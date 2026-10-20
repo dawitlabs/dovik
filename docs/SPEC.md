@@ -419,3 +419,50 @@ The following must be resolved before the relevant implementation begins:
 This is a draft, not a finalized language contract.
 
 Every unresolved behavior must be decided, explicitly deferred, or excluded from the first implementation before it becomes a dependency of compiler code.
+
+## Integer and Floating-Point Rules
+
+### Int
+
+`Int` is a signed 64-bit integer.
+
+- Range: −9,223,372,036,854,775,808 to 9,223,372,036,854,775,807.
+- Integer arithmetic uses signed 64-bit values.
+- Integer overflow must never silently produce an incorrect result.
+- The exact overflow behavior will be defined before the first implementation.
+
+### Float
+
+`Float` is a 64-bit IEEE 754 floating-point number.
+
+- Floating-point arithmetic follows IEEE 754 behavior where applicable.
+- Floating-point values may include positive and negative infinity and NaN.
+- Floating-point comparisons follow IEEE 754 rules.
+
+### Arithmetic Operators
+
+Dovik supports:
+
+- `+`: Addition
+- `-`: Subtraction
+- `*`: Multiplication
+- `/`: Division
+- `%`: Remainder
+
+Both operands must have compatible numeric types.
+
+### Division
+
+- Dividing two `Int` values produces a `Float`.
+- Dividing a `Float` by another numeric value produces a `Float`.
+- Division by zero must have explicitly defined behavior for each numeric type.
+
+### Type Conversion
+
+Dovik does not silently convert between `Int` and `Float` when doing so could change program behavior.
+
+Explicit conversion functions will be defined in the standard library.
+
+### Status
+
+These are proposed numeric rules. Overflow behavior, division by zero, and conversion functions must be finalized before implementation.
