@@ -83,19 +83,23 @@ Variable visibility follows lexical scope.
 
 The precise rules for shadowing, redeclaration, constants, and global variables remain to be finalized.
 
-## 4. Built-in Types
+## 4. Built-in Types and Naming
 
-The initial language is expected to include:
+Dovik's built-in type names are case-insensitive. Different capitalization of the same built-in type refers to the same type.
 
-| Type     | Purpose                    | Example                         |
-| -------- | -------------------------- | ------------------------------- |
-| `Int`    | Integer numbers            | `42`                            |
-| `Float`  | Floating-point numbers     | `3.14`                          |
-| `Bool`   | Boolean values             | `true`                          |
-| `String` | Text                       | `"hello"`                       |
-| `Unit`   | No meaningful return value | A function that returns nothing |
+For example, `Int`, `int`, and `INT` all refer to the same integer type.
 
-The exact integer width, floating-point representation, overflow behavior, and numeric conversion rules require explicit decisions before implementation.
+Initial built-in types include:
+
+- `Int`: Integer numbers.
+- `Float`: Floating-point numbers.
+- `Bool`: Boolean values (`true` and `false`).
+- `String`: Text.
+- `Unit`: The absence of a meaningful return value.
+
+Variable names and function names are case-sensitive. For example, `age` and `Age` are different identifiers.
+
+Type annotations are optional for variables but required for function parameters. Function return types are inferred when possible, with optional explicit return annotations.
 
 ### 4.1 Type Annotations
 
