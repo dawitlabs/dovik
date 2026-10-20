@@ -77,11 +77,53 @@ age = "twenty" # Compile-time error.
 
 Reassignment is permitted when the new value has the same type.
 
-### 3.2 Scope and Redeclaration
+### 3.2 Scope and Variable Reassignment
 
-Variable visibility follows lexical scope.
+### 3.2.1. Function Scope
 
-The precise rules for shadowing, redeclaration, constants, and global variables remain to be finalized.
+Variables declared inside a function are local to that function and cannot be accessed outside it.
+
+```python
+function calculate():
+    result = 10
+    return result
+
+# result is not accessible here
+```
+
+### 3.2.2. Block Scope
+
+Variables declared inside `if`, `else`, `while`, and `for` blocks are local to those blocks.
+
+A variable declared inside a block cannot be accessed after the block ends.
+
+### 3.2.3. Variable Reassignment
+
+A variable's type is inferred from its initial assignment and remains fixed.
+
+```python
+age = 20
+age = 21       # Valid
+age = "Dawit"  # Type error
+```
+
+Reassignment changes the value, not the variable's type.
+
+### 3.2.4. Shadowing
+
+A variable declared in an inner scope may not reuse the name of a variable in an enclosing scope.
+
+This restriction avoids confusion about which variable a name refers to.
+
+### 3.2.5. Global Variables
+
+Variables declared at the top level belong to the module's global scope.
+
+Functions may read accessible global variables, but modifying global variables from inside functions requires an explicit mechanism that will be defined later.
+
+### Status
+
+These are proposed rules. The compiler's scope resolution and global-variable behavior must be tested before the specification is finalized.
 
 ## 4. Built-in Types and Naming
 
