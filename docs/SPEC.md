@@ -1,27 +1,30 @@
 # Dovik Language Specification
 
-**Version:** Draft 0.1  
-**Status:** Under design  
-**Source extension:** `.dovk`  
-**CLI command:** `dovik`
+**Version:** 0.2.0  
+**Status:** Initial implementation specification
 
-This document defines the proposed syntax and semantics of Dovik. Rules marked as provisional may change before the first stable language release.
+## 1. Language Overview
 
-## 1. Design Goals
+Dovik is a statically typed, compiled programming language designed to combine readable syntax, automatic type inference, predictable behavior, and efficient native execution.
 
-Dovik aims to provide:
+Its design goals are:
 
-- Readable, minimal syntax.
-- Static typing with automatic type inference.
-- Native compilation.
+- Simple, readable syntax.
+- Automatic type inference without sacrificing static type safety.
+- Native executable generation.
 - Automatic memory management.
-- Low memory overhead.
-- Predictable behavior and useful compiler errors.
-- A path toward cross-platform development.
+- Low runtime overhead and efficient memory usage.
+- Clear compiler diagnostics.
+- Cross-platform support over time.
+- Reliable tooling for developers and AI coding agents.
 
-Simplicity must not come at the expense of type safety or predictable behavior.
+Dovik is intended to support command-line tools, backend services, desktop applications, web applications, and eventually mobile applications.
 
-## 2. Source Files and Formatting
+These are design goals. Actual performance and platform support must be demonstrated through implementation and testing.
+
+## 2. Source Files and Syntax
+
+### 2.1 File Extension
 
 Dovik source files use the `.dovk` extension.
 
@@ -29,482 +32,760 @@ Example:
 
 `main.dovk`
 
-### 2.1 Indentation
+### 2.2 Indentation
 
-- Indentation defines code blocks.
-- Four spaces are the proposed indentation unit.
-- Tabs are not permitted for indentation in the initial specification.
-- Blank lines do not change block structure.
-- Inconsistent indentation must produce a clear diagnostic.
+Dovik uses indentation to define blocks.
 
-### 2.2 Comments
+- Four spaces represent one indentation level.
+- Tabs are not permitted for indentation.
+- Statements within the same block must use consistent indentation.
+- Braces are not required to define blocks.
+- Semicolons are not required after statements.
 
-A `#` begins a comment outside a string literal.
+Example:
 
-```dovk
-# This is a comment.
-name = "Dovik" # This is also a comment.
+```python
+if age >= 18:
+    print("Adult")
+else:
+    print("Minor")
 ```
 
-### 2.3 Statements
+### 2.3 Comments
 
-Statements normally end at a newline. Expressions may span multiple lines only where the syntax explicitly permits them.
+A `#` begins a single-line comment.
 
-Braces are not used to delimit ordinary control-flow or function bodies. Semicolons are not required.
+```python
+# This is a comment
+age = 23  # This is also a comment
+```
 
-## 3. Variables and Assignment
+### 2.4 Identifiers
 
-Variables are introduced through assignment.
+Identifiers name variables and functions.
 
-```dovk
-name = "Dovik"
+- Identifiers may contain letters, digits, and underscores.
+- An identifier cannot begin with a digit.
+- Variable and function names are case-sensitive.
+- Reserved keywords cannot be used as identifiers.
+
+For example, `age` and `Age` are different identifiers.
+
+## 3. Built-in Types
+
+Dovik initially defines the following types:
+
+| Type     | Meaning                               |
+| -------- | ------------------------------------- |
+| `Int`    | Signed 64-bit integer                 |
+| `Float`  | 64-bit IEEE 754 floating-point number |
+| `Bool`   | Boolean value: `true` or `false`      |
+| `String` | Text                                  |
+| `Unit`   | Absence of a meaningful return value  |
+
+### 3.1 Case-Insensitive Type Names
+
+Built-in type names are case-insensitive.
+
+The following all refer to the same type:
+
+```python
+Int
+int
+INT
+```
+
+This rule applies to built-in type names, not variable or function names.
+
+### 3.2 Static Typing
+
+Dovik checks types at compile time.
+
+A successfully type-checked program cannot silently change a value's type or fall back to dynamic typing.
+
+```python
 age = 23
+age = 24       # Valid
+age = "Dawit"  # Compile-time error
+```
+
+## 4. Variables and Type Inference
+
+### 4.1 Automatic Inference
+
+Dovik infers a variable's type from its initial assignment.
+
+```python
+age = 23
+name = "Dawit"
 height = 1.75
-active = true
+is_student = true
 ```
 
-The compiler infers the initial type from the assigned expression.
+The inferred types are `Int`, `String`, `Float`, and `Bool`, respectively.
 
-### 3.1 Static Types
+Type annotations are optional for variables.
 
-Once a variable's type is established, its type cannot change.
+```python
+age: Int = 23
+name: String = "Dawit"
+```
 
-```dovk
+An explicit annotation must agree with the assigned value's type.
+
+### 4.2 Fixed Variable Types
+
+A variable's type is fixed after its declaration.
+
+```python
 age = 23
-age = 24       # Valid: same type.
-age = "twenty" # Compile-time error.
-```
-
-Reassignment is permitted when the new value has the same type.
-
-### 3.2 Scope and Variable Reassignment
-
-### 3.2.1. Function Scope
-
-Variables declared inside a function are local to that function and cannot be accessed outside it.
-
-```python
-function calculate():
-    result = 10
-    return result
-
-# result is not accessible here
-```
-
-### 3.2.2. Block Scope
-
-Variables declared inside `if`, `else`, `while`, and `for` blocks are local to those blocks.
-
-A variable declared inside a block cannot be accessed after the block ends.
-
-### 3.2.3. Variable Reassignment
-
-A variable's type is inferred from its initial assignment and remains fixed.
-
-```python
-age = 20
-age = 21       # Valid
+age = 24       # Valid
+age = 25.5     # Type error
 age = "Dawit"  # Type error
 ```
 
 Reassignment changes the value, not the variable's type.
 
-### 3.2.4. Shadowing
+Dovik does not silently convert between incompatible types.
 
-A variable declared in an inner scope may not reuse the name of a variable in an enclosing scope.
+### 4.3 Initialization
 
-This restriction avoids confusion about which variable a name refers to.
+A variable must have an initial value or an explicit initialization mechanism before it can be read.
 
-### 3.2.5. Global Variables
+Reading an uninitialized variable is a compile-time error.
 
-Variables declared at the top level belong to the module's global scope.
+### 4.4 Type Inference Failure
 
-Functions may read accessible global variables, but modifying global variables from inside functions requires an explicit mechanism that will be defined later.
+If the compiler cannot determine a variable's type safely, it reports an error and requests an explicit annotation where appropriate.
 
-### Status
-
-These are proposed rules. The compiler's scope resolution and global-variable behavior must be tested before the specification is finalized.
-
-## 4. Built-in Types and Naming
-
-Dovik's built-in type names are case-insensitive. Different capitalization of the same built-in type refers to the same type.
-
-For example, `Int`, `int`, and `INT` all refer to the same integer type.
-
-Initial built-in types include:
-
-- `Int`: Integer numbers.
-- `Float`: Floating-point numbers.
-- `Bool`: Boolean values (`true` and `false`).
-- `String`: Text.
-- `Unit`: The absence of a meaningful return value.
-
-Variable names and function names are case-sensitive. For example, `age` and `Age` are different identifiers.
-
-Type annotations are optional for variables but required for function parameters. Function return types are inferred when possible, with optional explicit return annotations.
-
-### 4.1 Type Annotations
-
-Type inference is the default.
-
-Optional annotations are proposed for cases where an explicit type improves clarity or resolves ambiguity.
-
-```dovk
-age: Int = 23
-name: String = "Dovik"
-```
-
-The exact annotation grammar remains provisional.
-
-### 4.2 Static Type Checking
-
-Type errors must be detected during compilation whenever the compiler has sufficient information.
-
-Dovik must not silently fall back to dynamic typing when inference fails.
-
-When a type cannot be inferred unambiguously, the compiler must request sufficient information or report a useful error.
+The compiler must not silently assign an arbitrary type.
 
 ## 5. Functions
 
-Functions are declared with the `function` keyword.
+### 5.1 Declaration
 
-```dovk
-function greet(name)
-    print("Hello, " + name)
+Functions use the `function` keyword.
+
+Function parameters require explicit type annotations.
+
+```python
+function add(a: Int, b: Int):
+    return a + b
 ```
 
-A function that produces a value uses an explicit `return`.
+Parameter types define the function's input contract.
 
-```dovk
-function double(number)
-    return number * 2
+### 5.2 Return Type Inference
+
+Return types are inferred automatically when possible.
+
+```python
+function add(a: Int, b: Int):
+    return a + b
 ```
 
-Functions are called using parentheses.
+The compiler infers that `add` returns `Int`.
 
-```dovk
-result = double(5)
-print(result)
+Explicit return annotations are also supported:
+
+```python
+function add(a: Int, b: Int) -> Int:
+    return a + b
 ```
 
-### 5.1 Function Rules
+The inferred or declared return type must be consistent across every return path.
 
-- Function bodies use indentation.
-- Parameters have statically determined types.
-- Return types must be statically determined.
-- Functions without a returned value have type `Unit`.
-- Invalid argument types must be reported during compilation.
-- Recursive calls must eventually be supported.
+### 5.3 Return Statements
 
-The method used to infer parameter and return types, including recursive functions and mutually recursive functions, remains provisional.
+Functions return values using `return`.
+
+```python
+function greet(name: String):
+    return "Hello, " + name
+```
+
+A function that returns no meaningful value has type `Unit`.
+
+Functions returning `Unit` may omit a return statement. Functions returning another type must return a compatible value on every reachable path.
+
+### 5.4 Function Calls
+
+Arguments must match the declared parameter types.
+
+```python
+function multiply(a: Int, b: Int):
+    return a * b
+
+result = multiply(3, 5)
+```
+
+The compiler infers `result` as `Int`.
+
+This call is invalid:
+
+```python
+multiply(3, "five")
+```
+
+The compiler reports a type error before execution.
+
+### 5.5 Recursion
+
+Functions may call themselves.
+
+When return-type inference cannot determine a recursive function's return type without circular reasoning, an explicit return annotation is required.
+
+### 5.6 Function Names
+
+Function names are case-sensitive.
+
+Two functions cannot have the same name in the same scope unless a future specification explicitly introduces function overloading.
 
 ## 6. Operators and Expressions
 
-The proposed arithmetic operators are:
-
-`+`, `-`, `*`, `/`, `%`
-
-The proposed comparison operators are:
-
-`==`, `!=`, `<`, `>`, `<=`, `>=`
-
-The logical operators are:
-
-`and`, `or`, `not`
-
-Assignment uses `=`.
-
 ### 6.1 Arithmetic
+
+Dovik supports:
+
+| Operator | Meaning                          |
+| -------- | -------------------------------- |
+| `+`      | Addition or string concatenation |
+| `-`      | Subtraction                      |
+| `*`      | Multiplication                   |
+| `/`      | Division                         |
+| `%`      | Integer remainder                |
 
 Arithmetic operands must have compatible numeric types.
 
-Implicit numeric conversions, if any, must be explicitly specified.
+`String + String` concatenates strings. Other combinations involving a string and a non-string value are type errors unless an explicit conversion is performed.
 
-The meaning of division, including whether `/` always produces a floating-point result, remains undecided.
+### 6.2 Division
 
-### 6.2 Comparisons
+The `/` operator always produces a `Float`.
 
-Comparison expressions produce a `Bool`.
-
-### 6.3 Logical Expressions
-
-Logical operators operate on `Bool` values.
-
-Dovik does not use implicit truthiness. Conditions must evaluate to a boolean value.
-
-### 6.4 String Concatenation
-
-The `+` operator may concatenate two strings.
-
-```dovk
-first = "Hello, "
-second = "Dovik"
-message = first + second
+```python
+result = 7 / 2
+# result is 3.5
 ```
 
-Concatenating strings and non-strings requires an explicit conversion or formatting operation.
+Integer division is not performed implicitly. A separate integer-division operation may be introduced in a later version.
 
-Operator precedence and evaluation order must be defined before the language is stable.
+### 6.3 Remainder
 
-## 7. Conditions
+The `%` operator accepts two `Int` operands and returns an `Int`.
 
-Dovik uses indentation-based conditional blocks.
+The right operand must not be zero.
 
-```dovk
-if age >= 18
-    print("Adult")
-else if age >= 13
-    print("Teenager")
-else
-    print("Child")
+### 6.4 Comparisons
+
+Dovik supports:
+
+- `==`
+- `!=`
+- `<`
+- `>`
+- `<=`
+- `>=`
+
+Comparison operators return `Bool`.
+
+Ordering comparisons apply to compatible numeric values and strings. Equality and inequality apply to compatible types that define equality.
+
+### 6.5 Logical Operators
+
+Dovik supports:
+
+- `and`
+- `or`
+- `not`
+
+Logical operators require `Bool` operands and produce `Bool`.
+
+`and` and `or` use short-circuit evaluation.
+
+### 6.6 Operator Precedence
+
+Operators follow conventional precedence:
+
+1. Parentheses and expression grouping.
+2. Unary operators, including `not` and unary minus.
+3. Multiplication, division, and remainder.
+4. Addition and subtraction.
+5. Comparisons and equality.
+6. `and`.
+7. `or`.
+
+Operators at the same precedence level are evaluated left to right unless explicitly specified otherwise.
+
+Parentheses can be used to make evaluation order explicit.
+
+## 7. Numeric Semantics
+
+### 7.1 Integer Range
+
+`Int` is a signed 64-bit integer.
+
+Its range is:
+
+- Minimum: `-9223372036854775808`
+- Maximum: `9223372036854775807`
+
+### 7.2 Integer Overflow
+
+Integer arithmetic must not silently wrap around.
+
+If an operation produces a result outside the `Int` range, the program terminates with a defined runtime error.
+
+This includes integer addition, subtraction, multiplication, negation, and the minimum-integer divided by negative one if integer division is introduced.
+
+### 7.3 Floating-Point Values
+
+`Float` follows IEEE 754 binary64 behavior.
+
+It supports ordinary finite numbers, positive and negative infinity, and NaN.
+
+Floating-point arithmetic may lose precision, as defined by IEEE 754.
+
+### 7.4 Division by Zero
+
+Integer remainder by zero produces a runtime error.
+
+Floating-point division follows IEEE 754 behavior, including infinity or NaN where applicable.
+
+### 7.5 Explicit Conversion
+
+Conversions between numeric types must be explicit.
+
+The standard library will provide conversion functions such as `to_int` and `to_float`.
+
+Converting a `Float` to `Int` truncates toward zero. A conversion that cannot produce a valid `Int`, such as converting NaN, infinity, or an out-of-range value, produces a defined conversion error.
+
+## 8. Conditions and Control Flow
+
+### 8.1 Conditional Statements
+
+Dovik supports `if`, `else if`, and `else`.
+
+```python
+if score >= 90:
+    print("Excellent")
+else if score >= 50:
+    print("Pass")
+else:
+    print("Fail")
 ```
 
-Conditions must have type `Bool`.
+Conditions must evaluate to `Bool`. Other types do not have implicit truthiness.
 
-The language must specify whether every conditional branch is required to return a value when used inside a value-producing expression. Expression-valued conditionals are not included in this initial proposal.
+### 8.2 Loops
 
-## 8. Loops
+Dovik supports `while` loops and `for` loops.
 
-### 8.1 For Loops
-
-```dovk
-names = ["Dave", "Sara", "Miki"]
-
-for name in names
-    print(name)
-```
-
-A `for` loop iterates over a supported iterable value.
-
-### 8.2 While Loops
-
-```dovk
+```python
 count = 0
 
-while count < 3
+while count < 5:
     print(count)
     count = count + 1
 ```
 
+A `for` loop iterates over a supported collection or iterable.
+
+```python
+for number in numbers:
+    print(number)
+```
+
 ### 8.3 Loop Control
 
-The proposed loop-control statements are:
-
 - `break` exits the nearest enclosing loop.
-- `continue` skips to the next iteration.
+- `continue` skips to the next iteration of the nearest enclosing loop.
 
-The exact behavior of nested loops and loop-variable scope must be specified.
+Using either outside a loop is a compile-time error.
 
-## 9. Lists
+### 8.4 Execution Order
 
-Lists are written using square brackets.
+Top-level statements execute in source order.
 
-```dovk
+A function definition makes that function available from its declaration onward. A function must be declared before it is called.
+
+A simple program does not require a `main` function.
+
+## 9. Scope and Name Resolution
+
+### 9.1 Function Scope
+
+Variables declared inside a function are local to that function.
+
+They cannot be accessed outside it.
+
+### 9.2 Block Scope
+
+Variables declared inside conditional and loop blocks are local to those blocks.
+
+They cannot be accessed after the block ends.
+
+### 9.3 Shadowing
+
+A declaration cannot reuse the name of a variable in an enclosing scope.
+
+This rule avoids ambiguity about which variable an identifier refers to.
+
+### 9.4 Global Variables
+
+Top-level variables belong to the module's global scope.
+
+Functions may read accessible global variables.
+
+Modifying global variables from inside functions is not supported in the initial version. A future version may introduce an explicit mechanism for this.
+
+## 10. Strings
+
+### 10.1 String Values
+
+`String` represents text encoded internally using UTF-8.
+
+String literals use double quotation marks.
+
+```python
+name = "Dawit"
+message = "Hello, world!"
+```
+
+### 10.2 Concatenation
+
+Two strings can be concatenated using `+`.
+
+```python
+message = "Hello, " + "Dawit"
+```
+
+Implicit conversion of numbers or other types to strings is not supported.
+
+### 10.3 Immutability
+
+Strings are immutable.
+
+Operations that modify text produce a new string rather than changing the original string's contents.
+
+### 10.4 Length and Indexing
+
+String indexing is zero-based and operates on Unicode scalar values rather than UTF-8 bytes.
+
+An indexing operation must check its bounds. An out-of-range index produces a runtime error.
+
+String length counts Unicode scalar values, not bytes or user-perceived grapheme clusters.
+
+The standard library will provide explicit operations for byte length and more advanced Unicode text processing.
+
+## 11. Lists
+
+### 11.1 List Types
+
+Lists contain values of one element type.
+
+```python
 numbers = [1, 2, 3]
-names = ["Dave", "Sara"]
+names = ["Dawit", "Abel"]
 ```
 
-The initial proposal uses homogeneous lists: all elements share one element type.
+The inferred types are `List<Int>` and `List<String>`.
 
-The specification must define:
+Mixed element types are rejected.
 
-- Indexing behavior.
-- Out-of-bounds handling.
-- Mutation and append operations.
-- Empty-list type inference.
-- List copying and reference semantics.
-
-An empty list may require an explicit type or sufficient type information from its context.
-
-## 10. Dictionaries
-
-Dictionaries are written using key-value pairs.
-
-```dovk
-person = {
-    "name": "Dave",
-    "age": 23
-}
+```python
+numbers = [1, "hello"]  # Type error
 ```
 
-The initial proposal uses homogeneous key types and homogeneous value types.
+### 11.2 Mutability
 
-The following remain to be specified:
+Lists are mutable.
 
-- Key restrictions.
-- Missing-key behavior.
-- Mutation.
-- Iteration order.
-- Equality and hashing.
-- Memory and reference semantics.
+Supported operations will include reading, updating, appending, and removing elements.
 
-## 11. Strings
+Mutating a list cannot change its element type.
 
-Strings use double quotes.
+### 11.3 Indexing
 
-```dovk
-message = "Hello, Dovik"
+List indexing is zero-based.
+
+An out-of-range index produces a runtime error.
+
+### 11.4 Empty Lists
+
+An empty list has no element type that can be inferred from its contents.
+
+When the type cannot be inferred from the surrounding context, an explicit annotation is required.
+
+```python
+numbers: List<Int> = []
 ```
 
-The language must define:
+## 12. Dictionaries
 
-- Escape sequences.
-- Unicode representation.
-- String indexing behavior.
-- String immutability.
-- Efficient concatenation and formatting.
+### 12.1 Dictionary Types
 
-These details must be consistent across supported targets.
+Dictionaries store key-value pairs.
 
-## 12. Errors and Safety
+```python
+ages = {"Dawit": 23, "Abel": 21}
+```
 
-### 12.1 Compile-Time Errors
+The inferred type is `Dict<String, Int>`.
 
-Examples include:
+All keys must share one type, and all values must share one type.
+
+### 12.2 Supported Keys
+
+The initial implementation supports `Int`, `Bool`, and `String` as dictionary key types.
+
+Dictionary keys must satisfy the language's equality and hashing rules.
+
+### 12.3 Mutability
+
+Dictionaries are mutable.
+
+Adding or updating a value must preserve the dictionary's key and value types.
+
+### 12.4 Missing Keys
+
+Looking up a missing key produces a defined runtime error in the initial version.
+
+A future standard-library API may provide a safe lookup operation that represents a missing value explicitly.
+
+### 12.5 Empty Dictionaries
+
+When an empty dictionary's types cannot be inferred from context, explicit type annotations are required.
+
+```python
+ages: Dict<String, Int> = {}
+```
+
+## 13. Equality and Collection Behavior
+
+Primitive values support equality according to their type's defined semantics.
+
+Lists support structural equality: two lists are equal when they contain the same number of equal elements in the same order.
+
+Dictionaries support structural equality: two dictionaries are equal when they contain the same key-value mappings.
+
+Comparing incompatible types is a compile-time error.
+
+`Float` equality follows IEEE 754 behavior. In particular, NaN is not equal to itself.
+
+The implementation must ensure that dictionary hashing is consistent with key equality.
+
+## 14. Memory Management
+
+### 14.1 Automatic Management
+
+Dovik programs do not require manual memory deallocation for ordinary values.
+
+The runtime is responsible for reclaiming memory that is no longer needed.
+
+### 14.2 Implementation Requirements
+
+The memory-management implementation must address:
+
+- Object allocation and reclamation.
+- Memory leaks.
+- Cyclic references.
+- Collection and string storage.
+- Runtime overhead.
+- Memory usage and reclamation pauses.
+
+The specific memory-management algorithm is an implementation decision and must be evaluated against Dovik's performance and memory goals.
+
+### 14.3 Implementation Independence
+
+The language's observable behavior must not depend on a particular memory-management algorithm.
+
+The compiler and runtime may evolve their implementation without changing the language's specified semantics.
+
+## 15. Errors
+
+### 15.1 Compile-Time Errors
+
+The compiler rejects programs with errors such as:
 
 - Invalid syntax.
-- Undefined variables.
-- Incompatible types.
-- Invalid function calls.
-- Invalid return values.
-- Ambiguous type inference.
+- Undefined variables or functions.
+- Duplicate declarations in the same scope.
+- Incompatible assignments.
+- Invalid function arguments.
+- Inconsistent return values.
+- Invalid operator operands.
+- Invalid condition types.
+- Unreachable name references outside their scope.
+- Type inference failures that cannot be resolved safely.
 
-Compiler diagnostics should identify the source location, explain the problem, and suggest a correction where practical.
+### 15.2 Runtime Errors
 
-### 12.2 Runtime Errors
+The initial runtime reports errors such as:
 
-The runtime must define behavior for failures such as invalid indexing, arithmetic errors, and resource exhaustion.
+- Integer overflow.
+- Integer remainder by zero.
+- Invalid numeric conversion.
+- Out-of-bounds indexing.
+- Missing dictionary keys.
 
-The exact error-handling syntax and recoverability rules remain undecided.
+Runtime errors must provide useful diagnostic messages and terminate the affected program predictably.
 
-## 13. Memory Management
+### 15.3 Diagnostics
 
-Dovik aims to manage ordinary object memory automatically.
+Compiler diagnostics should include:
 
-Typical programs should not require manual deallocation of each object.
+- An error code.
+- The source file and location.
+- A concise explanation.
+- A correction suggestion where practical.
 
-The implementation must define:
+Diagnostic output must be suitable for both humans and automated tools.
 
-- Object lifetime.
-- Ownership and reference behavior.
-- Cyclic references.
-- Reclamation strategy.
-- Out-of-memory behavior.
+## 16. Modules and Imports
 
-The garbage-collection or other reclamation strategy is an implementation decision until the required semantics and performance constraints are settled.
+The initial implementation supports individual source files.
 
-## 14. Modules and Imports
+A module and import system will be introduced when the compiler foundation is stable.
 
-A module system is required for larger programs.
+The future module system must define:
 
-Its syntax, visibility rules, dependency resolution, package format, and initialization behavior have not yet been finalized.
+- Import syntax.
+- Name visibility.
+- Module initialization.
+- Dependency resolution.
+- Circular imports.
+- Multi-file compilation.
 
-Simple scripts should eventually be executable without requiring a complex project structure.
+Until those rules are implemented and specified, multi-module projects are outside the initial language implementation.
 
-## 15. Program Entry Point
+## 17. Concurrency
 
-The proposed scripting model allows top-level statements to execute in source order.
+The initial language specification does not define a complete concurrency model.
 
-A mandatory `main` function is not required for simple programs.
+Concurrency primitives, thread safety, asynchronous operations, and memory-model guarantees will be designed separately before implementation.
 
-The compilation and initialization rules for multi-module applications remain to be defined.
+The runtime must not promise thread safety for mutable collections unless that guarantee is explicitly provided.
 
-## 16. Standard Library
+## 18. Standard Library
 
-The initial standard library should prioritize:
+The standard library will provide core operations for:
 
 - Console input and output.
-- Strings and formatting.
-- Collections.
-- Filesystem operations.
-- Command-line arguments.
-- Basic error reporting.
+- Strings.
+- Lists and dictionaries.
+- Numeric conversion.
+- File operations.
+- Time and dates.
+- Networking.
+- Concurrency when supported.
 
-Networking, concurrency, advanced collections, and platform-specific APIs can be introduced as the core language matures.
+The exact API surface will be defined incrementally.
 
-## 17. Compilation and Targets
+Standard-library operations must respect Dovik's type system and error-handling rules.
 
-The compiler should eventually support native executable generation and additional targets.
+## 19. Compilation Model
 
-Linux x86-64 is the proposed first target, subject to confirmation during architecture planning.
+Dovik uses a compiler written initially in Rust.
 
-Support for other operating systems, CPU architectures, WebAssembly, mobile applications, and desktop applications requires separate implementation and validation.
+The compiler pipeline is:
 
-## 18. Compatibility and Versioning
+1. Lexical analysis.
+2. Parsing and abstract syntax tree construction.
+3. Name resolution.
+4. Type checking and type inference.
+5. Intermediate representation generation.
+6. Optimization.
+7. LLVM code generation.
+8. Native linking and executable generation.
 
-The language specification and compiler must have identifiable versions.
+LLVM is an implementation backend, not the definition of Dovik's language semantics.
 
-Breaking changes to syntax or semantics must be documented.
+The initial compilation target is Linux x86-64.
 
-A stable compatibility policy will be defined before a stable release.
+## 20. Command-Line Interface
 
-## 19. Open Design Decisions
+The `dovik` CLI will provide:
 
-The following must be resolved before the relevant implementation begins:
+- `dovik build`: Compile a program into an executable.
+- `dovik run`: Compile and execute a program.
+- `dovik check`: Check syntax, names, and types.
+- `dovik test`: Run automated tests.
+- `dovik format`: Format source code.
+- `dovik --version`: Display the compiler version.
+- `dovik --help`: Display command help.
 
-1. Integer width, overflow, and numeric conversions.
-2. Division semantics and operator precedence.
-3. Parameter and return-type inference.
-4. Optional annotation grammar.
-5. Scope, shadowing, and redeclaration.
-6. Empty collection inference.
-7. Collection mutation and reference semantics.
-8. String representation and indexing.
-9. Memory reclamation and cyclic references.
-10. Error handling.
-11. Module and package system.
-12. Concurrency model.
-13. Target-specific runtime requirements.
+The CLI must use predictable exit codes and separate compiler diagnostics from program output.
 
-## 20. Status
+Machine-readable diagnostics are a goal for automated tooling.
 
-This is a draft, not a finalized language contract.
+## 21. Platform Support
 
-Every unresolved behavior must be decided, explicitly deferred, or excluded from the first implementation before it becomes a dependency of compiler code.
+The initial target is Linux x86-64.
 
-## Integer and Floating-Point Rules
+Future targets may include:
 
-### Int
+- Linux on additional architectures.
+- Windows.
+- macOS.
+- WebAssembly.
+- Android.
+- iOS.
 
-`Int` is a signed 64-bit integer.
+These targets require their own compiler, runtime, standard-library, and platform-integration work. They are not supported until implemented and tested.
 
-- Range: −9,223,372,036,854,775,808 to 9,223,372,036,854,775,807.
-- Integer arithmetic uses signed 64-bit values.
-- Integer overflow must never silently produce an incorrect result.
-- The exact overflow behavior will be defined before the first implementation.
+## 22. Performance Requirements
 
-### Float
+Dovik aims for:
 
-`Float` is a 64-bit IEEE 754 floating-point number.
+- Competitive native execution speed.
+- Low memory overhead.
+- Fast startup.
+- Reasonable compilation time.
+- Small executables where practical.
 
-- Floating-point arithmetic follows IEEE 754 behavior where applicable.
-- Floating-point values may include positive and negative infinity and NaN.
-- Floating-point comparisons follow IEEE 754 rules.
+Performance must be measured using reproducible benchmarks.
 
-### Arithmetic Operators
+Comparisons with C, Rust, Python, and other languages must use equivalent workloads and documented configurations.
 
-Dovik supports:
+Dovik must not claim to be universally faster than C without sufficient evidence.
 
-- `+`: Addition
-- `-`: Subtraction
-- `*`: Multiplication
-- `/`: Division
-- `%`: Remainder
+## 23. Compatibility and Versioning
 
-Both operands must have compatible numeric types.
+This document defines the initial language contract.
 
-### Division
+Changes to syntax, type rules, numeric behavior, scope, or other observable semantics must be documented.
 
-- Dividing two `Int` values produces a `Float`.
-- Dividing a `Float` by another numeric value produces a `Float`.
-- Division by zero must have explicitly defined behavior for each numeric type.
+Breaking changes should be identified clearly in release notes.
 
-### Type Conversion
+The implementation must not silently diverge from the specification.
 
-Dovik does not silently convert between `Int` and `Float` when doing so could change program behavior.
+## 24. Development Priorities
 
-Explicit conversion functions will be defined in the standard library.
+Implementation proceeds in this order:
 
-### Status
+1. Lexer and parser.
+2. Abstract syntax tree and syntax diagnostics.
+3. Name resolution and scope.
+4. Static type checking and inference.
+5. Core expression evaluation semantics.
+6. Intermediate representation and LLVM code generation.
+7. Native executable generation.
+8. Functions and control flow.
+9. Strings and collections.
+10. Runtime and automatic memory management.
+11. CLI and developer tooling.
+12. Benchmarks, optimization, and platform expansion.
+13. Modules and eventual self-hosting.
 
-These are proposed numeric rules. Overflow behavior, division by zero, and conversion functions must be finalized before implementation.
+Each feature must have tests before it is considered complete.
+
+## 25. Specification Status
+
+This document establishes the initial language contract for Dovik.
+
+Implementation details such as the memory-management algorithm, exact LLVM integration, object layout, and cross-compilation strategy remain separate architectural decisions.
+
+A feature must not be advertised as supported until it has been implemented and tested.
+
+The specification should be updated whenever implementation experience reveals a necessary change.
