@@ -25,12 +25,12 @@ impl Emitter<'_> {
 
         match which {
             Builtin::Append => self.line(&format!(
-                "  call void @dovik_list_push(i64 {}, i8 {}, i64 {})",
-                words[0], tags[1], words[1]
+                "  call void @dovik_list_push(i64 {}, i64 {})",
+                words[0], words[1]
             )),
             Builtin::Insert => self.line(&format!(
-                "  call void @dovik_list_insert(i64 {}, i64 {}, i8 {}, i64 {}, i32 {line}, i32 {column})",
-                words[0], words[1], tags[2], words[2]
+                "  call void @dovik_list_insert(i64 {}, i64 {}, i64 {}, i32 {line}, i32 {column})",
+                words[0], words[1], words[2]
             )),
             Builtin::RemoveAt => {
                 let word = self.next_temp();

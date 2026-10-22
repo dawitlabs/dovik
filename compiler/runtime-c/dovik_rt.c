@@ -34,22 +34,24 @@ typedef struct List {
     Header h;
     size_t len;
     size_t cap;
-    Cell *items;
+    uint8_t elem;
+    uint64_t *items;
     struct List *next_free;
 } List;
 
-#define TAG_EMPTY 255
-
 typedef struct {
-    Cell key;
-    Cell val;
+    uint64_t key;
+    uint64_t val;
 } Entry;
 
 typedef struct {
     Header h;
     size_t len;
     size_t cap;
+    uint8_t key_tag;
+    uint8_t val_tag;
     Entry *entries;
+    uint8_t *state;
 } Dict;
 
 static int64_t live_objects = 0;
@@ -166,10 +168,13 @@ void dovik_release(uint8_t tag, uint64_t word) {
 
     if (tag == TAG_LIST) {
         List *owned = (List *)header;
-        for (size_t i = 0; i < owned->len; i++)
-            dovik_release(owned->items[i].tag, owned->items[i].word);
 
-        if (list_pool_len < POOL_LIMIT && owned->cap * sizeof(Cell) <= POOL_MAX_BYTES) {
+        if (owned->elem >= TAG_STR) {
+            for (size_t i = 0; i < owned->len; i++)
+                dovik_release(owned->elem, owned->items[i]);
+        }
+
+        if (list_pool_len < POOL_LIMIT && owned->cap * sizeof(uint64_t) <= POOL_MAX_BYTES) {
             owned->len = 0;
             owned->next_free = list_pool;
             list_pool = owned;
@@ -183,11 +188,17 @@ void dovik_release(uint8_t tag, uint64_t word) {
     }
 
     Dict *owned = (Dict *)header;
-    for (size_t i = 0; i < owned->cap; i++) {
-        if (owned->entries[i].key.tag == TAG_EMPTY) continue;
-        dovik_release(owned->entries[i].key.tag, owned->entries[i].key.word);
-        dovik_release(owned->entries[i].val.tag, owned->entries[i].val.word);
+    int keys_owned = owned->key_tag >= TAG_STR;
+    int vals_owned = owned->val_tag >= TAG_STR;
+
+    if (keys_owned || vals_owned) {
+        for (size_t i = 0; i < owned->cap; i++) {
+            if (!owned->state[i]) continue;
+            if (keys_owned) dovik_release(owned->key_tag, owned->entries[i].key);
+            if (vals_owned) dovik_release(owned->val_tag, owned->entries[i].val);
+        }
     }
+
     free(owned->entries);
     free(owned);
 }
@@ -341,7 +352,7 @@ int32_t dovik_str_cmp(uint64_t left, uint64_t right) {
     return a->len < b->len ? -1 : 1;
 }
 
-uint64_t dovik_list_new(void) {
+uint64_t dovik_list_new(uint8_t elem) {
     live_objects += 1;
 
     if (list_pool != NULL) {
@@ -350,6 +361,7 @@ uint64_t dovik_list_new(void) {
         list_pool_len -= 1;
         value->h.count = 1;
         value->len = 0;
+        value->elem = elem;
         return (uint64_t)(uintptr_t)value;
     }
 
@@ -357,6 +369,7 @@ uint64_t dovik_list_new(void) {
     value->h.count = 1;
     value->len = 0;
     value->cap = 0;
+    value->elem = elem;
     value->items = NULL;
     return (uint64_t)(uintptr_t)value;
 }
@@ -365,21 +378,20 @@ static void reserve(List *value, size_t needed) {
     if (needed <= value->cap) return;
     size_t cap = value->cap < 4 ? 4 : value->cap;
     while (cap < needed) cap *= 2;
-    Cell *items = checked_alloc(cap * sizeof(Cell));
+    uint64_t *items = checked_alloc(cap * sizeof(uint64_t));
     if (value->items != NULL) {
-        memcpy(items, value->items, value->len * sizeof(Cell));
+        memcpy(items, value->items, value->len * sizeof(uint64_t));
         free(value->items);
     }
     value->items = items;
     value->cap = cap;
 }
 
-void dovik_list_push(uint64_t list, uint8_t tag, uint64_t word) {
+void dovik_list_push(uint64_t list, uint64_t word) {
     List *value = (List *)(uintptr_t)list;
-    dovik_retain(tag, word);
+    if (value->elem >= TAG_STR) dovik_retain(value->elem, word);
     reserve(value, value->len + 1);
-    value->items[value->len].tag = tag;
-    value->items[value->len].word = word;
+    value->items[value->len] = word;
     value->len += 1;
 }
 
@@ -388,45 +400,49 @@ int64_t dovik_list_len(uint64_t list) { return (int64_t)((List *)(uintptr_t)list
 uint64_t dovik_list_get(uint64_t list, int64_t index, uint32_t line, uint32_t column) {
     List *value = (List *)(uintptr_t)list;
     if (index < 0 || (size_t)index >= value->len) dovik_trap(4, line, column);
-    return value->items[index].word;
+    return value->items[index];
 }
 
 uint64_t dovik_list_get_fast(uint64_t list, int64_t index) {
-    return ((List *)(uintptr_t)list)->items[index].word;
+    return ((List *)(uintptr_t)list)->items[index];
 }
 
-void dovik_list_set(uint64_t list, int64_t index, uint8_t tag, uint64_t word, uint32_t line,
+void dovik_list_set(uint64_t list, int64_t index, uint64_t word, uint32_t line,
                     uint32_t column) {
     List *value = (List *)(uintptr_t)list;
     if (index < 0 || (size_t)index >= value->len) dovik_trap(4, line, column);
-    dovik_retain(tag, word);
-    Cell previous = value->items[index];
-    value->items[index].tag = tag;
-    value->items[index].word = word;
-    dovik_release(previous.tag, previous.word);
+
+    if (value->elem < TAG_STR) {
+        value->items[index] = word;
+        return;
+    }
+
+    dovik_retain(value->elem, word);
+    uint64_t previous = value->items[index];
+    value->items[index] = word;
+    dovik_release(value->elem, previous);
 }
 
-void dovik_list_insert(uint64_t list, int64_t index, uint8_t tag, uint64_t word, uint32_t line,
+void dovik_list_insert(uint64_t list, int64_t index, uint64_t word, uint32_t line,
                        uint32_t column) {
     List *value = (List *)(uintptr_t)list;
     if (index < 0 || (size_t)index > value->len) dovik_trap(4, line, column);
-    dovik_retain(tag, word);
+    if (value->elem >= TAG_STR) dovik_retain(value->elem, word);
     reserve(value, value->len + 1);
     memmove(value->items + index + 1, value->items + index,
-            (value->len - (size_t)index) * sizeof(Cell));
-    value->items[index].tag = tag;
-    value->items[index].word = word;
+            (value->len - (size_t)index) * sizeof(uint64_t));
+    value->items[index] = word;
     value->len += 1;
 }
 
 uint64_t dovik_list_remove_at(uint64_t list, int64_t index, uint32_t line, uint32_t column) {
     List *value = (List *)(uintptr_t)list;
     if (index < 0 || (size_t)index >= value->len) dovik_trap(4, line, column);
-    Cell removed = value->items[index];
+    uint64_t removed = value->items[index];
     memmove(value->items + index, value->items + index + 1,
-            (value->len - (size_t)index - 1) * sizeof(Cell));
+            (value->len - (size_t)index - 1) * sizeof(uint64_t));
     value->len -= 1;
-    return removed.word;
+    return removed;
 }
 
 static uint64_t hash_cell(Cell key) {
@@ -461,43 +477,53 @@ static int cells_equal(Cell a, Cell b) {
     return memcmp(x->bytes, y->bytes, x->len) == 0;
 }
 
-uint64_t dovik_dict_new(void) {
+uint64_t dovik_dict_new(uint8_t key_tag, uint8_t val_tag) {
     Dict *value = checked_alloc(sizeof(Dict));
     value->h.count = 1;
     value->len = 0;
     value->cap = 0;
+    value->key_tag = key_tag;
+    value->val_tag = val_tag;
     value->entries = NULL;
+    value->state = NULL;
     live_objects += 1;
     return (uint64_t)(uintptr_t)value;
 }
 
-static inline size_t probe(Dict *dict, Cell key) {
+static inline size_t probe(Dict *dict, uint64_t key) {
     size_t mask = dict->cap - 1;
-    size_t slot = (size_t)hash_cell(key) & mask;
-    Entry *entries = dict->entries;
+    Cell probe_key = {dict->key_tag, key};
+    size_t slot = (size_t)hash_cell(probe_key) & mask;
 
-    while (entries[slot].key.tag != TAG_EMPTY && !cells_equal(entries[slot].key, key))
+    while (dict->state[slot]) {
+        Cell stored = {dict->key_tag, dict->entries[slot].key};
+        if (cells_equal(stored, probe_key)) break;
         slot = (slot + 1) & mask;
+    }
 
     return slot;
 }
 
 static void grow(Dict *dict) {
     size_t cap = dict->cap < 8 ? 8 : dict->cap * 2;
-    Entry *entries = checked_alloc(cap * sizeof(Entry));
-    for (size_t i = 0; i < cap; i++) entries[i].key.tag = TAG_EMPTY;
+    uint8_t *block = checked_alloc(cap * sizeof(Entry) + cap);
+    Entry *entries = (Entry *)block;
+    uint8_t *state = block + cap * sizeof(Entry);
+    memset(state, 0, cap);
 
-    Dict moved = {dict->h, 0, cap, entries};
+    Dict moved = {dict->h, 0, cap, dict->key_tag, dict->val_tag, entries, state};
 
     for (size_t i = 0; i < dict->cap; i++) {
-        if (dict->entries[i].key.tag == TAG_EMPTY) continue;
+        if (!dict->state[i]) continue;
         size_t slot = probe(&moved, dict->entries[i].key);
         moved.entries[slot] = dict->entries[i];
+        moved.state[slot] = 1;
         moved.len += 1;
     }
 
     free(dict->entries);
     dict->entries = entries;
+    dict->state = state;
     dict->cap = cap;
     dict->len = moved.len;
 }
@@ -506,22 +532,20 @@ void dovik_dict_set(uint64_t dict, uint8_t ktag, uint64_t kword, uint8_t vtag, u
     Dict *value = (Dict *)(uintptr_t)dict;
     if (value->len * 4 >= value->cap * 3) grow(value);
 
-    Cell key = {ktag, kword};
-    Cell item = {vtag, vword};
-    size_t slot = probe(value, key);
-
+    size_t slot = probe(value, kword);
     dovik_retain(vtag, vword);
 
-    if (value->entries[slot].key.tag != TAG_EMPTY) {
-        Cell previous = value->entries[slot].val;
-        value->entries[slot].val = item;
-        dovik_release(previous.tag, previous.word);
+    if (value->state[slot]) {
+        uint64_t previous = value->entries[slot].val;
+        value->entries[slot].val = vword;
+        dovik_release(vtag, previous);
         return;
     }
 
     dovik_retain(ktag, kword);
-    value->entries[slot].key = key;
-    value->entries[slot].val = item;
+    value->entries[slot].key = kword;
+    value->entries[slot].val = vword;
+    value->state[slot] = 1;
     value->len += 1;
 }
 
@@ -529,10 +553,10 @@ uint64_t dovik_dict_get(uint64_t dict, uint8_t ktag, uint64_t kword, uint32_t li
                         uint32_t column) {
     Dict *value = (Dict *)(uintptr_t)dict;
     if (value->cap == 0) dovik_trap(5, line, column);
-    Cell key = {ktag, kword};
-    size_t slot = probe(value, key);
-    if (value->entries[slot].key.tag == TAG_EMPTY) dovik_trap(5, line, column);
-    return value->entries[slot].val.word;
+    (void)ktag;
+    size_t slot = probe(value, kword);
+    if (!value->state[slot]) dovik_trap(5, line, column);
+    return value->entries[slot].val;
 }
 
 int64_t dovik_dict_len(uint64_t dict) { return (int64_t)((Dict *)(uintptr_t)dict)->len; }
@@ -540,30 +564,31 @@ int64_t dovik_dict_len(uint64_t dict) { return (int64_t)((Dict *)(uintptr_t)dict
 uint8_t dovik_dict_has_key(uint64_t dict, uint8_t ktag, uint64_t kword) {
     Dict *value = (Dict *)(uintptr_t)dict;
     if (value->cap == 0) return 0;
-    Cell key = {ktag, kword};
-    return value->entries[probe(value, key)].key.tag != TAG_EMPTY ? 1 : 0;
+    (void)ktag;
+    return value->state[probe(value, kword)] ? 1 : 0;
 }
 
 uint8_t dovik_dict_remove_key(uint64_t dict, uint8_t ktag, uint64_t kword) {
     Dict *value = (Dict *)(uintptr_t)dict;
     if (value->cap == 0) return 0;
 
-    Cell key = {ktag, kword};
-    size_t slot = probe(value, key);
-    if (value->entries[slot].key.tag == TAG_EMPTY) return 0;
+    (void)ktag;
+    size_t slot = probe(value, kword);
+    if (!value->state[slot]) return 0;
 
-    dovik_release(value->entries[slot].key.tag, value->entries[slot].key.word);
-    dovik_release(value->entries[slot].val.tag, value->entries[slot].val.word);
-    value->entries[slot].key.tag = TAG_EMPTY;
+    dovik_release(value->key_tag, value->entries[slot].key);
+    dovik_release(value->val_tag, value->entries[slot].val);
+    value->state[slot] = 0;
     value->len -= 1;
 
     size_t mask = value->cap - 1;
     size_t next = (slot + 1) & mask;
-    while (value->entries[next].key.tag != TAG_EMPTY) {
+    while (value->state[next]) {
         Entry moved = value->entries[next];
-        value->entries[next].key.tag = TAG_EMPTY;
+        value->state[next] = 0;
         size_t target = probe(value, moved.key);
         value->entries[target] = moved;
+        value->state[target] = 1;
         next = (next + 1) & mask;
     }
 
@@ -592,7 +617,8 @@ static size_t render_sequence(Cell cell, char *buffer, size_t size) {
         used += (size_t)snprintf(buffer + used, size - used, "[");
         for (size_t i = 0; i < list->len; i++) {
             if (i > 0) used += (size_t)snprintf(buffer + used, size - used, ", ");
-            used += render(list->items[i], buffer + used, size - used);
+            Cell item = {list->elem, list->items[i]};
+            used += render(item, buffer + used, size - used);
         }
         used += (size_t)snprintf(buffer + used, size - used, "]");
         return used;
@@ -602,12 +628,14 @@ static size_t render_sequence(Cell cell, char *buffer, size_t size) {
     used += (size_t)snprintf(buffer + used, size - used, "{");
     int first = 1;
     for (size_t i = 0; i < dict->cap; i++) {
-        if (dict->entries[i].key.tag == TAG_EMPTY) continue;
+        if (!dict->state[i]) continue;
         if (!first) used += (size_t)snprintf(buffer + used, size - used, ", ");
         first = 0;
-        used += render(dict->entries[i].key, buffer + used, size - used);
+        Cell k = {dict->key_tag, dict->entries[i].key};
+        Cell v = {dict->val_tag, dict->entries[i].val};
+        used += render(k, buffer + used, size - used);
         used += (size_t)snprintf(buffer + used, size - used, ": ");
-        used += render(dict->entries[i].val, buffer + used, size - used);
+        used += render(v, buffer + used, size - used);
     }
     used += (size_t)snprintf(buffer + used, size - used, "}");
     return used;
@@ -732,19 +760,27 @@ static int cell_equal(Cell left, Cell right);
 
 static int list_equal(List *a, List *b) {
     if (a->len != b->len) return 0;
-    for (size_t i = 0; i < a->len; i++)
-        if (!cell_equal(a->items[i], b->items[i])) return 0;
+    if (a->elem == TAG_INT || a->elem == TAG_BOOL)
+        return memcmp(a->items, b->items, a->len * sizeof(uint64_t)) == 0;
+
+    for (size_t i = 0; i < a->len; i++) {
+        Cell x = {a->elem, a->items[i]};
+        Cell y = {b->elem, b->items[i]};
+        if (!cell_equal(x, y)) return 0;
+    }
     return 1;
 }
 
 static int dict_equal(Dict *a, Dict *b) {
     if (a->len != b->len) return 0;
     for (size_t i = 0; i < a->cap; i++) {
-        if (a->entries[i].key.tag == TAG_EMPTY) continue;
+        if (!a->state[i]) continue;
         if (b->cap == 0) return 0;
         size_t slot = probe(b, a->entries[i].key);
-        if (b->entries[slot].key.tag == TAG_EMPTY) return 0;
-        if (!cell_equal(a->entries[i].val, b->entries[slot].val)) return 0;
+        if (!b->state[slot]) return 0;
+        Cell x = {a->val_tag, a->entries[i].val};
+        Cell y = {b->val_tag, b->entries[slot].val};
+        if (!cell_equal(x, y)) return 0;
     }
     return 1;
 }

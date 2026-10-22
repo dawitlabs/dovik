@@ -417,3 +417,23 @@ every time. They are now one `Entry` array, and `TAG_EMPTY` in a key's tag marks
 slot so no separate occupancy array is needed.
 
 Nothing may store a real value with tag 255.
+
+## Containers are monomorphic, so element tags live in the header
+
+A `List<T>` holds only `T` and a `Dict<K, V>` only `K` and `V`, so a per-element tag was
+pure waste. `List` stores `elem` once and its items are raw 8-byte words; `Dict` stores
+`key_tag` and `val_tag` once and its entries are two raw words. That halved memory
+traffic and is most of why collection work went from 29.8 ms to 17.0 ms.
+
+Consequences to respect:
+
+- `dovik_list_new` takes the element tag and `dovik_dict_new` takes both. A container
+  created with the wrong tag will retain and release the wrong things.
+- Retain and release are skipped entirely when the tag is a scalar (`< TAG_STR`), which is
+  why scalar lists cost nothing to drop.
+- List equality uses `memcmp` for `Int` and `Bool` only. **Not for `Float`:**
+  [SPEC.md](SPEC.md) 13 requires NaN to differ from itself and -0.0 to equal 0.0, and bit
+  comparison gets both backwards.
+- `Dict` keeps occupancy in a separate `state` byte array allocated in the same block as
+  the entries. One byte per slot packs 64 per cache line, so a probe usually tests
+  occupancy without touching the 16-byte entry at all.

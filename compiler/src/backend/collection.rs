@@ -7,12 +7,12 @@ impl Emitter<'_> {
     pub(crate) fn collection(&mut self, function: &Function, kind: &InstKind, span: Span) {
         match kind {
             InstKind::ListNew { dest, element, items } => {
-                self.line(&format!("  %r{dest} = call i64 @dovik_list_new()"));
                 let tag = tag_of(element);
+                self.line(&format!("  %r{dest} = call i64 @dovik_list_new(i8 {tag})"));
                 for item in items {
                     let word = self.as_word(item, element);
                     self.line(&format!(
-                        "  call void @dovik_list_push(i64 %r{dest}, i8 {tag}, i64 {word})"
+                        "  call void @dovik_list_push(i64 %r{dest}, i64 {word})"
                     ));
                 }
             }
@@ -39,18 +39,19 @@ impl Emitter<'_> {
             InstKind::ListSet { list, index, value } => {
                 let (line, column) = self.position(span);
                 let ty = self.type_of(function, value);
-                let tag = tag_of(&ty);
                 let word = self.as_word(value, &ty);
                 self.line(&format!(
-                    "  call void @dovik_list_set(i64 {}, i64 {}, i8 {tag}, i64 {word}, i32 {line}, i32 {column})",
+                    "  call void @dovik_list_set(i64 {}, i64 {}, i64 {word}, i32 {line}, i32 {column})",
                     literal(list),
                     literal(index)
                 ));
             }
             InstKind::DictNew { dest, key, value, entries } => {
-                self.line(&format!("  %r{dest} = call i64 @dovik_dict_new()"));
                 let ktag = tag_of(key);
                 let vtag = tag_of(value);
+                self.line(&format!(
+                    "  %r{dest} = call i64 @dovik_dict_new(i8 {ktag}, i8 {vtag})"
+                ));
                 for (entry_key, entry_value) in entries {
                     let kword = self.as_word(entry_key, key);
                     let vword = self.as_word(entry_value, value);
