@@ -40,6 +40,10 @@ impl Resolution {
         self.bindings.get(&span).map(|id| &self.symbols[*id])
     }
 
+    pub fn binding_id(&self, span: Span) -> Option<BindingId> {
+        self.bindings.get(&span).copied()
+    }
+
     pub fn declares(&self, span: Span) -> bool {
         self.declares.contains(&span)
     }

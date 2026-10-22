@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use compiler::error::line_col;
-use compiler::{lexer, parser, resolve};
+use compiler::{check, lexer, parser, resolve};
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -59,13 +59,23 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let (_resolution, resolve_errors) = resolve::resolve(&program);
+    let (resolution, resolve_errors) = resolve::resolve(&program);
 
     for error in &resolve_errors {
         report(&path, &source, error.span.start, &error.kind);
     }
 
     if !resolve_errors.is_empty() {
+        return ExitCode::FAILURE;
+    }
+
+    let type_errors = check::check(&program, &resolution);
+
+    for error in &type_errors {
+        report(&path, &source, error.span.start, &error.kind);
+    }
+
+    if !type_errors.is_empty() {
         return ExitCode::FAILURE;
     }
 
