@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use compiler::error::line_col;
 use compiler::error::line_col as position;
-use compiler::{check, interp, lexer, lower, opt, parser, resolve};
+use compiler::{backend, check, interp, lexer, lower, opt, parser, resolve};
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -11,20 +11,26 @@ fn main() -> ExitCode {
     let mut dump_ir = false;
     let mut execute = false;
     let mut optimize = true;
+    let mut dump_llvm = false;
+    let mut output = None;
     let mut path = None;
 
-    for arg in args.by_ref() {
+    while let Some(arg) = args.next() {
         match arg.as_str() {
             "--tokens" => dump_tokens = true,
             "--ir" => dump_ir = true,
             "--run" => execute = true,
             "--no-opt" => optimize = false,
+            "--emit-llvm" => dump_llvm = true,
+            "-o" => output = args.next(),
             _ => path = Some(arg),
         }
     }
 
     let Some(path) = path else {
-        eprintln!("usage: compiler [--tokens] [--ir] [--run] [--no-opt] <file.dovk>");
+        eprintln!(
+            "usage: compiler [--tokens] [--ir] [--emit-llvm] [--run] [--no-opt] [-o out] <file.dovk>"
+        );
         return ExitCode::FAILURE;
     };
 
@@ -115,6 +121,15 @@ fn main() -> ExitCode {
         };
     }
 
+    if dump_llvm {
+        write_lines(backend::emit(&ir, &source).lines().map(str::to_string));
+        return ExitCode::SUCCESS;
+    }
+
+    if let Some(target) = output {
+        return build(&ir, &source, &target);
+    }
+
     if dump_ir {
         write_lines(ir.to_string().lines().map(str::to_string));
     } else if !dump_tokens {
@@ -122,6 +137,49 @@ fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+fn build(ir: &compiler::ir::Program, source: &str, target: &str) -> ExitCode {
+    let llvm = backend::emit(ir, source);
+    let ll_path = format!("{target}.ll");
+
+    if let Err(err) = std::fs::write(&ll_path, &llvm) {
+        eprintln!("{ll_path}: {err}");
+        return ExitCode::FAILURE;
+    }
+
+    let archive = runtime_archive();
+
+    let status = std::process::Command::new("clang")
+        .args(["-O2", "-o", target, &ll_path, &archive, "-lm", "-lpthread", "-ldl"])
+        .status();
+
+    match status {
+        Ok(status) if status.success() => {
+            let _ = std::fs::remove_file(&ll_path);
+            ExitCode::SUCCESS
+        }
+        Ok(_) => {
+            eprintln!("clang failed; the LLVM IR is at {ll_path}");
+            ExitCode::FAILURE
+        }
+        Err(err) => {
+            eprintln!("could not run clang: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn runtime_archive() -> String {
+    if let Ok(path) = std::env::var("DOVIK_RUNTIME") {
+        return path;
+    }
+
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("libdovik_rt.a")))
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "libdovik_rt.a".to_string())
 }
 
 fn write_lines(lines: impl Iterator<Item = String>) {

@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod backend;
 pub mod check;
 pub mod error;
 pub mod interp;
