@@ -148,3 +148,39 @@ impl fmt::Display for TypeErrorKind {
         }
     }
 }
+
+impl TypeErrorKind {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::AnnotationMismatch { .. } => "DVK4001",
+            Self::ReassignMismatch { .. } => "DVK4002",
+            Self::BinaryOperands { .. } => "DVK4003",
+            Self::UnaryOperand { .. } => "DVK4004",
+            Self::ConditionNotBool(_) => "DVK4005",
+            Self::NotCallable(_) => "DVK4006",
+            Self::ArgumentCount { .. } => "DVK4007",
+            Self::ArgumentType { .. } => "DVK4008",
+            Self::BuiltinArgument { .. } => "DVK4009",
+            Self::NotIndexable(_) => "DVK4010",
+            Self::IndexType { .. } => "DVK4011",
+            Self::StringsAreImmutable => "DVK4012",
+            Self::NotIterable(_) => "DVK4013",
+            Self::MixedListElements { .. } => "DVK4014",
+            Self::MixedDictKeys { .. } => "DVK4015",
+            Self::MixedDictValues { .. } => "DVK4016",
+            Self::InvalidDictKeyType(_) => "DVK4017",
+            Self::CannotInferEmptyList => "DVK4018",
+            Self::CannotInferEmptyDict => "DVK4019",
+            Self::UnitAsValue => "DVK4020",
+            Self::UnitAnnotation => "DVK4021",
+            Self::FunctionAsValue(_) => "DVK4022",
+            Self::BuiltinAsValue(_) => "DVK4023",
+            Self::IntegerLiteralOutOfRange => "DVK4024",
+            Self::ReturnTypeMismatch { .. } => "DVK4025",
+            Self::ReturnOutsideFunction => "DVK4026",
+            Self::MissingReturn { .. } => "DVK4027",
+            Self::CannotInferReturnType(_) => "DVK4028",
+            Self::FoldedCheckFailed(_) => "DVK4029",
+        }
+    }
+}

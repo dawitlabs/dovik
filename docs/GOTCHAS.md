@@ -175,3 +175,27 @@ breaks.
 `DOVIK_RUNTIME`. `cargo build -p dovik-rt` produces it. `tests/native.rs` builds
 it on demand rather than skipping, so a missing archive fails loudly instead of
 quietly passing.
+
+## Error codes are stable identifiers, not line numbers
+
+Every diagnostic carries a `DVK` code ([SPEC.md](SPEC.md) 15.3), assigned per
+error-kind variant in `src/error/*.rs` and `RuntimeError::code`. The prefix is the
+pass: 1 lexical, 2 syntax, 3 names, 4 types, 5 runtime.
+
+Codes are part of the CLI's contract with tools that parse its output. Adding a
+variant takes the next free number in its range. Never renumber one, and never
+reuse a retired number for a different error — delete the variant and leave the
+number spent.
+
+The numeric codes passed to `dovik_trap` are a separate, internal sequence that
+the runtime maps back to `DVK5xxx`. Changing one without the other makes the
+runtime report the wrong error.
+
+## `dovik run` compiles; it does not interpret
+
+[DECISIONS.md](DECISIONS.md) D016 rules out shipping an interpreter, so `run`
+builds a real executable to a temporary path, executes it, forwards its exit code
+and deletes it. An earlier CLI exposed the IR interpreter as `--run`, which
+contradicted D016; the interpreter is reachable only as a library, from tests.
+
+Do not reintroduce a user-facing flag that interprets.

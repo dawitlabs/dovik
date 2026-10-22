@@ -1,8 +1,8 @@
 # Dovik Command-Line Interface
 
-**Status:** Draft — no CLI exists
+**Status:** Partly implemented — `build`, `run`, `check`, `--version` and `--help` work; `format` and `test` do not
 
-Nothing in this document is implemented. Command names and behavior are proposals, not a contract; the only contract is [SPEC.md](SPEC.md).
+Command names and behavior remain proposals rather than a contract; the only contract is [SPEC.md](SPEC.md). Section 8 records what the current CLI actually does.
 
 ## 1. Purpose
 
@@ -67,14 +67,57 @@ A project manifest and dependency management belong with the module system, in R
 
 ## 6. Open Decisions
 
-- Exact command syntax and flags.
-- Default executable naming.
-- JSON diagnostic schema.
-- Build output directory.
 - Project manifest format.
 - Dependency management.
 - Incremental compilation and caching.
+- Whether `dovik test` needs a language-level way to declare a test, or an external harness.
+
+Settled provisionally by the current implementation, and open to change:
+
+- Default executable naming: the source file's stem, written to the working directory.
+- Build output directory: none; the executable is written where it is named.
+- JSON diagnostic schema: see section 8.
 
 ## 7. Status
 
-This document defines the proposed CLI, not a finalized interface contract. `dovik build`, `run`, `check`, `test`, and `format` are all unimplemented.
+`format` and `test` are unimplemented. `format` needs a formatter; `test` cannot
+be written at all until the language can express a test, since there would be
+nothing for it to collect.
+
+## 8. Implemented Behaviour
+
+`dovik build <file> [-o <path>]` writes an executable, defaulting to the file's
+stem. `--emit-llvm`, `--emit-ir` and `--emit-tokens` write that stage to stdout
+instead. `--no-opt` skips optimization.
+
+`dovik run <file>` builds to a temporary path, executes it, forwards its exit
+code, and removes it. It does not interpret ([DECISIONS.md](DECISIONS.md) D016).
+
+`dovik check <file>` runs every pass and reports diagnostics without generating
+code. It prints nothing and exits 0 when the program is valid.
+
+Exit codes are 0 on success and 1 on any failure, including a runtime error in a
+program started by `dovik run`.
+
+Diagnostics go to stderr; program output goes to stdout. Nothing a compiler pass
+produces is ever written to stdout.
+
+Every diagnostic carries a stable code ([SPEC.md](SPEC.md) 15.3), prefixed by the
+pass that raised it: `DVK1xxx` lexical, `DVK2xxx` syntax, `DVK3xxx` names and
+scope, `DVK4xxx` types, `DVK5xxx` runtime. A code, once assigned, is never reused
+for a different error.
+
+Text form:
+
+```
+main.dovk:4:17: error[DVK4001]: annotation says `Float` but the initializer is `Int`
+```
+
+`--json` emits one object per line instead:
+
+```json
+{"severity":"error","code":"DVK4001","file":"main.dovk","line":4,"column":17,"start":37,"end":38,"message":"..."}
+```
+
+`start` and `end` are byte offsets into the source. A runtime error is reported by
+the program itself, in the form `runtime error[DVK5005] at 3:7: index out of bounds`.

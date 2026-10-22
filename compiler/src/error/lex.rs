@@ -84,3 +84,32 @@ impl fmt::Display for LexErrorKind {
         }
     }
 }
+
+impl LexErrorKind {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::UnexpectedChar(_) => "DVK1001",
+            Self::NonAsciiIdentifier => "DVK1002",
+            Self::TabInIndentation => "DVK1003",
+            Self::IndentNotMultipleOfFour(_) => "DVK1004",
+            Self::IndentSkippedLevel { .. } => "DVK1005",
+            Self::InconsistentDedent(_) => "DVK1006",
+            Self::UnclosedBracket(_) => "DVK1007",
+            Self::UnmatchedCloseBracket(_) => "DVK1008",
+            Self::UnterminatedString => "DVK1009",
+            Self::NewlineInString => "DVK1010",
+            Self::TrailingBackslash => "DVK1011",
+            Self::InvalidEscape(_) => "DVK1012",
+            Self::UnicodeEscapeMissingOpenBrace => "DVK1013",
+            Self::UnicodeEscapeUnterminated => "DVK1014",
+            Self::UnicodeEscapeEmpty => "DVK1015",
+            Self::UnicodeEscapeTooManyDigits => "DVK1016",
+            Self::UnicodeEscapeInvalidDigit(_) => "DVK1017",
+            Self::UnicodeEscapeOutOfRange(_) => "DVK1018",
+            Self::IntegerTooLarge => "DVK1019",
+            Self::LeadingZero => "DVK1020",
+            Self::FloatMissingFractionDigits => "DVK1021",
+            Self::FloatOverflow => "DVK1022",
+        }
+    }
+}

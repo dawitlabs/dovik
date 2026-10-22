@@ -1,4 +1,5 @@
 mod checks;
+mod collection;
 mod inst;
 mod predicate;
 mod value;

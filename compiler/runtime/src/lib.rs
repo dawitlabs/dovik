@@ -39,6 +39,17 @@ fn text(word: u64) -> &'static str {
     unsafe { borrow::<Str>(word).bytes.as_str() }
 }
 
+fn code_name(code: u32) -> &'static str {
+    match code {
+        0 => "DVK5001",
+        1 => "DVK5002",
+        2 => "DVK5003",
+        3 => "DVK5004",
+        4 => "DVK5005",
+        _ => "DVK5006",
+    }
+}
+
 fn message(code: u32) -> &'static str {
     match code {
         0 => "integer overflow",
@@ -53,7 +64,12 @@ fn message(code: u32) -> &'static str {
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_trap(code: u32, line: u32, column: u32) -> ! {
     let mut err = std::io::stderr();
-    let _ = writeln!(err, "runtime error at {line}:{column}: {}", message(code));
+    let _ = writeln!(
+        err,
+        "runtime error[{}] at {line}:{column}: {}",
+        code_name(code),
+        message(code)
+    );
     let _ = err.flush();
     std::process::exit(1);
 }

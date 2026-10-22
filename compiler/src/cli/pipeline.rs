@@ -1,0 +1,204 @@
+use std::path::Path;
+use std::process::{Command, ExitCode};
+
+use super::report::write_stdout;
+use super::{Emit, Options, Report};
+use crate::diagnostic::{self, Diagnostic};
+use crate::error::line_col;
+use crate::{backend, check, ir, lexer, lower, opt, parser, resolve};
+
+pub struct Compiled {
+    pub program: ir::Program,
+    pub llvm: String,
+}
+
+pub fn check(path: &str, source: &str, options: &Options) -> ExitCode {
+    let report = Report {
+        path,
+        source,
+        json: options.json,
+    };
+
+    match compile(source, options) {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(diagnostics) => {
+            report.emit(&diagnostics);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+pub fn build(path: &str, source: &str, options: &Options) -> ExitCode {
+    let report = Report {
+        path,
+        source,
+        json: options.json,
+    };
+
+    if options.emit == Emit::Tokens {
+        let (tokens, errors) = lexer::lex(source);
+
+        if !errors.is_empty() {
+            report.emit(&diagnostic::from_lex(&errors));
+            return ExitCode::FAILURE;
+        }
+
+        write_stdout(tokens.iter().map(|token| {
+            let (line, column) = line_col(source, token.span.start);
+            format!("{line}:{column}\t{:?}", token.kind)
+        }));
+        return ExitCode::SUCCESS;
+    }
+
+    let compiled = match compile(source, options) {
+        Ok(compiled) => compiled,
+        Err(diagnostics) => {
+            report.emit(&diagnostics);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    match options.emit {
+        Emit::Ir => {
+            write_stdout(compiled.program.to_string().lines().map(str::to_string));
+            ExitCode::SUCCESS
+        }
+        Emit::Llvm => {
+            write_stdout(compiled.llvm.lines().map(str::to_string));
+            ExitCode::SUCCESS
+        }
+        _ => {
+            let target = options
+                .output
+                .clone()
+                .unwrap_or_else(|| default_output(path));
+
+            match link(&compiled.llvm, &target) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(message) => {
+                    report.note(&message);
+                    ExitCode::FAILURE
+                }
+            }
+        }
+    }
+}
+
+pub fn run(path: &str, source: &str, options: &Options) -> ExitCode {
+    let report = Report {
+        path,
+        source,
+        json: options.json,
+    };
+
+    let compiled = match compile(source, options) {
+        Ok(compiled) => compiled,
+        Err(diagnostics) => {
+            report.emit(&diagnostics);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let target = std::env::temp_dir().join(format!("dovik-run-{}", std::process::id()));
+    let target = target.display().to_string();
+
+    if let Err(message) = link(&compiled.llvm, &target) {
+        report.note(&message);
+        return ExitCode::FAILURE;
+    }
+
+    let status = Command::new(&target).status();
+    let _ = std::fs::remove_file(&target);
+
+    match status {
+        Ok(status) => match status.code() {
+            Some(0) => ExitCode::SUCCESS,
+            Some(_) => ExitCode::FAILURE,
+            None => ExitCode::FAILURE,
+        },
+        Err(err) => {
+            report.note(&format!("could not start the program: {err}"));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+pub fn compile(source: &str, options: &Options) -> Result<Compiled, Vec<Diagnostic>> {
+    let (tokens, lex_errors) = lexer::lex(source);
+
+    if !lex_errors.is_empty() {
+        return Err(diagnostic::from_lex(&lex_errors));
+    }
+
+    let (ast, parse_errors) = parser::parse(source, &tokens);
+
+    if !parse_errors.is_empty() {
+        return Err(diagnostic::from_parse(&parse_errors));
+    }
+
+    let (resolution, resolve_errors) = resolve::resolve(&ast);
+
+    if !resolve_errors.is_empty() {
+        return Err(diagnostic::from_resolve(&resolve_errors));
+    }
+
+    let (typed, type_errors) = check::check(&ast, &resolution);
+
+    if !type_errors.is_empty() {
+        return Err(diagnostic::from_type(&type_errors));
+    }
+
+    let mut program = lower::lower(&ast, &resolution, &typed);
+
+    if options.optimize {
+        let fold_errors = opt::optimize(&mut program);
+
+        if !fold_errors.is_empty() {
+            return Err(diagnostic::from_type(&fold_errors));
+        }
+    }
+
+    let llvm = backend::emit(&program, source);
+    Ok(Compiled { program, llvm })
+}
+
+fn default_output(path: &str) -> String {
+    Path::new(path)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .unwrap_or_else(|| "a.out".to_string())
+}
+
+fn link(llvm: &str, target: &str) -> Result<(), String> {
+    let ll_path = format!("{target}.ll");
+
+    if let Err(err) = std::fs::write(&ll_path, llvm) {
+        return Err(format!("{ll_path}: {err}"));
+    }
+
+    let status = Command::new("clang")
+        .args(["-O2", "-o", target, &ll_path, &runtime_archive()])
+        .args(["-lm", "-lpthread", "-ldl"])
+        .status();
+
+    match status {
+        Ok(status) if status.success() => {
+            let _ = std::fs::remove_file(&ll_path);
+            Ok(())
+        }
+        Ok(_) => Err(format!("clang failed; the LLVM IR is at {ll_path}")),
+        Err(err) => Err(format!("could not run clang: {err}")),
+    }
+}
+
+pub fn runtime_archive() -> String {
+    if let Ok(path) = std::env::var("DOVIK_RUNTIME") {
+        return path;
+    }
+
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("libdovik_rt.a")))
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "libdovik_rt.a".to_string())
+}

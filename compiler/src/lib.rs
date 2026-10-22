@@ -1,6 +1,8 @@
 pub mod ast;
 pub mod backend;
 pub mod check;
+pub mod cli;
+pub mod diagnostic;
 pub mod error;
 pub mod interp;
 pub mod ir;

@@ -62,3 +62,22 @@ impl fmt::Display for ResolveErrorKind {
         }
     }
 }
+
+impl ResolveErrorKind {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::UndefinedName(_) => "DVK3001",
+            Self::DuplicateDeclaration { .. } => "DVK3002",
+            Self::Shadows { .. } => "DVK3003",
+            Self::ReservedTypeName(_) => "DVK3004",
+            Self::RedeclaresBuiltin(_) => "DVK3005",
+            Self::AssignToGlobal(_) => "DVK3006",
+            Self::MutateGlobalInFunction(_) => "DVK3007",
+            Self::AssignToLoopVariable(_) => "DVK3008",
+            Self::NotAssignable { .. } => "DVK3009",
+            Self::BreakOutsideLoop => "DVK3010",
+            Self::ContinueOutsideLoop => "DVK3011",
+            Self::CallReachesLaterGlobal { .. } => "DVK3012",
+        }
+    }
+}

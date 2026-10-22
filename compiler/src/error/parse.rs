@@ -50,3 +50,16 @@ impl fmt::Display for ParseErrorKind {
         }
     }
 }
+
+impl ParseErrorKind {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Expected { .. } => "DVK2001",
+            Self::InvalidAssignTarget => "DVK2002",
+            Self::AnnotationNeedsPlainName => "DVK2003",
+            Self::UnknownType(_) => "DVK2004",
+            Self::TypeArity { .. } => "DVK2005",
+            Self::NestedFunction => "DVK2006",
+        }
+    }
+}

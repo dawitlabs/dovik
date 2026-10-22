@@ -169,6 +169,19 @@ pub enum InstKind {
     },
 }
 
+impl RuntimeError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::IntegerOverflow => "DVK5001",
+            Self::DivisionByZero => "DVK5002",
+            Self::RemainderByZero => "DVK5003",
+            Self::InvalidConversion => "DVK5004",
+            Self::IndexOutOfBounds => "DVK5005",
+            Self::MissingKey => "DVK5006",
+        }
+    }
+}
+
 impl InstKind {
     pub fn runtime_error(&self) -> Option<RuntimeError> {
         match self {
