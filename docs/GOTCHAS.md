@@ -355,3 +355,42 @@ work as 120 ms when the real figure was 38 ms.
 Sampling `/proc/<pid>/status` for `VmHWM` perturbs the process being watched. Measuring
 both at once inflated every timing in an earlier revision of the results. `bench/run.py`
 now runs the timing repetitions first and the memory passes afterwards.
+
+## In-place string append is only safe because of three guards
+
+`dovik_str_concat` extends its left operand in place instead of copying, which is what
+makes `s = s + "x"` amortized O(1) and beats the equivalent C. [SPEC.md](SPEC.md) 10.3
+says strings are immutable, so this is only legal while no one can observe it. Three
+conditions enforce that, and removing any one is a correctness bug:
+
+1. **`count == 1`.** Exactly one owner, so no other binding can see the change. A string
+   also held in a list, a dict or another variable has a higher count and takes the
+   copying path.
+2. **`frozen == 0`.** A literal is created once at program start and shared by every use
+   (`@slit.N`), so its count is 1 while being referenced from many places. `dovik_str_new`
+   marks it frozen. Without this, `"p" + n` in a loop would corrupt the literal `"p"`.
+3. **`a != b`.** `s = s + s` would read from the buffer it is reallocating.
+
+The in-place path returns the same pointer with the count incremented, because the
+backend treats a concat result as owned and will release it once. Returning it without
+that increment frees a live string.
+
+`tests/native.rs` covers all three guards — shared variable, self-concat, string in a
+list, string in a dict, named literal, returned string, string parameter — by comparing
+native output against the interpreter, which has no in-place path. A broken guard shows
+up as a mismatch there.
+
+## The object pool bounds itself deliberately
+
+Released strings and lists go onto free lists rather than back to `malloc`, which is most
+of why allocation churn improved. Both are capped at 2048 entries and only accept objects
+whose buffer is at most 4096 bytes, so a program that briefly builds something huge does
+not keep that memory forever.
+
+A pooled object keeps its buffer and capacity; reuse resets `count`, `len` and `frozen`.
+Forgetting to reset `frozen` would let a recycled object inherit a literal's immutability
+and silently disable in-place append.
+
+Pooling does not affect the leak counter: `live_objects` is decremented on release
+whether or not the memory is recycled, so `DOVIK_CHECK_LEAKS` still measures ownership
+rather than allocator behaviour.

@@ -134,6 +134,38 @@ const CORPUS: &[(&str, &str)] = &[
         "function add(a: Int, b: Int) -> Int:\n    return a + b\n\nfunction mutate(xs: List<Int>):\n    xs[0] = 42\n\nitems = [1]\nmutate(items)\nprint(items[0])\nprint(add(20, 22))\n",
     ),
     ("negatives", "print(-7 % 3)\nprint(-9223372036854775808)\nprint(0 - 5)\n"),
+    (
+        "alias_shared_string",
+        "a = \"x\"\nb = a\na = a + \"y\"\nprint(a)\nprint(b)\n",
+    ),
+    (
+        "alias_self_concat",
+        "s = \"ab\"\ns = s + s\nprint(s)\nprint(len(s))\n",
+    ),
+    (
+        "alias_string_in_list",
+        "s = \"a\"\nxs: List<String> = []\nappend(xs, s)\ns = s + \"b\"\nprint(s)\nprint(xs[0])\n",
+    ),
+    (
+        "alias_literal_left",
+        "out = \"\"\nfor n in [\"a\", \"b\"]:\n    out = out + (\"p\" + n)\nprint(out)\nprint(\"p\" + \"q\")\n",
+    ),
+    (
+        "alias_named_literal",
+        "prefix = \"hi \"\nfor n in [\"a\", \"b\"]:\n    print(prefix + n)\nprint(prefix)\n",
+    ),
+    (
+        "alias_dict_value",
+        "d: Dict<String, String> = {}\ns = \"v\"\nd[\"k\"] = s\ns = s + \"2\"\nprint(s)\nprint(d[\"k\"])\n",
+    ),
+    (
+        "alias_returned",
+        "function build(n: Int) -> String:\n    out = \"\"\n    i = 0\n    while i < n:\n        out = out + \"z\"\n        i = i + 1\n    return out\n\na = build(3)\nb = build(4)\nprint(a)\nprint(b)\n",
+    ),
+    (
+        "alias_param_concat",
+        "function tag(base: String) -> String:\n    return base + \"!\"\n\ns = \"hi\"\nprint(tag(s))\nprint(s)\n",
+    ),
 ];
 
 #[test]

@@ -19,17 +19,21 @@ typedef struct {
     int64_t count;
 } Header;
 
-typedef struct {
+typedef struct Str {
     Header h;
     size_t len;
+    size_t cap;
+    uint8_t frozen;
     char *bytes;
+    struct Str *next_free;
 } Str;
 
-typedef struct {
+typedef struct List {
     Header h;
     size_t len;
     size_t cap;
     Cell *items;
+    struct List *next_free;
 } List;
 
 typedef struct {
@@ -42,6 +46,14 @@ typedef struct {
 } Dict;
 
 static int64_t live_objects = 0;
+
+#define POOL_LIMIT 2048
+#define POOL_MAX_BYTES 4096
+
+static Str *string_pool = NULL;
+static size_t string_pool_len = 0;
+static List *list_pool = NULL;
+static size_t list_pool_len = 0;
 
 static char out_buffer[1 << 16];
 static size_t out_len = 0;
@@ -130,6 +142,16 @@ void dovik_release(uint8_t tag, uint64_t word) {
 
     if (tag == TAG_STR) {
         Str *owned = (Str *)header;
+
+        if (string_pool_len < POOL_LIMIT && owned->cap <= POOL_MAX_BYTES) {
+            owned->len = 0;
+            owned->frozen = 0;
+            owned->next_free = string_pool;
+            string_pool = owned;
+            string_pool_len += 1;
+            return;
+        }
+
         free(owned->bytes);
         free(owned);
         return;
@@ -139,6 +161,15 @@ void dovik_release(uint8_t tag, uint64_t word) {
         List *owned = (List *)header;
         for (size_t i = 0; i < owned->len; i++)
             dovik_release(owned->items[i].tag, owned->items[i].word);
+
+        if (list_pool_len < POOL_LIMIT && owned->cap * sizeof(Cell) <= POOL_MAX_BYTES) {
+            owned->len = 0;
+            owned->next_free = list_pool;
+            list_pool = owned;
+            list_pool_len += 1;
+            return;
+        }
+
         free(owned->items);
         free(owned);
         return;
@@ -165,26 +196,70 @@ void dovik_report_leaks(void) {
     fprintf(stderr, "dovik: %lld live object(s) at exit\n", (long long)live_objects);
 }
 
-static Str *new_string(size_t len) {
+static Str *new_string_with_capacity(size_t len, size_t cap) {
+    live_objects += 1;
+
+    if (string_pool != NULL && string_pool->cap >= cap) {
+        Str *value = string_pool;
+        string_pool = value->next_free;
+        string_pool_len -= 1;
+        value->h.count = 1;
+        value->len = len;
+        value->frozen = 0;
+        value->bytes[len] = 0;
+        return value;
+    }
+
     Str *value = checked_alloc(sizeof(Str));
     value->h.count = 1;
     value->len = len;
-    value->bytes = checked_alloc(len + 1);
+    value->cap = cap;
+    value->frozen = 0;
+    value->bytes = checked_alloc(cap + 1);
     value->bytes[len] = 0;
-    live_objects += 1;
     return value;
 }
+
+static Str *new_string(size_t len) { return new_string_with_capacity(len, len); }
 
 uint64_t dovik_str_new(const char *bytes, int64_t len) {
     Str *value = new_string((size_t)len);
     memcpy(value->bytes, bytes, (size_t)len);
+    value->frozen = 1;
     return (uint64_t)(uintptr_t)value;
+}
+
+static inline int can_extend_in_place(Str *a, Str *b) {
+    return a->h.count == 1 && !a->frozen && a != b;
 }
 
 uint64_t dovik_str_concat(uint64_t left, uint64_t right) {
     Str *a = (Str *)(uintptr_t)left;
     Str *b = (Str *)(uintptr_t)right;
-    Str *value = new_string(a->len + b->len);
+
+    if (can_extend_in_place(a, b)) {
+        size_t needed = a->len + b->len;
+
+        if (needed > a->cap) {
+            size_t cap = a->cap < 16 ? 16 : a->cap;
+            while (cap < needed) cap *= 2;
+            char *bytes = checked_alloc(cap + 1);
+            memcpy(bytes, a->bytes, a->len);
+            free(a->bytes);
+            a->bytes = bytes;
+            a->cap = cap;
+        }
+
+        memcpy(a->bytes + a->len, b->bytes, b->len);
+        a->len = needed;
+        a->bytes[needed] = 0;
+        a->h.count += 1;
+        return (uint64_t)(uintptr_t)a;
+    }
+
+    size_t total = a->len + b->len;
+    size_t cap = total < 16 ? 16 : total;
+    Str *value = new_string_with_capacity(total, cap);
     memcpy(value->bytes, a->bytes, a->len);
     memcpy(value->bytes + a->len, b->bytes, b->len);
     return (uint64_t)(uintptr_t)value;
@@ -258,12 +333,22 @@ int32_t dovik_str_cmp(uint64_t left, uint64_t right) {
 }
 
 uint64_t dovik_list_new(void) {
+    live_objects += 1;
+
+    if (list_pool != NULL) {
+        List *value = list_pool;
+        list_pool = value->next_free;
+        list_pool_len -= 1;
+        value->h.count = 1;
+        value->len = 0;
+        return (uint64_t)(uintptr_t)value;
+    }
+
     List *value = checked_alloc(sizeof(List));
     value->h.count = 1;
     value->len = 0;
     value->cap = 0;
     value->items = NULL;
-    live_objects += 1;
     return (uint64_t)(uintptr_t)value;
 }
 
