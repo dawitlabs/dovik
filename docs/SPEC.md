@@ -786,7 +786,9 @@ A `String` is indexed and measured in **Unicode scalar values**, zero-based — 
 Two consequences worth stating plainly:
 
 1. `len("é")` is `1` even though the UTF-8 encoding is two bytes, and `len` of a flag emoji or a combining sequence is greater than `1` because those are multiple scalars.
-2. Scalar indexing over UTF-8 storage is **O(n)**, not O(1). A loop that indexes a string by position is quadratic. Prefer `for` (8.3). See U3 in section 21.
+2. Indexing cost depends on the string's contents, not on its type. A string whose scalars are all below U+0080 indexes and measures in constant time; one containing any multi-byte scalar costs time proportional to its length per index, so a loop that indexes such a string by position is quadratic. `for` (8.3) is linear for every string and is the form to prefer when either could be written.
+
+This is a cost model, not a guarantee about representation: an implementation may index any string in constant time, and none may make a conforming program observe the difference other than by timing it.
 
 Byte-level access, grapheme segmentation, normalization, and case conversion belong to the standard library (section 17).
 
@@ -1074,18 +1076,11 @@ Identifiers are stable. A resolved question keeps its number and is listed below
 | **U7** — stack exhaustion and out-of-memory | Both are runtime errors with diagnostics and no source location; the thresholds are implementation-defined (5.5, 15.2) | [DECISIONS.md](DECISIONS.md) D022 |
 | **U4** — method-call syntax versus functions | Functions only. There is no member-access expression and no method syntax (6.9, 11.2, 16) | [DECISIONS.md](DECISIONS.md) D023 |
 | **U8** — representing absence | `T?`, with `none`, `some`, and narrowing through a single `if` (23) | [DECISIONS.md](DECISIONS.md) D025 |
+| **U3** — string indexing cost and unit | Scalar indexing over UTF-8 is kept; all-ASCII strings index and measure in constant time, others in linear time (10.4) | [DECISIONS.md](DECISIONS.md) D026 |
 
 The shadowing question that D011 settled was never a numbered entry here; it is recorded in [DECISIONS.md](DECISIONS.md) D011 and specified in 9.3 and 9.6.
 
 **Still open.**
-
-### U3 — String indexing cost and unit
-
-10.4 indexes by Unicode scalar over UTF-8 storage, which is O(n) per index and conflicts with the low-overhead goal.
-
-Alternatives: index by scalar and accept O(n), with `for` as the fast path; index by byte, which is O(1) but lets a program split a scalar; store UTF-32, which is O(1) but up to four times the memory; keep scalar indexing but add a cursor type, which is a new type.
-
-**Blocks:** the string representation in [RUNTIME.md](RUNTIME.md), and Roadmap Phase 6.
 
 ### U5 — Shared mutable module state
 

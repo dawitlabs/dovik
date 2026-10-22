@@ -959,3 +959,25 @@ Why no test caught it: `opt`'s corpus compares optimized against unoptimized out
 the interpreter, which does not care whether the IR would satisfy LLVM's dominance rule, and
 `native`'s corpus had no loop with `len` in its condition. Both corpora now have one. An
 optimizer bug that produces invalid IR is only visible to a test that runs `clang`.
+
+## The ASCII flag is an invalidation obligation, like the hash
+
+`len` and `s[i]` are constant time for a string whose bytes are all below `0x80`, and that is
+the difference between 7 ms and 759 ms on a positional scan
+([DECISIONS.md](DECISIONS.md) D026). It works because each `Str` caches the answer in
+`ascii_known` / `ascii`, computed on first use.
+
+**Anything that changes a string's bytes must clear `ascii_known`, in the same place it clears
+`hashed`.** Both flags are memoized facts about the bytes, both are sound only because strings
+are immutable apart from in-place append, and both go stale in exactly the same situations.
+Searching for `hashed` finds every site that needs the other.
+
+In-place append does better than clearing: it computes whether the appended string is ASCII
+*before* extending, and combines the two answers. Clearing instead would be correct but would
+make append-then-index quadratic again, because every index after an append would rescan the
+whole string.
+
+The case worth testing is a string that crosses the boundary. `"abc" + "é"` has a stale
+`true` to invalidate, and after the append `s[3]` must take the byte-walking path and return
+`é` rather than one byte of it. The tests walk such a string by index and compare against
+iterating it with `for`.

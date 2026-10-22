@@ -335,3 +335,23 @@ The narrowing rule is also the first flow-sensitive rule in the type checker, an
 One consequence worth noting: forbidding assignment to a narrowed variable, which looked like a type-system tidiness rule, turns out to be what makes the implementation sound. A narrowed read of a `String?` hands back the reference the optional holds without retaining it; if the variable could be reassigned inside the block, that reference could be released while still in use.
 
 **Status:** Accepted. Resolves U8. Specified in [SPEC.md](SPEC.md) 23, with amendments to 2.7 and 16.
+
+## D026: Scalar Indexing Stays, With a Constant-Time Path for ASCII
+
+**Decision:** [SPEC.md](SPEC.md) 10.4 is unchanged in meaning: a `String` is UTF-8, indexed and measured in Unicode scalar values. The cost model is now stated: a string whose scalars are all below U+0080 indexes and measures in constant time, and one containing a multi-byte scalar costs time proportional to its length per index.
+
+The runtime gets there with a lazily computed per-string flag, cached exactly like the memoized hash: set on first use, invalidated by mutation, and combined from both operands on in-place append.
+
+**Reason:** U3 asked whether scalar-over-UTF-8 was affordable, and offered four ways out: accept O(n); index by bytes; store UTF-32; or add a cursor type. Measurement says none of them is needed.
+
+Scanning a 20,000-scalar ASCII string by position, best of five: **759 ms before, 7 ms after.** `for` over the same string is 6 ms either way, and the `string_index` and `strings` benchmarks both got faster — 6 ms to 4 ms and 8 ms to 4 ms — because `len` is now constant time for ASCII as well.
+
+Each rejected alternative now costs something for nothing. Byte indexing would let a program split a scalar in half, which is a semantic regression to buy speed that is already there. UTF-32 would make every string up to four times larger to fix a case that is no longer slow. A cursor type would add a type to the language for the same reason.
+
+**Trade-off:** A string containing any non-ASCII scalar still costs O(n) per index, so positional scanning of one is still quadratic, and `for` is still the guidance in 10.4. Dovik is used from Amharic, where that is the normal case rather than the exotic one, so this is a real limitation and not a theoretical one.
+
+Closing it needs a scalar-offset index stored beside the bytes, which costs memory on every string to speed up a pattern `for` already handles. That is recorded as open in [RUNTIME.md](RUNTIME.md) rather than guessed at.
+
+The flag is also an invalidation obligation: anything that mutates a string's bytes must clear it, in the same place it clears the hash. Both are listed in [GOTCHAS.md](GOTCHAS.md).
+
+**Status:** Accepted. Resolves U3. Specified in [SPEC.md](SPEC.md) 10.4.

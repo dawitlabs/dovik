@@ -223,6 +223,15 @@ print(ends_with(\"dovik\", \"vik\"))
 print(upper(\"dovik\"))
 print(lower(\"DOVIK\"))
 print(join(split(\"héllo\", \"\"), \"-\"))
+mixed = \"abc\" + \"é\"
+print(len(mixed))
+print(mixed[3])
+j = 0
+walked = \"\"
+while j < len(mixed):
+    walked = walked + mixed[j]
+    j = j + 1
+print(walked)
 total = 0
 for p in parts:
     total = total + len(p)
@@ -332,4 +341,64 @@ fn case_conversion_is_locale_independent() {
 fn case_conversion_leaves_uncased_scalars_alone() {
     assert_eq!(output("print(upper(\"漢字 123 !\"))\n"), ["漢字 123 !"]);
     assert_eq!(output("print(lower(\"漢字 123 !\"))\n"), ["漢字 123 !"]);
+}
+
+#[test]
+fn indexing_is_correct_across_the_ascii_boundary() {
+    let source = "\
+mixed = \"abc\" + \"é\"
+print(len(mixed))
+print(mixed[0])
+print(mixed[3])
+
+wide = \"héllo wörld\"
+print(len(wide))
+print(wide[1])
+print(wide[6])
+
+plain = \"abc\"
+print(len(plain))
+print(plain[2])
+";
+    assert_eq!(
+        output(source),
+        ["4", "a", "é", "11", "é", "w", "3", "c"]
+    );
+}
+
+#[test]
+fn appending_invalidates_the_ascii_answer() {
+    let source = "\
+s = \"ab\"
+print(len(s))
+s = s + \"é\"
+print(len(s))
+print(s[2])
+s = s + \"c\"
+print(len(s))
+print(s[3])
+";
+    assert_eq!(output(source), ["2", "3", "é", "4", "c"]);
+}
+
+#[test]
+fn a_positional_scan_matches_an_iterating_scan() {
+    let source = "\
+text = \"héllo wörld\"
+by_index = \"\"
+j = 0
+
+while j < len(text):
+    by_index = by_index + text[j]
+    j = j + 1
+
+by_loop = \"\"
+
+for c in text:
+    by_loop = by_loop + c
+
+print(by_index == by_loop)
+print(by_index == text)
+";
+    assert_eq!(output(source), ["true", "true"]);
 }

@@ -36,6 +36,8 @@ typedef struct Str {
     size_t cap;
     uint8_t frozen;
     uint8_t hashed;
+    uint8_t ascii_known;
+    uint8_t ascii;
     uint64_t hash;
     char *bytes;
     struct Str *next_free;
@@ -213,6 +215,7 @@ static void *checked_alloc(size_t bytes) {
 void dovik_retain(uint8_t tag, uint64_t word);
 void dovik_release(uint8_t tag, uint64_t word);
 uint64_t dovik_cell_new(uint64_t word);
+static int all_ascii(Str *value);
 static void reclaim(uint8_t tag, uint64_t word);
 
 static inline Header *header_of(uint8_t tag, uint64_t word) {
@@ -330,6 +333,8 @@ static Str *new_string_with_capacity(size_t len, size_t cap) {
         value->len = len;
         value->frozen = 0;
         value->hashed = 0;
+    value->ascii_known = 0;
+        value->ascii_known = 0;
         value->bytes[len] = 0;
         return value;
     }
@@ -340,6 +345,7 @@ static Str *new_string_with_capacity(size_t len, size_t cap) {
     value->cap = cap;
     value->frozen = 0;
     value->hashed = 0;
+    value->ascii_known = 0;
     value->bytes = checked_alloc(cap + 1);
     value->bytes[len] = 0;
     return value;
@@ -363,6 +369,7 @@ uint64_t dovik_str_concat(uint64_t left, uint64_t right) {
     Str *b = (Str *)(uintptr_t)right;
 
     if (can_extend_in_place(a, b)) {
+        int both_ascii = a->ascii_known && a->ascii && all_ascii(b);
         size_t needed = a->len + b->len;
 
         if (needed > a->cap) {
@@ -379,6 +386,8 @@ uint64_t dovik_str_concat(uint64_t left, uint64_t right) {
         a->len = needed;
         a->bytes[needed] = 0;
         a->hashed = 0;
+        a->ascii_known = both_ascii;
+        a->ascii = both_ascii;
         a->h.count += 1;
         return (uint64_t)(uintptr_t)a;
     }
@@ -395,8 +404,22 @@ int64_t dovik_str_byte_len(uint64_t word) { return (int64_t)((Str *)(uintptr_t)w
 
 static inline int is_continuation(unsigned char byte) { return (byte & 0xC0) == 0x80; }
 
+static int all_ascii(Str *value) {
+    if (value->ascii_known) return value->ascii;
+
+    size_t i = 0;
+    for (; i < value->len; i++)
+        if ((unsigned char)value->bytes[i] >= 0x80) break;
+
+    value->ascii = i == value->len ? 1 : 0;
+    value->ascii_known = 1;
+    return value->ascii;
+}
+
 int64_t dovik_str_scalar_len(uint64_t word) {
     Str *value = (Str *)(uintptr_t)word;
+    if (all_ascii(value)) return (int64_t)value->len;
+
     int64_t count = 0;
     for (size_t i = 0; i < value->len; i++)
         if (!is_continuation((unsigned char)value->bytes[i])) count++;
@@ -414,6 +437,13 @@ static inline size_t scalar_width(unsigned char lead) {
 uint64_t dovik_str_scalar_at(uint64_t word, int64_t index, uint32_t line, uint32_t column) {
     Str *value = (Str *)(uintptr_t)word;
     if (index < 0) dovik_trap(4, line, column);
+
+    if (all_ascii(value)) {
+        if ((size_t)index >= value->len) dovik_trap(4, line, column);
+        Str *scalar = new_string(1);
+        scalar->bytes[0] = value->bytes[index];
+        return (uint64_t)(uintptr_t)scalar;
+    }
 
     size_t offset = 0;
     int64_t seen = 0;
