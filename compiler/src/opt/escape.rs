@@ -61,7 +61,9 @@ pub(crate) fn destinations(kind: &InstKind) -> Vec<RegId> {
             next_offset,
             ..
         } => vec![*scalar, *next_offset],
-        InstKind::Call { dest, .. } => dest.iter().copied().collect(),
+        InstKind::Call { dest, .. } | InstKind::Builtin { dest, .. } => {
+            dest.iter().copied().collect()
+        }
         InstKind::StoreLocal { .. }
         | InstKind::StoreGlobal { .. }
         | InstKind::ListSet { .. }

@@ -184,6 +184,16 @@ impl Interpreter<'_> {
                 let value = self.value(value, frame);
                 self.output.push(rendered(&value, ty));
             }
+            InstKind::Builtin { dest, which, args } => {
+                let which = *which;
+                let dest = *dest;
+                let args = args.clone();
+                let result = self.run_builtin(which, &args, frame, span)?;
+
+                if let Some(dest) = dest {
+                    frame.registers[dest] = result;
+                }
+            }
             InstKind::Call { dest, function, args } => {
                 let args: Vec<Value> = args.iter().map(|arg| self.value(arg, frame)).collect();
                 let result = self.call(*function, args)?;

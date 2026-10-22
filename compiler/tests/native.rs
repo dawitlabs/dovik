@@ -176,7 +176,7 @@ const TRAPS: &[(&str, &str, &str)] = &[
     (
         "trap_convert",
         "big = 9999999999.0\nprint(to_int(big * big))\n",
-        "cannot convert",
+        "invalid conversion",
     ),
     ("trap_bounds", "xs = [1]\ni = 5\nprint(xs[i])\n", "index out of bounds"),
     ("trap_string_bounds", "s = \"a\"\ni = 9\nprint(s[i])\n", "index out of bounds"),

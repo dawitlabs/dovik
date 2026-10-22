@@ -153,7 +153,7 @@ impl Resolver {
     }
 
     fn declare_builtins(&mut self) {
-        for name in ["print", "len", "to_int", "to_float"] {
+        for name in crate::builtins::NAMES {
             let id = self.symbols.len();
             self.symbols.push(Symbol {
                 name: name.to_string(),

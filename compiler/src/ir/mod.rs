@@ -46,7 +46,7 @@ pub struct Block {
     pub terminator: Terminator,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Inst {
     pub kind: InstKind,
     pub span: Span,
@@ -88,7 +88,7 @@ pub enum RuntimeError {
     MissingKey,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InstKind {
     LoadLocal { dest: RegId, local: LocalId },
     StoreLocal { local: LocalId, value: Value },
@@ -167,6 +167,11 @@ pub enum InstKind {
         function: FuncId,
         args: Vec<Value>,
     },
+    Builtin {
+        dest: Option<RegId>,
+        which: crate::builtins::Builtin,
+        args: Vec<(Value, Type)>,
+    },
 }
 
 impl RuntimeError {
@@ -193,8 +198,21 @@ impl InstKind {
                 Some(RuntimeError::IndexOutOfBounds)
             }
             Self::DictGet { .. } => Some(RuntimeError::MissingKey),
+            Self::Builtin { which, .. } => builtin_error(*which),
             _ => None,
         }
+    }
+}
+
+fn builtin_error(which: crate::builtins::Builtin) -> Option<RuntimeError> {
+    use crate::builtins::Builtin;
+
+    match which {
+        Builtin::Insert | Builtin::RemoveAt => Some(RuntimeError::IndexOutOfBounds),
+        Builtin::ToInt | Builtin::ParseInt | Builtin::ParseFloat => {
+            Some(RuntimeError::InvalidConversion)
+        }
+        _ => None,
     }
 }
 

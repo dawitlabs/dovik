@@ -19,7 +19,10 @@ impl Checker<'_> {
         };
 
         match symbol.kind {
-            SymbolKind::Builtin => self.check_builtin_call(name.clone(), args, span),
+            SymbolKind::Builtin => match crate::builtins::Builtin::from_name(name) {
+                Some(builtin) => self.check_builtin(builtin, args, span),
+                None => Type::Unknown,
+            },
             SymbolKind::Function => self.check_function_call(name.clone(), args, span),
             _ => self.reject_callee(callee, args),
         }
@@ -76,65 +79,5 @@ impl Checker<'_> {
         }
 
         self.signatures[index].return_type.clone().unwrap_or(Type::Unknown)
-    }
-
-    fn check_builtin_call(&mut self, name: String, args: &[Expr], span: Span) -> Type {
-        if args.len() != 1 {
-            let kind = TypeErrorKind::ArgumentCount {
-                name,
-                expected: 1,
-                found: args.len(),
-            };
-            self.report(kind, span);
-
-            for arg in args {
-                self.value_of(arg, None);
-            }
-
-            return Type::Unknown;
-        }
-
-        let found = self.value_of(&args[0], builtin_hint(&name).as_ref());
-
-        let (accepted, result) = match name.as_str() {
-            "print" => (
-                matches!(found, Type::Int | Type::Float | Type::Bool | Type::Str),
-                Type::Unit,
-            ),
-            "len" => (
-                matches!(found, Type::Str | Type::List(_) | Type::Dict(..)),
-                Type::Int,
-            ),
-            "to_int" => (found == Type::Float, Type::Int),
-            "to_float" => (found == Type::Int, Type::Float),
-            _ => (true, Type::Unknown),
-        };
-
-        if !accepted && !found.is_unknown() {
-            let kind = TypeErrorKind::BuiltinArgument {
-                name: builtin_name(&name),
-                found,
-            };
-            self.report(kind, args[0].span);
-        }
-
-        result
-    }
-}
-
-fn builtin_hint(name: &str) -> Option<Type> {
-    match name {
-        "to_int" => Some(Type::Float),
-        "to_float" => Some(Type::Int),
-        _ => None,
-    }
-}
-
-fn builtin_name(name: &str) -> &'static str {
-    match name {
-        "print" => "print",
-        "len" => "len",
-        "to_int" => "to_int",
-        _ => "to_float",
     }
 }

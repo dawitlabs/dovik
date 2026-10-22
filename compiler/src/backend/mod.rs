@@ -1,3 +1,4 @@
+mod builtin;
 mod checks;
 mod collection;
 mod inst;
@@ -29,6 +30,15 @@ declare void @dovik_dict_set(i64, i8, i64, i8, i64)
 declare i64 @dovik_dict_get(i64, i8, i64, i32, i32)
 declare i64 @dovik_dict_len(i64)
 declare i8 @dovik_eq(i8, i64, i64)
+declare void @dovik_list_insert(i64, i64, i8, i64, i32, i32)
+declare i64 @dovik_list_remove_at(i64, i64, i32, i32)
+declare i8 @dovik_dict_has_key(i64, i8, i64)
+declare i8 @dovik_dict_remove_key(i64, i8, i64)
+declare i64 @dovik_to_string(i8, i64)
+declare i64 @dovik_parse_int(i64, i32, i32)
+declare double @dovik_parse_float(i64, i32, i32)
+declare i8 @dovik_can_parse_int(i64)
+declare i8 @dovik_can_parse_float(i64)
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)

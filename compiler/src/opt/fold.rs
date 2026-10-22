@@ -190,6 +190,7 @@ fn operands(kind: &mut InstKind) -> Vec<&mut Value> {
         InstKind::DictGet { dict, key, .. } => vec![dict, key],
         InstKind::DictSet { dict, key, value } => vec![dict, key, value],
         InstKind::Call { args, .. } => args.iter_mut().collect(),
+        InstKind::Builtin { args, .. } => args.iter_mut().map(|(value, _)| value).collect(),
         InstKind::LoadLocal { .. } | InstKind::LoadGlobal { .. } => Vec::new(),
     }
 }

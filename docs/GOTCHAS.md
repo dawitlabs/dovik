@@ -234,3 +234,29 @@ lines — the lexer emits no token for a blank line at all.
 
 `tests/format.rs` asserts that formatting a program cannot change what it prints.
 That test is the reason to trust the token approach; keep it passing.
+
+## Built-ins are a table, not a list of string comparisons
+
+`src/builtins.rs` holds the name list, the `Builtin` enum, arity and result types.
+The resolver seeds the built-in scope from `NAMES`, so adding a function there makes
+it visible everywhere at once. Adding one means touching, in order: `builtins.rs`,
+`check/builtin.rs` for argument rules, `lower/call.rs`, `interp/builtin.rs`,
+`backend/builtin.rs` for the LLVM call, the `declare` lines in `backend/mod.rs`, and
+`runtime/src/lib.rs`.
+
+Miss the backend `declare` and `llc` rejects the module; miss the interpreter and the
+differential tests in `tests/stdlib.rs` fail. Both failures are loud, which is why
+there is no central registry beyond the table.
+
+`print`, `len`, `to_int` and `to_float` keep their own dedicated IR instructions from
+before the table existed. Everything else lowers to `InstKind::Builtin`.
+
+## A failed parse reuses the invalid-conversion error
+
+`parse_int` and `parse_float` trap with `RuntimeError::InvalidConversion` (`DVK5004`),
+the error `to_int` already uses, rather than introducing a seventh runtime error.
+[SPEC.md](SPEC.md) 15.2's list is normative and adding to it is a language change, so
+the message was widened instead of the list.
+
+If 15.2 later gains a parse error, the code must change in two places that have to
+agree: `RuntimeError::code` in `src/ir/mod.rs` and `code_name` in the runtime.

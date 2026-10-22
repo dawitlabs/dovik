@@ -139,6 +139,17 @@ impl fmt::Display for InstKind {
             }
             Self::Len { dest, ty, value } => write!(f, "r{dest} = len [{ty}] {value}"),
             Self::Print { ty, value } => write!(f, "print [{ty}] {value}"),
+            Self::Builtin { dest, which, args } => {
+                let prefix = match dest {
+                    Some(dest) => format!("r{dest} = "),
+                    None => String::new(),
+                };
+                let rendered: Vec<String> = args
+                    .iter()
+                    .map(|(value, ty)| format!("[{ty}] {value}"))
+                    .collect();
+                write!(f, "{prefix}builtin.{}({})", which.name(), rendered.join(", "))
+            }
             Self::Call { dest, function, args } => {
                 let prefix = match dest {
                     Some(dest) => format!("r{dest} = "),

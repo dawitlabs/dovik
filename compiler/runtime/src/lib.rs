@@ -55,7 +55,7 @@ fn message(code: u32) -> &'static str {
         0 => "integer overflow",
         1 => "division by zero",
         2 => "remainder by zero",
-        3 => "`to_int` cannot convert this value: NaN, infinity, or out of range",
+        3 => "invalid conversion",
         4 => "index out of bounds",
         _ => "dictionary key not found",
     }
@@ -330,4 +330,91 @@ fn equal(left: Cell, right: Cell) -> bool {
         TAG_FLOAT => f64::from_bits(left.word) == f64::from_bits(right.word),
         _ => left.word == right.word,
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_list_insert(
+    list: u64,
+    index: i64,
+    tag: u8,
+    word: u64,
+    line: u32,
+    column: u32,
+) {
+    let items = unsafe { &mut borrow::<List>(list).items };
+
+    if index < 0 || index as usize > items.len() {
+        dovik_trap(4, line, column);
+    }
+
+    items.insert(index as usize, Cell { tag, word });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_list_remove_at(list: u64, index: i64, line: u32, column: u32) -> u64 {
+    let items = unsafe { &mut borrow::<List>(list).items };
+
+    if index < 0 || index as usize >= items.len() {
+        dovik_trap(4, line, column);
+    }
+
+    items.remove(index as usize).word
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_dict_has_key(dict: u64, ktag: u8, kword: u64) -> u8 {
+    let target = unsafe { borrow::<Dict>(dict) };
+    let key = normalized(Cell { tag: ktag, word: kword });
+    u8::from(target.entries.contains_key(&key))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_dict_remove_key(dict: u64, ktag: u8, kword: u64) -> u8 {
+    let target = unsafe { borrow::<Dict>(dict) };
+    let key = normalized(Cell { tag: ktag, word: kword });
+
+    if target.entries.remove(&key).is_none() {
+        return 0;
+    }
+
+    target.order.retain(|existing| *existing != key);
+    1
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_to_string(tag: u8, word: u64) -> u64 {
+    leak(Str {
+        bytes: render(Cell { tag, word }),
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_parse_int(word: u64, line: u32, column: u32) -> i64 {
+    match text(word).trim().parse::<i64>() {
+        Ok(value) => value,
+        Err(_) => dovik_trap(3, line, column),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_parse_float(word: u64, line: u32, column: u32) -> f64 {
+    match text(word).trim().parse::<f64>() {
+        Ok(value) if value.is_finite() => value,
+        _ => dovik_trap(3, line, column),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_can_parse_int(word: u64) -> u8 {
+    u8::from(text(word).trim().parse::<i64>().is_ok())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_can_parse_float(word: u64) -> u8 {
+    u8::from(
+        text(word)
+            .trim()
+            .parse::<f64>()
+            .is_ok_and(|value| value.is_finite()),
+    )
 }

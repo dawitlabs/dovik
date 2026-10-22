@@ -112,6 +112,9 @@ impl Emitter<'_> {
                 let word = self.as_word(value, ty);
                 self.line(&format!("  call void @dovik_print(i8 {tag}, i64 {word})"));
             }
+            InstKind::Builtin { dest, which, args } => {
+                self.builtin(function, *dest, *which, args, span)
+            }
             InstKind::Call { dest, function: target, args } => {
                 let callee = &self.program.functions[*target];
                 let types: Vec<&'static str> = callee

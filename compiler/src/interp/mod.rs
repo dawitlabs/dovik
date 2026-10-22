@@ -1,3 +1,4 @@
+mod builtin;
 mod exec;
 
 use std::collections::HashMap;

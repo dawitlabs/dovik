@@ -40,8 +40,12 @@ impl Lowerer<'_> {
         span: Span,
         ty: Type,
     ) -> Option<ir::Value> {
-        if self.function_id(name).is_some() || args.len() != 1 {
+        if self.function_id(name).is_some() {
             return None;
+        }
+
+        if args.len() != 1 {
+            return self.lower_generic_builtin(name, args, span, ty);
         }
 
         let argument_type = self.typed.type_of(args[0].span);
@@ -83,10 +87,33 @@ impl Lowerer<'_> {
                 self.emit(ir::InstKind::IntToFloat { dest, value }, span);
                 Some(ir::Value::Reg(dest))
             }
-            _ => {
-                let _ = ty;
-                None
-            }
+            _ => self.lower_generic_builtin(name, args, span, ty),
         }
+    }
+
+    fn lower_generic_builtin(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+        span: Span,
+        ty: Type,
+    ) -> Option<ir::Value> {
+        let which = crate::builtins::Builtin::from_name(name)?;
+        let lowered: Vec<(ir::Value, Type)> = args
+            .iter()
+            .map(|arg| (self.lower_expr(arg), self.typed.type_of(arg.span)))
+            .collect();
+
+        let dest = match ty {
+            Type::Unit => None,
+            _ => Some(self.register(ty)),
+        };
+
+        self.emit(ir::InstKind::Builtin { dest, which, args: lowered }, span);
+
+        Some(match dest {
+            Some(dest) => ir::Value::Reg(dest),
+            None => ir::Value::Int(0),
+        })
     }
 }

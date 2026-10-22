@@ -15,9 +15,10 @@ impl fmt::Display for RuntimeError {
             Self::IntegerOverflow => write!(f, "integer overflow"),
             Self::DivisionByZero => write!(f, "division by zero"),
             Self::RemainderByZero => write!(f, "remainder by zero"),
-            Self::InvalidConversion => {
-                write!(f, "`to_int` cannot convert this value: NaN, infinity, or out of range")
-            }
+            Self::InvalidConversion => write!(
+                f,
+                "invalid conversion: not a number, not finite, or outside the range of `Int`"
+            ),
             Self::IndexOutOfBounds => write!(f, "index out of bounds"),
             Self::MissingKey => write!(f, "dictionary key not found"),
         }
