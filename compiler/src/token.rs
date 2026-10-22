@@ -92,3 +92,53 @@ pub fn keyword(text: &str) -> Option<TokenKind> {
         _ => return None,
     })
 }
+
+impl TokenKind {
+    pub fn describe(&self) -> &'static str {
+        match self {
+            Self::Identifier => "an identifier",
+            Self::Int(_) => "an integer literal",
+            Self::Float(_) => "a float literal",
+            Self::Str(_) => "a string literal",
+            Self::And => "`and`",
+            Self::Break => "`break`",
+            Self::Continue => "`continue`",
+            Self::Else => "`else`",
+            Self::False => "`false`",
+            Self::For => "`for`",
+            Self::Function => "`function`",
+            Self::If => "`if`",
+            Self::In => "`in`",
+            Self::Not => "`not`",
+            Self::Or => "`or`",
+            Self::Return => "`return`",
+            Self::True => "`true`",
+            Self::While => "`while`",
+            Self::Plus => "`+`",
+            Self::Minus => "`-`",
+            Self::Star => "`*`",
+            Self::Slash => "`/`",
+            Self::Percent => "`%`",
+            Self::Eq => "`=`",
+            Self::EqEq => "`==`",
+            Self::BangEq => "`!=`",
+            Self::Lt => "`<`",
+            Self::Gt => "`>`",
+            Self::LtEq => "`<=`",
+            Self::GtEq => "`>=`",
+            Self::Arrow => "`->`",
+            Self::LParen => "`(`",
+            Self::RParen => "`)`",
+            Self::LBracket => "`[`",
+            Self::RBracket => "`]`",
+            Self::LBrace => "`{`",
+            Self::RBrace => "`}`",
+            Self::Comma => "`,`",
+            Self::Colon => "`:`",
+            Self::Newline => "a line break",
+            Self::Indent => "an indent",
+            Self::Dedent => "a dedent",
+            Self::Eof => "end of file",
+        }
+    }
+}
