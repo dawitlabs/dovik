@@ -799,9 +799,9 @@ A `String` is indexed and measured in **Unicode scalar values**, zero-based — 
 Two consequences worth stating plainly:
 
 1. `len("é")` is `1` even though the UTF-8 encoding is two bytes, and `len` of a flag emoji or a combining sequence is greater than `1` because those are multiple scalars.
-2. Indexing cost depends on the string's contents, not on its type. A string whose scalars are all below U+0080 indexes and measures in constant time; one containing any multi-byte scalar costs time proportional to its length per index, so a loop that indexes such a string by position is quadratic. `for` (8.3) is linear for every string and is the form to prefer when either could be written.
+2. Indexing and `len` are **amortized constant time** for every string, whatever its contents. A string may pay one pass over its bytes the first time it is indexed or measured, and every index after that is constant time until the string is mutated. A loop that scans a string by position is therefore linear, not quadratic.
 
-This is a cost model, not a guarantee about representation: an implementation may index any string in constant time, and none may make a conforming program observe the difference other than by timing it.
+This is a cost model, not a guarantee about representation. An implementation may do it differently, and none may make a conforming program observe the difference other than by timing it. `for` (8.3) remains the clearer way to visit every scalar and is never slower.
 
 Byte-level access, grapheme segmentation, normalization, and case conversion belong to the standard library (section 17).
 

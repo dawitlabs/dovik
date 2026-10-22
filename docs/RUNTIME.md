@@ -57,9 +57,13 @@ around every binding that holds one. See section 11.
 
 Strings are UTF-8 and indexed by Unicode scalar value ([SPEC.md](SPEC.md) 10.4, [DECISIONS.md](DECISIONS.md) D026). A naive implementation of that pairing walks the bytes on every index, which made positional scanning quadratic.
 
-Each string therefore carries a lazily computed flag saying whether all of its bytes are below `0x80`, cached the same way its hash is. When the flag is set, `len` returns the byte count and an index is a single byte load, both in constant time; otherwise the byte walk stands. The flag is recomputed on first use after any mutation, and in-place append combines the two operands' flags rather than discarding the answer.
+Two caches make that affordable, and neither is visible to a program.
 
-Measured, best of five, on a 20,000-scalar ASCII string scanned by position: 759 ms without the flag, 7 ms with it. Scanning the same string with `for` is 6 ms either way. See [BENCHMARKS.md](BENCHMARKS.md).
+**An ASCII flag**, lazily computed and cached the same way the hash is. When it is set, `len` returns the byte count and an index is a single byte load. Measured on a 20,000-scalar ASCII string scanned by position: 759 ms without it, 7 ms with it.
+
+**A scalar map** for everything else: a separately allocated block holding the string's scalar count and the byte offset of every sixteenth scalar. An index jumps to the nearest mark and walks at most fifteen scalars. It is built on first use, extended rather than discarded when a string is appended to in place, and freed with the string. Measured on a 20,000-scalar Amharic string, best of fifteen interleaved runs: 1950 ms without the map, 4 ms with it; appending in a loop while calling `len` each iteration, 776 ms without, 4 ms with.
+
+The map costs four bytes per sixteen scalars plus a sixteen-byte header, paid only by a string that is actually indexed, and never by an ASCII string. It hangs off `Str` as a single pointer for a measured reason: holding its three fields inline in `Str` instead cost 40% on the append benchmark, because every string in a 20,000-iteration loop carried 24 bytes it did not use.
 
 ## 6. Runtime Errors
 
@@ -90,7 +94,7 @@ Measurements should use reproducible programs and documented environments.
 - Whether reference counting remains the strategy, or is replaced once the language gains features that can build a cycle. See section 11.
 - Cyclic reference handling, once cycles become constructible. They are not today; section 11 explains why.
 - Object layout.
-- Whether a string containing non-ASCII scalars should also index in constant time, which needs a scalar-offset index beside the bytes and is not obviously worth its memory.
+- Whether the sixteen-scalar chunk is the right size. It was chosen for being obviously small enough and has not been tuned against anything.
 - Collection representation.
 - The recursion depth a native build reaches, which follows `RLIMIT_STACK` rather than anything Dovik chooses.
 - Runtime linking and distribution.

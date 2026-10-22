@@ -1006,3 +1006,20 @@ The lesson generalises: a restriction that inspects the *spelling* of an express
 than a property of the value will be one local variable away from useless. The rebinding ban
 that remains is not like that — it is a rule about which scope owns a binding, and no
 rephrasing reaches around it.
+
+## Three fields in a string header cost 40% on an append loop
+
+The scalar map that makes non-ASCII indexing constant time ([DECISIONS.md](DECISIONS.md) D028)
+first held its three fields — scalar count, capacity, offsets pointer — inline in `Str`. That
+is 24 bytes added to every string in the program, and the `strings` benchmark, which appends
+in a 20,000-iteration loop, went from 5 ms to 7 ms. Nothing in that benchmark ever builds a
+map; the cost was the header.
+
+Moving the three fields into the separately allocated block and leaving `Str` with one pointer
+recovered all of it: 6 ms against 6 ms in a properly interleaved A/B.
+
+Two lessons. A cache that most values never use belongs behind a pointer, not in the header of
+every value. And the measurement only showed up when both binaries were built first and then
+run alternately — successive rounds of "build A, measure, build B, measure" drifted by more
+than the effect being measured, and reported `string_index` at 4 ms and 15 ms for the same
+binary.

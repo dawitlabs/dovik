@@ -354,7 +354,7 @@ Closing it needs a scalar-offset index stored beside the bytes, which costs memo
 
 The flag is also an invalidation obligation: anything that mutates a string's bytes must clear it, in the same place it clears the hash. Both are listed in [GOTCHAS.md](GOTCHAS.md).
 
-**Status:** Accepted. Resolves U3. Specified in [SPEC.md](SPEC.md) 10.4.
+**Status:** Accepted. Resolves U3. Specified in [SPEC.md](SPEC.md) 10.4. The cost model in this decision was superseded by D028, which closed the non-ASCII case the trade-off section called a real limitation; the reasoning for keeping scalar indexing stands.
 
 ## D027: A Function May Mutate a Reference-Typed Global, and May Never Rebind One
 
@@ -387,3 +387,21 @@ The rebinding ban stays, and is now the whole rule rather than half of one. Rebi
 The alternative that preserved call-site visibility was a mutable-reference parameter mode, and it was rejected for adding a parameter mode to solve a problem reference types already solve — every program that wants the visibility can still pass the collection as a parameter, and 9.6's example shows that form.
 
 **Status:** Accepted. Resolves U5, the last entry in [SPEC.md](SPEC.md) section 21. Specified in [SPEC.md](SPEC.md) 3.4, 9.4, and 9.6.
+
+## D028: A Scalar Map Makes Non-ASCII Indexing Constant Time Too
+
+**Decision:** A string that is not all-ASCII gets a lazily built **scalar map**: a separately allocated block holding its scalar count and the byte offset of every sixteenth scalar. `len` reads the count; `s[i]` jumps to the nearest mark and walks at most fifteen scalars. The map is built on first use, extended rather than discarded when the string is appended to in place, and freed with the string.
+
+[SPEC.md](SPEC.md) 10.4 now states one cost model for every string — indexing and `len` are amortized constant time — instead of the ASCII/non-ASCII split D026 left behind.
+
+**Reason:** D026's trade-off section called the non-ASCII case a real limitation and said so in the terms that matter here: Dovik is used from Amharic, where multi-byte scalars are the normal case rather than the exotic one. Leaving a 300× cliff between `"hello"` and `"ሀሁሂ"` would have made the language quietly worse for the people most likely to use it.
+
+Measured, best of fifteen interleaved runs, 20,000-scalar strings scanned by position: Amharic went from **1950 ms to 4 ms**, and appending in a loop while calling `len` each iteration from **776 ms to 4 ms**. ASCII is unchanged — `strings` 6 ms either way, `string_index` 5 ms to 4 ms — because an ASCII string never builds a map.
+
+**Trade-off:** Memory, and only where it is used: four bytes per sixteen scalars plus a sixteen-byte header, for a non-ASCII string that is actually indexed. An ASCII string pays nothing, and a string that is never indexed pays nothing.
+
+The first index of a string still pays one pass over its bytes, so a program that indexes a long string exactly once is no faster than before. That is what "amortized" is doing in 10.4, and `for` remains the better way to visit every scalar.
+
+The sixteen-scalar chunk was chosen for being obviously small enough rather than by tuning, which [RUNTIME.md](RUNTIME.md) records as open.
+
+**Status:** Accepted. Supersedes the cost model in D026. Specified in [SPEC.md](SPEC.md) 10.4.

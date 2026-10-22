@@ -30,6 +30,12 @@ typedef struct {
     int64_t count;
 } Header;
 
+typedef struct Marks {
+    size_t scalars;
+    size_t cap;
+    uint32_t offsets[];
+} Marks;
+
 typedef struct Str {
     Header h;
     size_t len;
@@ -38,6 +44,7 @@ typedef struct Str {
     uint8_t hashed;
     uint8_t ascii_known;
     uint8_t ascii;
+    struct Marks *marks;
     uint64_t hash;
     char *bytes;
     struct Str *next_free;
@@ -216,6 +223,9 @@ void dovik_retain(uint8_t tag, uint64_t word);
 void dovik_release(uint8_t tag, uint64_t word);
 uint64_t dovik_cell_new(uint64_t word);
 static int all_ascii(Str *value);
+static void drop_marks(Str *value);
+static void walk_marks(Str *value, size_t offset, size_t seen);
+static inline size_t scalar_width(unsigned char lead);
 static void reclaim(uint8_t tag, uint64_t word);
 
 static inline Header *header_of(uint8_t tag, uint64_t word) {
@@ -240,6 +250,7 @@ __attribute__((noinline, cold)) static void reclaim(uint8_t tag, uint64_t word) 
 
     if (tag == TAG_STR) {
         Str *owned = (Str *)header;
+        drop_marks(owned);
 
         if (string_pool_len < POOL_LIMIT && owned->cap <= POOL_MAX_BYTES) {
             owned->len = 0;
@@ -333,8 +344,8 @@ static Str *new_string_with_capacity(size_t len, size_t cap) {
         value->len = len;
         value->frozen = 0;
         value->hashed = 0;
-    value->ascii_known = 0;
         value->ascii_known = 0;
+        value->marks = NULL;
         value->bytes[len] = 0;
         return value;
     }
@@ -346,6 +357,7 @@ static Str *new_string_with_capacity(size_t len, size_t cap) {
     value->frozen = 0;
     value->hashed = 0;
     value->ascii_known = 0;
+    value->marks = NULL;
     value->bytes = checked_alloc(cap + 1);
     value->bytes[len] = 0;
     return value;
@@ -370,6 +382,9 @@ uint64_t dovik_str_concat(uint64_t left, uint64_t right) {
 
     if (can_extend_in_place(a, b)) {
         int both_ascii = a->ascii_known && a->ascii && all_ascii(b);
+        size_t mapped_from = a->len;
+        size_t mapped_scalars = a->marks != NULL ? a->marks->scalars : 0;
+        int was_mapped = a->marks != NULL;
         size_t needed = a->len + b->len;
 
         if (needed > a->cap) {
@@ -388,6 +403,8 @@ uint64_t dovik_str_concat(uint64_t left, uint64_t right) {
         a->hashed = 0;
         a->ascii_known = both_ascii;
         a->ascii = both_ascii;
+
+        if (was_mapped) walk_marks(a, mapped_from, mapped_scalars);
         a->h.count += 1;
         return (uint64_t)(uintptr_t)a;
     }
@@ -403,6 +420,52 @@ uint64_t dovik_str_concat(uint64_t left, uint64_t right) {
 int64_t dovik_str_byte_len(uint64_t word) { return (int64_t)((Str *)(uintptr_t)word)->len; }
 
 static inline int is_continuation(unsigned char byte) { return (byte & 0xC0) == 0x80; }
+
+#define SCALAR_CHUNK 16
+
+static void drop_marks(Str *value) {
+    free(value->marks);
+    value->marks = NULL;
+}
+
+static void reserve_marks(Str *value, size_t slots) {
+    size_t have = value->marks != NULL ? value->marks->cap : 0;
+    if (slots <= have) return;
+
+    size_t cap = have < 8 ? 8 : have;
+    while (cap < slots) cap *= 2;
+
+    Marks *grown = checked_alloc(sizeof(Marks) + cap * sizeof(uint32_t));
+    grown->scalars = value->marks != NULL ? value->marks->scalars : 0;
+    grown->cap = cap;
+
+    if (value->marks != NULL) {
+        memcpy(grown->offsets, value->marks->offsets, have * sizeof(uint32_t));
+        free(value->marks);
+    }
+
+    value->marks = grown;
+}
+
+static void walk_marks(Str *value, size_t offset, size_t seen) {
+    while (offset < value->len) {
+        if (seen % SCALAR_CHUNK == 0) {
+            reserve_marks(value, seen / SCALAR_CHUNK + 1);
+            value->marks->offsets[seen / SCALAR_CHUNK] = (uint32_t)offset;
+        }
+        offset += scalar_width((unsigned char)value->bytes[offset]);
+        seen += 1;
+    }
+
+    value->marks->scalars = seen;
+}
+
+static void build_marks(Str *value) {
+    if (value->marks != NULL) return;
+
+    reserve_marks(value, 1);
+    walk_marks(value, 0, 0);
+}
 
 static int all_ascii(Str *value) {
     if (value->ascii_known) return value->ascii;
@@ -420,10 +483,8 @@ int64_t dovik_str_scalar_len(uint64_t word) {
     Str *value = (Str *)(uintptr_t)word;
     if (all_ascii(value)) return (int64_t)value->len;
 
-    int64_t count = 0;
-    for (size_t i = 0; i < value->len; i++)
-        if (!is_continuation((unsigned char)value->bytes[i])) count++;
-    return count;
+    build_marks(value);
+    return (int64_t)value->marks->scalars;
 }
 
 static inline size_t scalar_width(unsigned char lead) {
@@ -445,20 +506,22 @@ uint64_t dovik_str_scalar_at(uint64_t word, int64_t index, uint32_t line, uint32
         return (uint64_t)(uintptr_t)scalar;
     }
 
-    size_t offset = 0;
-    int64_t seen = 0;
-    while (offset < value->len) {
-        size_t width = scalar_width((unsigned char)value->bytes[offset]);
-        if (seen == index) {
-            Str *scalar = new_string(width);
-            memcpy(scalar->bytes, value->bytes + offset, width);
-            return (uint64_t)(uintptr_t)scalar;
-        }
-        offset += width;
-        seen++;
+    build_marks(value);
+    if ((size_t)index >= value->marks->scalars) dovik_trap(4, line, column);
+
+    size_t slot = (size_t)index / SCALAR_CHUNK;
+    size_t offset = value->marks->offsets[slot];
+    size_t seen = slot * SCALAR_CHUNK;
+
+    while (seen < (size_t)index) {
+        offset += scalar_width((unsigned char)value->bytes[offset]);
+        seen += 1;
     }
 
-    dovik_trap(4, line, column);
+    size_t width = scalar_width((unsigned char)value->bytes[offset]);
+    Str *scalar = new_string(width);
+    memcpy(scalar->bytes, value->bytes + offset, width);
+    return (uint64_t)(uintptr_t)scalar;
 }
 
 uint64_t dovik_str_next(uint64_t word, int64_t offset, int64_t *next) {

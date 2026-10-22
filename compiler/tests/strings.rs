@@ -402,3 +402,98 @@ print(by_index == text)
 ";
     assert_eq!(output(source), ["true", "true"]);
 }
+
+#[test]
+fn indexing_spans_every_scalar_width() {
+    let source = "\
+mixed = \"aé漢🎉bሀc\"
+print(len(mixed))
+print(mixed[0])
+print(mixed[1])
+print(mixed[2])
+print(mixed[3])
+print(mixed[5])
+print(mixed[6])
+";
+    assert_eq!(
+        output(source),
+        ["7", "a", "é", "漢", "🎉", "ሀ", "c"]
+    );
+}
+
+#[test]
+fn indexing_crosses_the_index_chunk_boundary() {
+    let source = "\
+long = \"\"
+k = 0
+
+while k < 40:
+    long = long + \"ሀ\"
+    k = k + 1
+
+print(len(long))
+print(long[0] == long[15])
+print(long[16] == long[17])
+print(long[39] == long[0])
+";
+    assert_eq!(output(source), ["40", "true", "true", "true"]);
+}
+
+#[test]
+fn a_positional_walk_rebuilds_a_mixed_width_string() {
+    let source = "\
+mixed = \"aé漢🎉bሀc\"
+j = 0
+rebuilt = \"\"
+
+while j < len(mixed):
+    rebuilt = rebuilt + mixed[j]
+    j = j + 1
+
+print(rebuilt == mixed)
+";
+    assert_eq!(output(source), ["true"]);
+}
+
+#[test]
+fn growing_a_non_ascii_string_keeps_indexing_correct() {
+    let source = "\
+grown = \"ሀ\"
+print(len(grown))
+grown = grown + \"ለ\"
+print(len(grown))
+print(grown[1])
+grown = grown + \"x\"
+print(len(grown))
+print(grown[2])
+";
+    assert_eq!(output(source), ["1", "2", "ለ", "3", "x"]);
+}
+
+#[test]
+fn indexing_past_the_end_of_a_non_ascii_string_traps() {
+    assert_eq!(
+        trap("s = \"héllo\"\ni = 5\nprint(s[i])\n"),
+        RuntimeError::IndexOutOfBounds
+    );
+}
+
+#[test]
+fn appending_to_a_non_ascii_string_keeps_its_length_right() {
+    let source = "\
+s = \"ሀ\"
+i = 0
+seen = 0
+
+while i < 40:
+    s = s + \"ለ\"
+    seen = seen + len(s)
+    i = i + 1
+
+print(len(s))
+print(seen)
+print(s[0])
+print(s[40])
+";
+    assert_eq!(output(source), ["41", "860", "ሀ", "ለ"]);
+}

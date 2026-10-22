@@ -229,12 +229,20 @@ faster than C.
 
 ### Reading the rest
 
-**String indexing is contents-dependent.** A 20,000-scalar ASCII string scanned by position
-takes 7 ms; without the ASCII fast path it took 759 ms, and `for` over the same string takes
-6 ms either way (best of five, same machine, same methodology). `string_index` went from 6 ms
-to 4 ms and `strings` from 8 ms to 4 ms, because `len` is constant time for ASCII as well.
-A string containing a multi-byte scalar still costs O(n) per index
-([DECISIONS.md](DECISIONS.md) D026).
+**String indexing is amortized constant time, whatever the script.** Best of fifteen
+interleaved runs, 20,000-scalar strings scanned by position:
+
+| | before | after |
+| --- | --- | --- |
+| ASCII, scanned by position | 759 ms | 7 ms |
+| Amharic, scanned by position | 1950 ms | 4 ms |
+| Amharic, appended to and measured each step | 776 ms | 4 ms |
+| `strings` | 6 ms | 6 ms |
+| `string_index` | 5 ms | 4 ms |
+
+The first row is the ASCII flag ([DECISIONS.md](DECISIONS.md) D026), the next two the scalar
+map (D028). The last two rows are the point of the last column: the caches cost nothing
+measurable on strings that never use them.
 
 **Scalar work is 1.3-1.5x C.** `arith` and `recursion` are close; `calls` is 2.8x.
 
