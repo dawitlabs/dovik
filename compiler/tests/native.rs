@@ -108,6 +108,10 @@ const CORPUS: &[(&str, &str)] = &[
     ("lists", "xs = [1, 2, 3]\nprint(xs[1])\nprint(len(xs))\nxs[0] = 99\nprint(xs[0])\n"),
     ("list_loop", "total = 0\nfor n in [1, 2, 3, 4]:\n    total = total + n\nprint(total)\n"),
     ("list_strings", "for name in [\"Dawit\", \"Abel\"]:\n    print(\"Hi \" + name)\n"),
+    (
+        "float_and_bool_list_loop",
+        "fs = [2.5, -1.5]\nfor f in fs:\n    print(f)\nbs = [true, false]\nfor b in bs:\n    print(b)\n",
+    ),
     ("aliasing", "a = [1, 2]\nb = a\nb[0] = 9\nprint(a[0])\n"),
     (
         "dicts",

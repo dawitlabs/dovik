@@ -27,6 +27,14 @@ impl Interpreter<'_> {
             return Ok(Value::str(read_input()));
         }
 
+        if which == Builtin::Now {
+            return Ok(Value::Float(wall_clock()));
+        }
+
+        if which == Builtin::Clock {
+            return Ok(Value::Float(monotonic()));
+        }
+
         let result = match which {
             Builtin::Append => append(&values),
             Builtin::Insert => insert(&values),
@@ -70,6 +78,14 @@ impl Interpreter<'_> {
                 values[1].as_str(),
                 values[2].as_str(),
             ))),
+            Builtin::Sort => Ok(sort(&values[0])),
+            Builtin::ListDir => list_dir(&values[0]),
+            Builtin::IsDir => Ok(Value::Bool(
+                std::path::Path::new(values[0].as_str()).is_dir(),
+            )),
+            Builtin::CreateDir => directory_change(std::fs::create_dir(values[0].as_str())),
+            Builtin::RemoveDir => directory_change(std::fs::remove_dir(values[0].as_str())),
+            Builtin::RemoveFile => directory_change(std::fs::remove_file(values[0].as_str())),
             Builtin::Assert => match values[0].as_bool() {
                 true => Ok(Value::Unit),
                 false => Err(RuntimeError::AssertionFailed),
@@ -174,6 +190,61 @@ fn replace(text: &str, from: &str, to: &str) -> String {
         true => text.to_string(),
         false => text.replace(from, to),
     }
+}
+
+fn wall_clock() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
+fn monotonic() -> f64 {
+    use std::sync::OnceLock;
+    static ORIGIN: OnceLock<std::time::Instant> = OnceLock::new();
+    ORIGIN.get_or_init(std::time::Instant::now).elapsed().as_secs_f64()
+}
+
+fn order(left: &Value, right: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    match (left, right) {
+        (Value::Int(a), Value::Int(b)) => a.cmp(b),
+        (Value::Str(a), Value::Str(b)) => a.as_bytes().cmp(b.as_bytes()),
+        (Value::Float(a), Value::Float(b)) => match (a.is_nan(), b.is_nan()) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            _ => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+        },
+        _ => Ordering::Equal,
+    }
+}
+
+fn sort(value: &Value) -> Value {
+    if let Value::List(items) = value {
+        items.borrow_mut().sort_by(order);
+    }
+
+    Value::Unit
+}
+
+fn list_dir(path: &Value) -> Result<Value, RuntimeError> {
+    let Ok(entries) = std::fs::read_dir(path.as_str()) else {
+        return Err(RuntimeError::InputOutput);
+    };
+
+    let mut names: Vec<Value> = entries
+        .filter_map(Result::ok)
+        .map(|entry| Value::str(entry.file_name().to_string_lossy().into_owned()))
+        .collect();
+
+    names.sort_by(order);
+    Ok(Value::list(names))
+}
+
+fn directory_change(result: std::io::Result<()>) -> Result<Value, RuntimeError> {
+    result.map(|()| Value::Unit).map_err(|_| RuntimeError::InputOutput)
 }
 
 fn read_input() -> String {

@@ -1,7 +1,11 @@
+#include <dirent.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
 
 #define TAG_INT 0
 #define TAG_FLOAT 1
@@ -1176,4 +1180,93 @@ int64_t dovik_test_index(void) {
     long long parsed = strtoll(saved_argv[1], &end, 10);
     if (end == saved_argv[1] || *end != 0) return -1;
     return parsed;
+}
+
+double dovik_now(void) {
+    struct timespec moment;
+    if (clock_gettime(CLOCK_REALTIME, &moment) != 0) return 0.0;
+    return (double)moment.tv_sec + (double)moment.tv_nsec / 1e9;
+}
+
+double dovik_clock(void) {
+    struct timespec moment;
+    if (clock_gettime(CLOCK_MONOTONIC, &moment) != 0) return 0.0;
+    return (double)moment.tv_sec + (double)moment.tv_nsec / 1e9;
+}
+
+static int order_int(const void *left, const void *right) {
+    int64_t a = (int64_t)*(const uint64_t *)left;
+    int64_t b = (int64_t)*(const uint64_t *)right;
+    return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+static int order_float(const void *left, const void *right) {
+    double a;
+    double b;
+    memcpy(&a, left, sizeof(double));
+    memcpy(&b, right, sizeof(double));
+    int a_missing = a != a;
+    int b_missing = b != b;
+    if (a_missing || b_missing) return a_missing - b_missing;
+    return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+static int order_str(const void *left, const void *right) {
+    return dovik_str_cmp(*(const uint64_t *)left, *(const uint64_t *)right);
+}
+
+void dovik_list_sort(uint64_t list) {
+    List *value = (List *)(uintptr_t)list;
+    if (value->len < 2) return;
+
+    int (*order)(const void *, const void *) = order_int;
+    if (value->elem == TAG_FLOAT) order = order_float;
+    if (value->elem == TAG_STR) order = order_str;
+
+    qsort(value->items, value->len, sizeof(uint64_t), order);
+}
+
+uint64_t dovik_list_dir(uint64_t path, uint32_t line, uint32_t column) {
+    Str *name = (Str *)(uintptr_t)path;
+    DIR *handle = opendir(name->bytes);
+    if (handle == NULL) dovik_trap(6, line, column);
+
+    uint64_t list = dovik_list_new(TAG_STR);
+
+    for (;;) {
+        struct dirent *entry = readdir(handle);
+        if (entry == NULL) break;
+        if (strcmp(entry->d_name, ".") == 0) continue;
+        if (strcmp(entry->d_name, "..") == 0) continue;
+
+        uint64_t piece = make_string(entry->d_name, strlen(entry->d_name));
+        dovik_list_push(list, piece);
+        dovik_release(TAG_STR, piece);
+    }
+
+    closedir(handle);
+    dovik_list_sort(list);
+    return list;
+}
+
+uint8_t dovik_is_dir(uint64_t path) {
+    Str *name = (Str *)(uintptr_t)path;
+    struct stat info;
+    if (stat(name->bytes, &info) != 0) return 0;
+    return S_ISDIR(info.st_mode) ? 1 : 0;
+}
+
+void dovik_create_dir(uint64_t path, uint32_t line, uint32_t column) {
+    Str *name = (Str *)(uintptr_t)path;
+    if (mkdir(name->bytes, 0777) != 0) dovik_trap(6, line, column);
+}
+
+void dovik_remove_dir(uint64_t path, uint32_t line, uint32_t column) {
+    Str *name = (Str *)(uintptr_t)path;
+    if (rmdir(name->bytes) != 0) dovik_trap(6, line, column);
+}
+
+void dovik_remove_file(uint64_t path, uint32_t line, uint32_t column) {
+    Str *name = (Str *)(uintptr_t)path;
+    if (unlink(name->bytes) != 0) dovik_trap(6, line, column);
 }

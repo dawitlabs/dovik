@@ -1,6 +1,6 @@
 use crate::types::Type;
 
-pub const NAMES: [&str; 33] = [
+pub const NAMES: [&str; 41] = [
     "print",
     "len",
     "to_int",
@@ -34,6 +34,14 @@ pub const NAMES: [&str; 33] = [
     "replace",
     "read_input",
     "assert",
+    "now",
+    "clock",
+    "sort",
+    "list_dir",
+    "is_dir",
+    "create_dir",
+    "remove_dir",
+    "remove_file",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +79,14 @@ pub enum Builtin {
     Replace,
     ReadInput,
     Assert,
+    Now,
+    Clock,
+    Sort,
+    ListDir,
+    IsDir,
+    CreateDir,
+    RemoveDir,
+    RemoveFile,
 }
 
 impl Builtin {
@@ -109,6 +125,14 @@ impl Builtin {
             "replace" => Self::Replace,
             "read_input" => Self::ReadInput,
             "assert" => Self::Assert,
+            "now" => Self::Now,
+            "clock" => Self::Clock,
+            "sort" => Self::Sort,
+            "list_dir" => Self::ListDir,
+            "is_dir" => Self::IsDir,
+            "create_dir" => Self::CreateDir,
+            "remove_dir" => Self::RemoveDir,
+            "remove_file" => Self::RemoveFile,
             _ => return None,
         })
     }
@@ -148,6 +172,14 @@ impl Builtin {
             Self::Replace => "replace",
             Self::ReadInput => "read_input",
             Self::Assert => "assert",
+            Self::Now => "now",
+            Self::Clock => "clock",
+            Self::Sort => "sort",
+            Self::ListDir => "list_dir",
+            Self::IsDir => "is_dir",
+            Self::CreateDir => "create_dir",
+            Self::RemoveDir => "remove_dir",
+            Self::RemoveFile => "remove_file",
         }
     }
 
@@ -166,13 +198,9 @@ impl Builtin {
             | Self::IndexOf
             | Self::StartsWith
             | Self::EndsWith => 2,
-            Self::ArgumentCount | Self::ReadInput => 0,
+            Self::ArgumentCount | Self::ReadInput | Self::Now | Self::Clock => 0,
             _ => 1,
         }
-    }
-
-    pub fn mutates_first_argument(self) -> bool {
-        matches!(self, Self::Append | Self::Insert | Self::RemoveAt | Self::RemoveKey)
     }
 
     pub fn result(self, first: &Type) -> Type {
@@ -182,11 +210,15 @@ impl Builtin {
             | Self::Insert
             | Self::WriteFile
             | Self::AppendFile
-            | Self::Assert => Type::Unit,
+            | Self::Assert
+            | Self::Sort
+            | Self::CreateDir
+            | Self::RemoveDir
+            | Self::RemoveFile => Type::Unit,
             Self::Len | Self::ToInt | Self::ParseInt | Self::ArgumentCount | Self::IndexOf => {
                 Type::Int
             }
-            Self::ToFloat | Self::ParseFloat => Type::Float,
+            Self::ToFloat | Self::ParseFloat | Self::Now | Self::Clock => Type::Float,
             Self::ToString
             | Self::ReadFile
             | Self::Argument
@@ -197,7 +229,7 @@ impl Builtin {
             | Self::Lower
             | Self::Replace
             | Self::ReadInput => Type::Str,
-            Self::Split => Type::List(Box::new(Type::Str)),
+            Self::Split | Self::ListDir => Type::List(Box::new(Type::Str)),
             Self::HasKey
             | Self::RemoveKey
             | Self::CanParseInt
@@ -205,7 +237,8 @@ impl Builtin {
             | Self::FileExists
             | Self::Contains
             | Self::StartsWith
-            | Self::EndsWith => Type::Bool,
+            | Self::EndsWith
+            | Self::IsDir => Type::Bool,
             Self::RemoveAt => match first {
                 Type::List(item) => (**item).clone(),
                 _ => Type::Unknown,

@@ -733,3 +733,58 @@ IR representation, the runtime, five library signatures and six documents.
 
 Nothing in the compiler depends on that file. If it is rejected, deleting it costs nothing,
 which is the point of writing it before writing code.
+
+## A `for` loop over a list typed its element register `Unknown`
+
+`lower_list_loop` created the register receiving `ListGet` with `Type::Unknown`, which the
+backend lowers to `i64`. For `Int`, `String`, `List`, and `Dict` elements that is already
+the right width, so every existing test passed. For `List<Float>` it emitted
+`store double %rN, ptr %sM` where `%rN` was an `i64`, and clang rejected the module. For
+`List<Bool>` it stored an `i64` into an `i1` slot.
+
+The element type was available from the container all along. The register now takes it, and
+the native corpus iterates a `List<Float>` and a `List<Bool>` so the IR is checked by a
+compiler rather than by inspection.
+
+Two lessons. A register type that happens to share a representation with the right answer
+hides the bug until a type arrives that does not — `Unknown` is never a correct register
+type, only an undetected one. And the interpreter cannot catch this class of defect at all:
+it stores a tagged `Value` and does not care what the register claimed, so only the native
+backend fails. Any new element type needs a native test, not an interpreter test.
+
+## `sort` needs its own ordering for NaN, because equality is not an ordering
+
+[SPEC.md](SPEC.md) 13 gives `Float` IEEE 754 equality, where NaN is not equal to itself.
+That is not an ordering, and a comparison function built from `<` alone is not transitive
+once a NaN is present — which lets a sort produce any permutation, drop elements, or in a
+hand-written quicksort run off the end of the array.
+
+`sort` therefore defines a total order rather than reusing equality: every NaN is equal to
+every other NaN and greater than every number. `-0.0` and `0.0` compare equal, so their
+relative order is unspecified and the two implementations do differ there. Nothing may test
+it.
+
+The interpreter uses a stable sort and the runtime uses `qsort`, which is not stable. They
+agree on every list whose comparison-equal elements are indistinguishable, which is every
+list that does not mix `-0.0` with `0.0`.
+
+## `now` and `clock` must stay impure
+
+Both are `InstKind::Builtin`, and `backend::purity` already treats every builtin except
+`to_int` and `to_float` as touching memory, so neither gets `memory(none)` and LLVM cannot
+hoist one out of a loop or fold two calls into one. That is load-bearing, not incidental:
+a `clock()` that LLVM computed once would make every duration zero.
+
+If a later pass ever starts classifying builtins individually, these two belong with the
+I/O functions, not with the arithmetic conversions.
+
+## `list_dir` sorts, and dictionaries deliberately do not
+
+The order a file system reports directory entries in is arbitrary and varies between runs,
+so an unsorted `list_dir` would make every program that prints a listing
+non-reproducible. Sorting costs one pass.
+
+This looks inconsistent with [SPEC.md](SPEC.md) 12.6, which forbids a program from observing
+a dictionary's order, but the two cases differ: a dictionary's internal order is meaningless
+and exposing it would leak an implementation detail, while a directory listing's
+alphabetical order is the thing a reader actually wants.

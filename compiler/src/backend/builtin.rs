@@ -137,6 +137,26 @@ impl Emitter<'_> {
                     "  call void @dovik_assert(i8 {flag}, i32 {line}, i32 {column})"
                 ));
             }
+            Builtin::Now => self.plain_call(dest, "double @dovik_now()"),
+            Builtin::Clock => self.plain_call(dest, "double @dovik_clock()"),
+            Builtin::Sort => {
+                self.line(&format!("  call void @dovik_list_sort(i64 {})", words[0]))
+            }
+            Builtin::ListDir => self.plain_call(dest, &format!(
+                "i64 @dovik_list_dir(i64 {}, i32 {line}, i32 {column})", words[0]
+            )),
+            Builtin::IsDir => {
+                self.boolean_call(dest, &format!("@dovik_is_dir(i64 {})", words[0]))
+            }
+            Builtin::CreateDir => self.line(&format!(
+                "  call void @dovik_create_dir(i64 {}, i32 {line}, i32 {column})", words[0]
+            )),
+            Builtin::RemoveDir => self.line(&format!(
+                "  call void @dovik_remove_dir(i64 {}, i32 {line}, i32 {column})", words[0]
+            )),
+            Builtin::RemoveFile => self.line(&format!(
+                "  call void @dovik_remove_file(i64 {}, i32 {line}, i32 {column})", words[0]
+            )),
             Builtin::IndexOf => self.plain_call(dest, &format!(
                 "i64 @dovik_str_index_of(i64 {}, i64 {}, i32 {line}, i32 {column})",
                 words[0], words[1]

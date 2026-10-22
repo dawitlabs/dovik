@@ -241,6 +241,14 @@ const CORPUS: &[(&str, &str)] = &[
         "print(parse_int(\"77\"))\nprint(parse_float(\"2.25\"))\nprint(can_parse_int(\"x\"))\nprint(can_parse_float(\"3.5\"))\n",
     ),
     (
+        "std_sort",
+        "xs = [3, 1, 2]\nsort(xs)\nfor v in xs:\n    print(v)\nnames = [\"pear\", \"Apple\", \"apple\"]\nsort(names)\nprint(join(names, \",\"))\nfs = [2.5, -1.5, 0.5]\nsort(fs)\nfor f in fs:\n    print(f)\n",
+    ),
+    (
+        "std_sort_nan",
+        "big = 10.0\ni = 0\nwhile i < 20:\n    big = big * big\n    i = i + 1\n\nxs = [1.5, big - big, -1.5]\nsort(xs)\nprint(xs[0])\nprint(xs[1])\nprint(xs[2] == xs[2])\n",
+    ),
+    (
         "std_growth_loop",
         "xs: List<Int> = []\nn = 0\nwhile n < 5:\n    append(xs, n * n)\n    n = n + 1\nfor v in xs:\n    print(v)\n",
     ),
@@ -285,4 +293,85 @@ fn native_matches_the_interpreter_for_the_standard_library() {
 
         assert_eq!(native, expected.output, "{name}: native differs");
     }
+}
+
+#[test]
+fn sort_orders_a_list_in_place() {
+    let source = "xs = [3, 1, 2]\nsort(xs)\nprint(xs[0])\nprint(xs[1])\nprint(xs[2])\n";
+    assert_eq!(output(source), ["1", "2", "3"]);
+}
+
+#[test]
+fn sort_orders_strings_by_scalar_sequence() {
+    let source = "xs = [\"pear\", \"Apple\", \"apple\"]\nsort(xs)\nprint(join(xs, \",\"))\n";
+    assert_eq!(output(source), ["Apple,apple,pear"]);
+}
+
+#[test]
+fn sort_through_a_parameter_reaches_the_caller() {
+    let source = "\
+function arrange(target: List<Int>):
+    sort(target)
+
+xs = [2, 1]
+arrange(xs)
+print(xs[0])
+";
+    assert_eq!(output(source), ["1"]);
+}
+
+#[test]
+fn sort_puts_nan_after_every_number() {
+    let source = "\
+big = 10.0
+i = 0
+while i < 20:
+    big = big * big
+    i = i + 1
+
+missing = big - big
+xs = [1.0, missing, -1.0]
+sort(xs)
+print(xs[0])
+print(xs[1])
+print(xs[2] == xs[2])
+";
+    assert_eq!(output(source), ["-1", "1", "false"]);
+}
+
+#[test]
+fn sort_rejects_lists_it_cannot_order() {
+    assert_eq!(
+        errors("xs = [true, false]\nsort(xs)\n"),
+        [BuiltinArgument { name: "sort", found: Type::List(Box::new(Type::Bool)) }]
+    );
+    assert_eq!(
+        errors("sort(\"ab\")\n"),
+        [BuiltinArgument { name: "sort", found: Type::Str }]
+    );
+}
+
+#[test]
+fn sort_returns_unit() {
+    assert_eq!(errors("xs = [1]\nx = sort(xs)\n"), [UnitAsValue]);
+}
+
+#[test]
+fn clock_never_goes_backwards() {
+    let source = "a = clock()\nb = clock()\nprint(b >= a)\n";
+    assert_eq!(output(source), ["true"]);
+}
+
+#[test]
+fn now_reports_seconds_since_the_epoch() {
+    let source = "print(now() > 1700000000.0)\n";
+    assert_eq!(output(source), ["true"]);
+}
+
+#[test]
+fn time_takes_no_arguments() {
+    assert_eq!(
+        errors("print(now(0))\n"),
+        [ArgumentCount { name: "now".to_string(), expected: 0, found: 1 }]
+    );
 }

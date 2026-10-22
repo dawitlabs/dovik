@@ -241,3 +241,147 @@ fn native_matches_the_interpreter_for_io() {
         String::from_utf8_lossy(&run.stderr)
     );
 }
+
+#[test]
+fn list_dir_reports_sorted_names() {
+    let dir = sandbox("listing");
+    let path = dir.display().to_string();
+    std::fs::write(dir.join("b.txt"), "").expect("write");
+    std::fs::write(dir.join("a.txt"), "").expect("write");
+    std::fs::create_dir(dir.join("inner")).expect("mkdir");
+
+    let source = format!("print(join(list_dir(\"{path}\"), \",\"))\n");
+    assert_eq!(output(&source), ["a.txt,b.txt,inner"]);
+}
+
+#[test]
+fn list_dir_on_an_empty_directory_is_empty() {
+    let dir = sandbox("empty_listing");
+    let path = dir.display().to_string();
+    let source = format!("print(len(list_dir(\"{path}\")))\n");
+    assert_eq!(output(&source), ["0"]);
+}
+
+#[test]
+fn is_dir_separates_directories_from_files() {
+    let dir = sandbox("kinds");
+    let path = dir.display().to_string();
+    let file = dir.join("f.txt");
+    std::fs::write(&file, "").expect("write");
+    let file = file.display().to_string();
+    let missing = dir.join("absent").display().to_string();
+
+    let source = format!(
+        "print(is_dir(\"{path}\"))\nprint(is_dir(\"{file}\"))\nprint(is_dir(\"{missing}\"))\n"
+    );
+    assert_eq!(output(&source), ["true", "false", "false"]);
+}
+
+#[test]
+fn directories_round_trip() {
+    let dir = sandbox("round");
+    let made = dir.join("made").display().to_string();
+    let source = format!(
+        "create_dir(\"{made}\")\nprint(is_dir(\"{made}\"))\nremove_dir(\"{made}\")\nprint(is_dir(\"{made}\"))\n"
+    );
+    assert_eq!(output(&source), ["true", "false"]);
+}
+
+#[test]
+fn remove_file_deletes_one_file() {
+    let dir = sandbox("deletion");
+    let path = dir.join("gone.txt");
+    std::fs::write(&path, "x").expect("write");
+    let path = path.display().to_string();
+
+    let source = format!(
+        "print(file_exists(\"{path}\"))\nremove_file(\"{path}\")\nprint(file_exists(\"{path}\"))\n"
+    );
+    assert_eq!(output(&source), ["true", "false"]);
+}
+
+#[test]
+fn directory_failures_trap() {
+    let dir = sandbox("failures");
+    let missing = dir.join("absent").display().to_string();
+    let existing = dir.display().to_string();
+    let occupied = dir.join("taken.txt");
+    std::fs::write(&occupied, "").expect("write");
+    let occupied = occupied.display().to_string();
+
+    assert_eq!(
+        trap(&format!("print(len(list_dir(\"{missing}\")))\n")),
+        RuntimeError::InputOutput
+    );
+    assert_eq!(
+        trap(&format!("create_dir(\"{existing}\")\n")),
+        RuntimeError::InputOutput
+    );
+    assert_eq!(
+        trap(&format!("remove_dir(\"{missing}\")\n")),
+        RuntimeError::InputOutput
+    );
+    assert_eq!(
+        trap(&format!("remove_file(\"{existing}\")\n")),
+        RuntimeError::InputOutput
+    );
+    assert_eq!(
+        trap(&format!("remove_dir(\"{occupied}\")\n")),
+        RuntimeError::InputOutput
+    );
+}
+
+#[test]
+fn directory_builtins_reject_wrong_types() {
+    assert_eq!(
+        errors("print(is_dir(1))\n"),
+        [BuiltinArgument { name: "is_dir", found: Type::Int }]
+    );
+    assert_eq!(errors("x = create_dir(\"d\")\n"), [UnitAsValue]);
+}
+
+#[test]
+fn native_matches_the_interpreter_for_directories() {
+    let dir = sandbox("native_dirs");
+    let root = dir.display().to_string();
+    let source = format!(
+        "create_dir(\"{root}/nest\")\nwrite_file(\"{root}/nest/b\", \"\")\nwrite_file(\"{root}/nest/a\", \"\")\nprint(join(list_dir(\"{root}/nest\"), \",\"))\nprint(is_dir(\"{root}/nest\"))\nremove_file(\"{root}/nest/a\")\nremove_file(\"{root}/nest/b\")\nremove_dir(\"{root}/nest\")\nprint(is_dir(\"{root}/nest\"))\n"
+    );
+
+    let program = lowered(&source);
+    let ll = dir.join("dirs.ll");
+    let binary = dir.join("dirs");
+    std::fs::write(&ll, backend::emit(&program, &source)).expect("write ir");
+
+    let build = Command::new("clang")
+        .args(["-O2", "-flto=full"])
+        .arg("-o")
+        .arg(&binary)
+        .arg(&ll)
+        .arg(env!("DOVIK_RUNTIME_OBJECT"))
+        .arg("-lm")
+        .output()
+        .expect("clang");
+    assert!(
+        build.status.success(),
+        "clang rejected it:\n{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let run = Command::new(&binary)
+        .env("DOVIK_CHECK_LEAKS", "1")
+        .output()
+        .expect("run");
+
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout),
+        "a,b\ntrue\nfalse\n",
+        "native differs: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&run.stderr).contains("0 live object"),
+        "leaked: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}

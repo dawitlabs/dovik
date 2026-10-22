@@ -71,7 +71,8 @@ pub(crate) fn owned_result(kind: &InstKind) -> Option<RegId> {
             | Builtin::Upper
             | Builtin::Lower
             | Builtin::Replace
-            | Builtin::ReadInput => *dest,
+            | Builtin::ReadInput
+            | Builtin::ListDir => *dest,
             _ => None,
         },
         _ => None,

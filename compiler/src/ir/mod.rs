@@ -233,9 +233,14 @@ fn builtin_error(which: crate::builtins::Builtin) -> Option<RuntimeError> {
         Builtin::ToInt | Builtin::ParseInt | Builtin::ParseFloat => {
             Some(RuntimeError::InvalidConversion)
         }
-        Builtin::ReadFile | Builtin::WriteFile | Builtin::AppendFile | Builtin::ReadInput => {
-            Some(RuntimeError::InputOutput)
-        }
+        Builtin::ReadFile
+        | Builtin::WriteFile
+        | Builtin::AppendFile
+        | Builtin::ReadInput
+        | Builtin::ListDir
+        | Builtin::CreateDir
+        | Builtin::RemoveDir
+        | Builtin::RemoveFile => Some(RuntimeError::InputOutput),
         Builtin::Assert => Some(RuntimeError::AssertionFailed),
         Builtin::Argument | Builtin::Substring | Builtin::IndexOf => {
             Some(RuntimeError::IndexOutOfBounds)

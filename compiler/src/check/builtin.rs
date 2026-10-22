@@ -85,7 +85,12 @@ fn hint(builtin: Builtin) -> Option<Type> {
         | Builtin::EndsWith
         | Builtin::Upper
         | Builtin::Lower
-        | Builtin::Replace => Some(Type::Str),
+        | Builtin::Replace
+        | Builtin::ListDir
+        | Builtin::IsDir
+        | Builtin::CreateDir
+        | Builtin::RemoveDir
+        | Builtin::RemoveFile => Some(Type::Str),
         Builtin::Assert => Some(Type::Bool),
         Builtin::Join => Some(Type::List(Box::new(Type::Str))),
         Builtin::Argument => Some(Type::Int),
@@ -120,12 +125,25 @@ fn accepts_first(builtin: Builtin, found: &Type) -> bool {
         | Builtin::EndsWith
         | Builtin::Upper
         | Builtin::Lower
-        | Builtin::Replace => *found == Type::Str,
+        | Builtin::Replace
+        | Builtin::ListDir
+        | Builtin::IsDir
+        | Builtin::CreateDir
+        | Builtin::RemoveDir
+        | Builtin::RemoveFile => *found == Type::Str,
         Builtin::Assert => *found == Type::Bool,
-        Builtin::ReadInput => true,
+        Builtin::Sort => sortable(found),
+        Builtin::ReadInput | Builtin::Now | Builtin::Clock => true,
         Builtin::Join => *found == Type::List(Box::new(Type::Str)),
         Builtin::Argument => *found == Type::Int,
         Builtin::ArgumentCount => true,
+    }
+}
+
+fn sortable(found: &Type) -> bool {
+    match found {
+        Type::List(item) => matches!(**item, Type::Int | Type::Float | Type::Str),
+        _ => false,
     }
 }
 

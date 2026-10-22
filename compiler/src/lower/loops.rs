@@ -66,6 +66,10 @@ impl Lowerer<'_> {
         span: Span,
         container: Type,
     ) {
+        let element = match &container {
+            Type::List(item) => (**item).clone(),
+            _ => Type::Unknown,
+        };
         let cursor = self.temp_slot("index", Type::Int);
         self.emit(
             ir::InstKind::StoreLocal {
@@ -113,7 +117,7 @@ impl Lowerer<'_> {
         self.switch_to(body_block);
         let current = self.register(Type::Int);
         self.emit(ir::InstKind::LoadLocal { dest: current, local: cursor }, span);
-        let value = self.register(Type::Unknown);
+        let value = self.register(element);
         self.emit(
             ir::InstKind::ListGet {
                 dest: value,

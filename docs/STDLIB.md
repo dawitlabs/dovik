@@ -201,13 +201,121 @@ direction.
 `assert` exists so `dovik test` can work without a language change. It raises `DVK5008`,
 which extends [SPEC.md](SPEC.md) 15.2 again.
 
-## 9. Not Yet Provided
+## 9. Sorting
 
-Named by [SPEC.md](SPEC.md) 17 as library surface, with no implementation and no
-chosen names: time, grapheme segmentation and normalization (10.4), full Unicode case
-conversion, sorting, directory operations, and reading standard input a line at a time.
+| Signature | Behaviour |
+| --- | --- |
+| `sort(xs: List<T>) -> Unit` | Orders the list in place, smallest first. `T` must be `Int`, `Float`, or `String` |
 
-## 10. Open Decisions
+`sort` mutates through a reference ([SPEC.md](SPEC.md) 3.4), so sorting a `List`
+parameter sorts the caller's list, exactly as `append` does.
+
+There is deliberately **no comparator argument.** The language has no function values
+([SPEC.md](SPEC.md) 5.6 rejects a function used as a value), so a comparator cannot be
+passed. Ascending order is therefore the whole of sorting until that changes.
+
+`List<Bool>` is rejected. `Bool` has equality (13) but the specification never orders
+`false` before `true`, and `sort` is not the place to invent an ordering.
+
+Three decisions worth knowing:
+
+- **`String` sorts by scalar sequence, not by meaning.** `"Apple"` precedes `"apple"`
+  precedes `"pear"`, because that is the order of their code points. This matches
+  `<` on `String` (6.4) and is not a locale-aware collation.
+- **NaN sorts after every number.** Equality in 13 says NaN is not equal to itself,
+  which is not an ordering at all, so `sort` needs its own rule: every NaN is treated as
+  equal to every other NaN and greater than every number. Without a rule the sort would
+  be free to produce any permutation.
+- **`-0.0` and `0.0` compare equal, so their relative order is unspecified.** They are
+  the only two distinguishable values `sort` may leave in either order, and the two
+  implementations do differ there.
+
+## 10. Time
+
+| Signature | Behaviour |
+| --- | --- |
+| `now() -> Float` | Seconds since 1970-01-01 00:00:00 UTC, including a fraction |
+| `clock() -> Float` | Seconds from an unspecified moment, for measuring durations |
+
+Two functions because they answer different questions and only one of them is suitable
+for timing:
+
+- `now()` is the wall clock. It is what a program prints or stores, and it **can move
+  backwards** when the system clock is corrected.
+- `clock()` never moves backwards. Its zero point is not specified and carries no
+  meaning, so only the difference between two calls is useful.
+
+```dovk
+start = clock()
+total = work()
+print(to_string(clock() - start) + " seconds")
+```
+
+Neither function is a constant, so neither may be folded, hoisted out of a loop, or
+computed once and reused. See [GOTCHAS.md](GOTCHAS.md).
+
+There is no calendar: no year, month, day, or formatting. Breaking a timestamp into
+fields needs either a `Dict<String, Int>` return or a function per field, and neither
+has been chosen.
+
+## 11. Directories
+
+| Signature | Behaviour |
+| --- | --- |
+| `list_dir(path: String) -> List<String>` | The names inside that directory, sorted. A failure is a runtime error |
+| `is_dir(path: String) -> Bool` | Whether the path is a directory |
+| `create_dir(path: String) -> Unit` | Creates one directory. A failure is a runtime error |
+| `remove_dir(path: String) -> Unit` | Removes one empty directory. A failure is a runtime error |
+| `remove_file(path: String) -> Unit` | Removes one file. A failure is a runtime error |
+
+`list_dir` returns names, not paths. Joining is the caller's job, which keeps the
+function from having to know about separators.
+
+**`list_dir` is sorted.** The order a file system reports entries in is arbitrary and
+varies between runs and machines, which would make every program that prints a listing
+non-reproducible. Sorting costs one pass and removes the whole problem. This is the
+opposite of [SPEC.md](SPEC.md) 12.6, which forbids observing a dictionary's order — there
+the order is meaningless, here the alphabetical order is the thing a reader wants.
+
+`.` and `..` are not included. They are present in every directory and no program wants
+them.
+
+The four remaining decisions follow the pattern the rest of the library already uses:
+
+- **`create_dir` creates one level.** A missing parent is a runtime error rather than
+  something to create silently, because creating three unintended directories is worse
+  than being told the parent is absent.
+- **`create_dir` on something that already exists traps.** `is_dir` is the guard, the
+  way `file_exists` guards `read_file`.
+- **`remove_dir` requires the directory to be empty.** Recursive deletion is one typo
+  away from catastrophe, and nothing in the library should make it a single call.
+- **`remove_file` refuses directories and `remove_dir` refuses files.** The names say
+  which is which, so neither should quietly do the other's job.
+
+Every failure here is `DVK5007`, the same code file I/O uses, because the error model has
+no way to say which failure occurred ([PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTIONAL-TYPES.md)).
+
+## 12. Not Yet Provided
+
+Named by [SPEC.md](SPEC.md) 17 as library surface, still with no implementation:
+
+- **Grapheme segmentation and normalization** (10.4). Both need the Unicode Character
+  Database. Neither can be written honestly without either a generated table in the
+  runtime or a dependency, and that is a decision about what the runtime is allowed to
+  carry, not a function to name.
+- **Full Unicode case conversion.** The same table, plus the problem that it can change a
+  string's scalar count, which `upper` and `lower` currently guarantee it never does.
+- **Calendar operations.** `now()` exists; turning a timestamp into a year and a month
+  does not.
+- **Descending order.** `sort` only ascends, and with no function values there is no
+  comparator to pass. A `reverse` function would cover it in one call and has not been
+  chosen.
+- **Reading standard input a line at a time.** Deliberately absent, not missing:
+  `split(read_input(), "\n")` covers it, and a streaming reader would need an
+  end-of-input predicate beside it. The cost is that a filter cannot stream, so it holds
+  the whole input in memory — the wrong trade for a large file.
+
+## 13. Open Decisions
 
 - Every name above. They are chosen, not ratified.
 - Whether a failed parse keeps `DVK5004` or gets its own runtime error.
@@ -223,6 +331,14 @@ conversion, sorting, directory operations, and reading standard input a line at 
 - Whether `upper` and `lower` should grow to full Unicode, and what that does to the
   guarantee that they preserve scalar count.
 - Whether `split` should gain a variant that drops empty fields.
+- Whether `sort` keeps ascending-only order, or the language grows function values and
+  `sort` grows a comparator.
+- Whether `List<Bool>` should sort with `false` first rather than being rejected.
+- Whether `now` and `clock` are the right names, and whether `now` should return an `Int`
+  of whole seconds instead, leaving fractions to `clock`.
+- Whether `create_dir` should create missing parents, or gain a second function that does.
+- Whether `remove_dir` should ever recurse.
+- Whether `list_dir` should return names or full paths.
 - Whether `index_of` should return a scalar position or a value usable directly with
   `substring` — they are the same today and would diverge if byte offsets were ever
   exposed.
