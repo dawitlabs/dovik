@@ -16,7 +16,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Blocked by:** nothing.
 
-**Still open, and gating later phases only:** U3 gates Phase 6, U5 will surface in Phase 5, and U8 gates the standard-library error strategy. U4 and U7 are resolved ([DECISIONS.md](DECISIONS.md) D023 and D022). None of the rest blocks Phases 2 through 4.
+**Still open, and gating later phases only:** U3 gates Phase 6, and U5 will surface in Phase 5. U2, U4, U6, U7 and U8 are resolved ([DECISIONS.md](DECISIONS.md) D020, D023, D019, D022, D025).
 
 ## Phase 2: Compiler Foundation
 
@@ -77,7 +77,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Completion criterion:** Ordinary programs can use core features without manual memory management, and cyclic garbage is reclaimable ([SPEC.md](SPEC.md) section 14).
 
-**Blocked by:** **U3** (string indexing unit and cost), which decides the string representation and is not something to retrofit. **U7** (stack exhaustion and out-of-memory). **U8** (representing absence), which shapes the library's error strategy. The memory-management algorithm is also still unchosen ([RUNTIME.md](RUNTIME.md) section 8) and belongs before this phase, not inside it — and it must handle objects reachable from several bindings at once, since collections alias by default ([DECISIONS.md](DECISIONS.md) D013).
+**Blocked by:** **U3** (string indexing unit and cost), which decides the string representation and is not something to retrofit. U7 and U8 are resolved ([DECISIONS.md](DECISIONS.md) D022 and D025). The memory-management algorithm is also still unchosen ([RUNTIME.md](RUNTIME.md) section 8) and belongs before this phase, not inside it — and it must handle objects reachable from several bindings at once, since collections alias by default ([DECISIONS.md](DECISIONS.md) D013).
 
 ## Phase 7: Developer Experience
 
@@ -137,7 +137,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Completion criterion:** Dovik can compile its compiler without relying on the Rust implementation for the final bootstrap stage.
 
-**Blocked by:** Phase 9 (modules), plus language features a compiler needs that Dovik deliberately lacks — user-defined types and a way to represent absence (U8) among them. Each must earn its way in under [SPEC.md](SPEC.md) section 20 before this phase is realistic.
+**Blocked by:** language features a compiler needs that Dovik deliberately lacks, user-defined types chief among them. Modules (Phase 9) and a way to represent absence ([SPEC.md](SPEC.md) 23) both exist now. Each remaining one must earn its way in under [SPEC.md](SPEC.md) section 20 before this phase is realistic.
 
 ## Development Principles
 

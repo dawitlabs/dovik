@@ -60,9 +60,10 @@ checked against unoptimized output; `tests/opt.rs` runs a corpus both ways and
 compares. It is not a supported way to run Dovik programs and must not appear in
 user-facing documentation as one.
 
-Its step and recursion limits are not language semantics.
-[SPEC.md](SPEC.md) 15.2 leaves stack exhaustion unspecified (U7); the limits only
-stop a test from hanging.
+Its step limit is not language semantics; it only stops a test from hanging. Its recursion
+limit is different now: [SPEC.md](SPEC.md) 15.2 makes stack exhaustion a runtime error, so the
+interpreter's limit and the native build's guard page must report the same `DVK5009`, at
+thresholds the specification leaves implementation-defined.
 
 ## Parser recovery must not consume the next line
 
@@ -655,19 +656,18 @@ Reverted. The remaining 5.3x on allocation churn is the object model: a Dovik li
 a reference count, a length, a capacity and an element tag that C's `malloc(24)` does not.
 Closing it means a smaller representation, not a smarter allocator.
 
-## File I/O traps, and `file_exists` is a check rather than a guarantee
+## File I/O: reads return an optional, writes still trap
 
-[SPEC.md](SPEC.md) 17 forbids a library function from introducing a recoverable error, and
-the language has no optional type (U8), so `read_file`, `write_file` and `append_file` trap
-on failure. `file_exists` is the predicate that lets a program avoid the trap, the same
-shape as `can_parse_int` before `parse_int`.
+`read_file` returns `String?` ([SPEC.md](SPEC.md) 23, [STDLIB.md](STDLIB.md) 5). It used to
+trap, with `file_exists` as the guard in front of it, and that pair had a race nothing could
+remove: the file could vanish between the test and the read. One call cannot.
 
-It is not a guarantee. A file can vanish between the test and the read, and then the read
-traps. That race cannot be closed without a result type, and pretending otherwise would be
-worse than the trap.
+`write_file` and `append_file` still trap. A failed write is not an absence, and there is
+nothing useful to return in its place — the error model has no recoverable errors
+([SPEC.md](SPEC.md) 15.2) and section 17 forbids a library function from introducing one.
 
-This added a seventh entry to [SPEC.md](SPEC.md) 15.2's runtime error list, `DVK5007`. That
-list is normative, so the addition is recorded in the spec and not only in the library doc.
+`file_exists` survives as its own question rather than as a guard.
+
 
 ## The entry point now takes argc and argv
 
@@ -727,17 +727,20 @@ write.
 
 [SPEC.md](SPEC.md) 20 requires that a change to syntax or type rules is recorded in the
 specification first, and that the implementation must not diverge silently.
-[PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTIONAL-TYPES.md) is therefore a proposal and not a
-branch: resolving U8 touches the lexer, the type checker's first flow-sensitive rule, the
-IR representation, the runtime, five library signatures and six documents.
+Both proposals in `docs/` were written that way and then ratified in that order: the
+specification section first, then the implementation, in one commit each.
+[PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTIONAL-TYPES.md) became
+[SPEC.md](SPEC.md) 23 and D025, and it was wrong about two things that only writing the
+code found — it never said how a program builds a present optional, and it did not notice
+that narrowing a variable makes an optional collection element unreadable.
 
 [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) is the same thing for
 [SPEC.md](SPEC.md) 16's first bullet, and its section 8 is the part to read first: the cost of
 modules is not the parsing or the scope rules, it is that `Span` carries no file identity and
 every stage of the compiler is built on a single source string.
 
-Nothing in the compiler depends on either file. If one is rejected, deleting it costs nothing,
-which is the point of writing it before writing code.
+Each file now says it is ratified and not authoritative, and records where it was wrong. A
+design record that hides its own mistakes is worth less than one that keeps them.
 
 ## A `for` loop over a list typed its element register `Unknown`
 
