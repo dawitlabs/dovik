@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use compiler::error::line_col;
-use compiler::{lexer, parser};
+use compiler::{lexer, parser, resolve};
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -56,6 +56,16 @@ fn main() -> ExitCode {
     }
 
     if !parse_errors.is_empty() {
+        return ExitCode::FAILURE;
+    }
+
+    let (_resolution, resolve_errors) = resolve::resolve(&program);
+
+    for error in &resolve_errors {
+        report(&path, &source, error.span.start, &error.kind);
+    }
+
+    if !resolve_errors.is_empty() {
         return ExitCode::FAILURE;
     }
 
