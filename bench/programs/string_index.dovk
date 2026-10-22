@@ -1,0 +1,12 @@
+s = ""
+i = 0
+while i < 20000:
+    s = s + "x"
+    i = i + 1
+total = 0
+j = 0
+while j < 2000:
+    if s[j] == "x":
+        total = total + 1
+    j = j + 1
+print(total)

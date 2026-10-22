@@ -1,0 +1,15 @@
+xs: List<Int> = []
+i = 0
+while i < 300000:
+    append(xs, i)
+    i = i + 1
+total = 0
+for v in xs:
+    total = total + v
+print(total)
+d: Dict<Int, Int> = {}
+k = 0
+while k < 100000:
+    d[k] = k * 2
+    k = k + 1
+print(len(d))

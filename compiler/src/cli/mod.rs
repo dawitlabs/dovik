@@ -29,6 +29,12 @@ options:
   --no-opt        skip optimization
   --write         rewrite the file in place (format only)
   --check         exit 1 if the file is not already formatted (format only)
+
+  --omit-runtime-checks-for-benchmarking
+                  build without the overflow, zero-divisor and conversion
+                  checks. The result can produce wrong answers instead of
+                  failing. It exists only to price those checks against a
+                  build that lacks them (BENCHMARKS.md section 4).
 ";
 
 pub struct Options {
@@ -38,6 +44,7 @@ pub struct Options {
     pub emit: Emit,
     pub write: bool,
     pub check_only: bool,
+    pub omit_checks: bool,
 }
 
 #[derive(PartialEq, Eq)]
@@ -92,6 +99,7 @@ fn with_file(
         emit: Emit::Executable,
         write: false,
         check_only: false,
+        omit_checks: false,
     };
     let mut path = None;
     let mut pending = args.iter();
@@ -105,6 +113,7 @@ fn with_file(
             "--emit-tokens" => options.emit = Emit::Tokens,
             "--write" => options.write = true,
             "--check" => options.check_only = true,
+            "--omit-runtime-checks-for-benchmarking" => options.omit_checks = true,
             "-o" => options.output = pending.next().cloned(),
             other if other.starts_with('-') => {
                 eprintln!("unknown option `{other}`");

@@ -46,12 +46,17 @@ declare double @llvm.trunc.f64(double)
 "#;
 
 pub fn emit(program: &Program, source: &str) -> String {
+    emit_with(program, source, true)
+}
+
+pub fn emit_with(program: &Program, source: &str, checks: bool) -> String {
     let mut emitter = Emitter {
         program,
         source,
         out: String::new(),
         temp: 0,
         label: String::new(),
+        checks,
     };
 
     emitter.module();
@@ -64,6 +69,7 @@ pub(crate) struct Emitter<'a> {
     pub(crate) out: String,
     pub(crate) temp: usize,
     pub(crate) label: String,
+    pub(crate) checks: bool,
 }
 
 impl Emitter<'_> {

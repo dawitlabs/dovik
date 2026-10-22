@@ -213,7 +213,7 @@ pub fn compile(source: &str, options: &Options) -> Result<Compiled, Vec<Diagnost
         }
     }
 
-    let llvm = backend::emit(&program, source);
+    let llvm = backend::emit_with(&program, source, !options.omit_checks);
     Ok(Compiled { program, llvm })
 }
 

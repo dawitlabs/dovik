@@ -10,6 +10,10 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn trap_if(&mut self, condition: &str, code: u8, span: Span) {
+        if !self.checks {
+            return;
+        }
+
         let (line, column) = self.position(span);
         let trap = self.next_label("trap");
         let cont = self.next_label("cont");
@@ -27,6 +31,19 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn checked_arith(&mut self, dest: usize, op: ArithOp, lhs: &Value, rhs: &Value, span: Span) {
+        if !self.checks {
+            let plain = match op {
+                ArithOp::Add => "add",
+                ArithOp::Sub => "sub",
+                ArithOp::Mul => "mul",
+            };
+            return self.line(&format!(
+                "  %r{dest} = {plain} i64 {}, {}",
+                literal(lhs),
+                literal(rhs)
+            ));
+        }
+
         let intrinsic = match op {
             ArithOp::Add => "sadd",
             ArithOp::Sub => "ssub",
@@ -51,9 +68,12 @@ impl Emitter<'_> {
 
     pub(crate) fn remainder(&mut self, dest: usize, lhs: &Value, rhs: &Value, span: Span) {
         let divisor = literal(rhs);
-        let zero = self.next_temp();
-        self.line(&format!("  {zero} = icmp eq i64 {divisor}, 0"));
-        self.trap_if(&zero, 2, span);
+
+        if self.checks {
+            let zero = self.next_temp();
+            self.line(&format!("  {zero} = icmp eq i64 {divisor}, 0"));
+            self.trap_if(&zero, 2, span);
+        }
 
         let negative = self.next_temp();
         self.line(&format!("  {negative} = icmp eq i64 {divisor}, -1"));
@@ -69,9 +89,12 @@ impl Emitter<'_> {
 
     pub(crate) fn divide(&mut self, dest: usize, lhs: &Value, rhs: &Value, span: Span) {
         let divisor = literal(rhs);
-        let zero = self.next_temp();
-        self.line(&format!("  {zero} = fcmp oeq double {divisor}, 0.0"));
-        self.trap_if(&zero, 1, span);
+
+        if self.checks {
+            let zero = self.next_temp();
+            self.line(&format!("  {zero} = fcmp oeq double {divisor}, 0.0"));
+            self.trap_if(&zero, 1, span);
+        }
         self.line(&format!(
             "  %r{dest} = fdiv double {}, {divisor}",
             literal(lhs)
@@ -84,6 +107,10 @@ impl Emitter<'_> {
             "  {truncated} = call double @llvm.trunc.f64(double {})",
             literal(value)
         ));
+
+        if !self.checks {
+            return self.line(&format!("  %r{dest} = fptosi double {truncated} to i64"));
+        }
 
         let unordered = self.next_temp();
         self.line(&format!(
