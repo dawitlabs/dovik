@@ -4,7 +4,7 @@ use std::process::{Command, ExitCode};
 use super::report::write_stdout;
 use super::{Emit, Options, Report};
 use crate::diagnostic::{self, Diagnostic};
-use crate::error::line_col;
+use crate::source::SourceMap;
 use crate::{backend, check, format as formatter, ir, lexer, lower, opt, parser, resolve};
 
 pub struct Compiled {
@@ -12,14 +12,13 @@ pub struct Compiled {
     pub llvm: String,
 }
 
-pub fn check(path: &str, source: &str, options: &Options) -> ExitCode {
+pub fn check(sources: &SourceMap, options: &Options) -> ExitCode {
     let report = Report {
-        path,
-        source,
+        sources,
         json: options.json,
     };
 
-    match compile(source, options) {
+    match compile(sources, options) {
         Ok(_) => ExitCode::SUCCESS,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -28,14 +27,13 @@ pub fn check(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 }
 
-pub fn test(path: &str, source: &str, options: &Options) -> ExitCode {
+pub fn test(sources: &SourceMap, options: &Options) -> ExitCode {
     let report = Report {
-        path,
-        source,
+        sources,
         json: options.json,
     };
 
-    let compiled = match compile(source, options) {
+    let compiled = match compile(sources, options) {
         Ok(compiled) => compiled,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -62,7 +60,7 @@ pub fn test(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 
     let indices: Vec<usize> = found.iter().map(|(index, _)| *index).collect();
-    let llvm = backend::emit_tests(&compiled.program, source, &indices);
+    let llvm = backend::emit_tests(&compiled.program, sources, &indices);
     let binary = std::env::temp_dir().join(format!("dovik-test-{}", std::process::id()));
     let target = binary.display().to_string();
 
@@ -97,21 +95,20 @@ pub fn test(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 }
 
-pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
+pub fn format(sources: &SourceMap, options: &Options) -> ExitCode {
     let report = Report {
-        path,
-        source,
+        sources,
         json: options.json,
     };
 
-    let (tokens, lex_errors) = lexer::lex(source);
+    let (tokens, lex_errors) = lexer::lex(sources.entry_text());
 
     if !lex_errors.is_empty() {
         report.emit(&diagnostic::from_lex(&lex_errors));
         return ExitCode::FAILURE;
     }
 
-    let (_, parse_errors) = parser::parse(source, &tokens);
+    let (_, parse_errors) = parser::parse(sources.entry_text(), &tokens);
 
     if !parse_errors.is_empty() {
         report.emit(&diagnostic::from_parse(&parse_errors));
@@ -119,13 +116,13 @@ pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let Some(formatted) = formatter::format(source) else {
+    let Some(formatted) = formatter::format(sources.entry_text()) else {
         report.note("could not format this file");
         return ExitCode::FAILURE;
     };
 
     if options.check_only {
-        return match formatted == source {
+        return match formatted == sources.entry_text() {
             true => ExitCode::SUCCESS,
             false => {
                 report.note("file is not formatted");
@@ -135,11 +132,11 @@ pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 
     if options.write {
-        if formatted == source {
+        if formatted == sources.entry_text() {
             return ExitCode::SUCCESS;
         }
 
-        return match std::fs::write(path, &formatted) {
+        return match std::fs::write(sources.entry_path(), &formatted) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 report.note(&format!("could not write: {err}"));
@@ -152,15 +149,14 @@ pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-pub fn build(path: &str, source: &str, options: &Options) -> ExitCode {
+pub fn build(sources: &SourceMap, options: &Options) -> ExitCode {
     let report = Report {
-        path,
-        source,
+        sources,
         json: options.json,
     };
 
     if options.emit == Emit::Tokens {
-        let (tokens, errors) = lexer::lex(source);
+        let (tokens, errors) = lexer::lex(sources.text());
 
         if !errors.is_empty() {
             report.emit(&diagnostic::from_lex(&errors));
@@ -168,13 +164,13 @@ pub fn build(path: &str, source: &str, options: &Options) -> ExitCode {
         }
 
         write_stdout(tokens.iter().map(|token| {
-            let (line, column) = line_col(source, token.span.start);
+            let (line, column) = sources.position(token.span.start);
             format!("{line}:{column}\t{:?}", token.kind)
         }));
         return ExitCode::SUCCESS;
     }
 
-    let compiled = match compile(source, options) {
+    let compiled = match compile(sources, options) {
         Ok(compiled) => compiled,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -195,7 +191,7 @@ pub fn build(path: &str, source: &str, options: &Options) -> ExitCode {
             let target = options
                 .output
                 .clone()
-                .unwrap_or_else(|| default_output(path));
+                .unwrap_or_else(|| default_output(sources.entry_path()));
 
             match link(&compiled.llvm, &target) {
                 Ok(()) => ExitCode::SUCCESS,
@@ -208,14 +204,13 @@ pub fn build(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 }
 
-pub fn run(path: &str, source: &str, options: &Options) -> ExitCode {
+pub fn run(sources: &SourceMap, options: &Options) -> ExitCode {
     let report = Report {
-        path,
-        source,
+        sources,
         json: options.json,
     };
 
-    let compiled = match compile(source, options) {
+    let compiled = match compile(sources, options) {
         Ok(compiled) => compiled,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -247,14 +242,14 @@ pub fn run(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 }
 
-pub fn compile(source: &str, options: &Options) -> Result<Compiled, Vec<Diagnostic>> {
-    let (tokens, lex_errors) = lexer::lex(source);
+pub fn compile(sources: &SourceMap, options: &Options) -> Result<Compiled, Vec<Diagnostic>> {
+    let (tokens, lex_errors) = lexer::lex(sources.text());
 
     if !lex_errors.is_empty() {
         return Err(diagnostic::from_lex(&lex_errors));
     }
 
-    let (ast, parse_errors) = parser::parse(source, &tokens);
+    let (ast, parse_errors) = parser::parse(sources.text(), &tokens);
 
     if !parse_errors.is_empty() {
         return Err(diagnostic::from_parse(&parse_errors));
@@ -282,7 +277,7 @@ pub fn compile(source: &str, options: &Options) -> Result<Compiled, Vec<Diagnost
         }
     }
 
-    let llvm = backend::emit_with(&program, source, !options.omit_checks);
+    let llvm = backend::emit_with(&program, sources, !options.omit_checks);
     Ok(Compiled { program, llvm })
 }
 

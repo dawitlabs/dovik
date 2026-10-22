@@ -2,6 +2,7 @@ use std::process::Command;
 
 use compiler::error::TypeErrorKind::{self, *};
 use compiler::ir::RuntimeError;
+use compiler::source::SourceMap;
 use compiler::types::Type;
 use compiler::{backend, check, interp, ir, lexer, lower, opt, parser, resolve};
 
@@ -268,7 +269,7 @@ fn native_matches_the_interpreter_for_the_standard_library() {
 
         let ll = dir.join(format!("{name}.ll"));
         let binary = dir.join(name);
-        std::fs::write(&ll, backend::emit(&program, source)).expect("write ir");
+        std::fs::write(&ll, backend::emit(&program, &SourceMap::single("test.dovk", *source))).expect("write ir");
 
         let build = Command::new("clang")
             .args(["-O2", "-flto=full"])

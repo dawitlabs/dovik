@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 
+use compiler::source::SourceMap;
 use compiler::{backend, check, interp, ir, lexer, lower, opt, parser, resolve};
 
 fn lowered(source: &str, optimize: bool) -> ir::Program {
@@ -41,7 +42,7 @@ struct Native {
 
 fn compile_and_run(source: &str, name: &str) -> Native {
     let program = lowered(source, true);
-    let llvm = backend::emit(&program, source);
+    let llvm = backend::emit(&program, &SourceMap::single("test.dovk", source));
 
     let dir = std::env::temp_dir().join("dovik-native-tests");
     std::fs::create_dir_all(&dir).expect("temp dir");
@@ -232,7 +233,7 @@ fn a_trap_reports_its_source_position() {
 fn the_emitted_ir_is_valid() {
     for (name, source) in CORPUS {
         let program = lowered(source, true);
-        let llvm = backend::emit(&program, source);
+        let llvm = backend::emit(&program, &SourceMap::single("test.dovk", *source));
 
         let dir = std::env::temp_dir().join("dovik-native-tests");
         std::fs::create_dir_all(&dir).expect("temp dir");
@@ -259,7 +260,7 @@ fn live_objects_at_exit(source: &str, name: &str) -> i64 {
     std::fs::create_dir_all(&dir).expect("temp dir");
     let ll = dir.join(format!("leak-{name}.ll"));
     let binary = dir.join(format!("leak-{name}"));
-    std::fs::write(&ll, backend::emit(&program, source)).expect("write ir");
+    std::fs::write(&ll, backend::emit(&program, &SourceMap::single("test.dovk", source))).expect("write ir");
 
     let build = Command::new("clang")
         .args(["-O2", "-flto=full"])

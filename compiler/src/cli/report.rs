@@ -1,10 +1,10 @@
 use std::io::{self, Write};
 
 use crate::diagnostic::Diagnostic;
+use crate::source::SourceMap;
 
 pub struct Report<'a> {
-    pub path: &'a str,
-    pub source: &'a str,
+    pub sources: &'a SourceMap,
     pub json: bool,
 }
 
@@ -14,8 +14,8 @@ impl Report<'_> {
 
         for diagnostic in diagnostics {
             let line = match self.json {
-                true => diagnostic.to_json(self.path, self.source),
-                false => diagnostic.render(self.path, self.source),
+                true => diagnostic.to_json(self.sources),
+                false => diagnostic.render(self.sources),
             };
 
             if writeln!(err, "{line}").is_err() {
@@ -28,13 +28,13 @@ impl Report<'_> {
         if self.json {
             eprintln!(
                 "{{\"severity\":\"error\",\"code\":\"DVK0001\",\"file\":{},\"message\":{}}}",
-                crate::diagnostic::quote(self.path),
+                crate::diagnostic::quote(self.sources.entry_path()),
                 crate::diagnostic::quote(message)
             );
             return;
         }
 
-        eprintln!("{}: {message}", self.path);
+        eprintln!("{}: {message}", self.sources.entry_path());
     }
 }
 

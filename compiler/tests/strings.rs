@@ -3,6 +3,7 @@ use std::process::Command;
 use compiler::error::TypeErrorKind::{self, *};
 use compiler::ir::RuntimeError;
 use compiler::types::Type;
+use compiler::source::SourceMap;
 use compiler::{backend, check, interp, ir, lexer, lower, opt, parser, resolve};
 
 fn lowered(source: &str) -> ir::Program {
@@ -234,7 +235,7 @@ print(total)
     std::fs::create_dir_all(&dir).expect("temp dir");
     let ll = dir.join("prog.ll");
     let binary = dir.join("prog");
-    std::fs::write(&ll, backend::emit(&lowered(source), source)).expect("write ir");
+    std::fs::write(&ll, backend::emit(&lowered(source), &SourceMap::single("test.dovk", source))).expect("write ir");
 
     let build = Command::new("clang")
         .args(["-O2", "-flto=full"])

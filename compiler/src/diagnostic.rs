@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
-use crate::error::{line_col, LexError, ParseError, ResolveError, TypeError};
+use crate::error::{LexError, ParseError, ResolveError, TypeError};
+use crate::source::SourceMap;
 use crate::token::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,16 +12,16 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn render(&self, path: &str, source: &str) -> String {
-        let (line, column) = line_col(source, self.span.start);
+    pub fn render(&self, sources: &SourceMap) -> String {
+        let (path, line, column) = sources.locate(self.span.start);
         format!(
             "{path}:{line}:{column}: error[{}]: {}",
             self.code, self.message
         )
     }
 
-    pub fn to_json(&self, path: &str, source: &str) -> String {
-        let (line, column) = line_col(source, self.span.start);
+    pub fn to_json(&self, sources: &SourceMap) -> String {
+        let (path, line, column) = sources.locate(self.span.start);
         let mut out = String::new();
         let _ = write!(
             out,

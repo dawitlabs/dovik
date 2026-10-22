@@ -10,6 +10,7 @@ mod value;
 use std::fmt::Write;
 
 use crate::ir::{BlockId, Function, Program, Terminator};
+use crate::source::SourceMap;
 use crate::types::Type;
 use ownership::is_reference;
 use value::{escape, llvm_type, tag_of};
@@ -83,14 +84,14 @@ declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare double @llvm.trunc.f64(double)
 "#;
 
-pub fn emit(program: &Program, source: &str) -> String {
-    emit_with(program, source, true)
+pub fn emit(program: &Program, sources: &SourceMap) -> String {
+    emit_with(program, sources, true)
 }
 
-pub fn emit_tests(program: &Program, source: &str, tests: &[usize]) -> String {
+pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> String {
     let mut emitter = Emitter {
         program,
-        source,
+        sources,
         out: String::new(),
         temp: 0,
         label: String::new(),
@@ -103,10 +104,10 @@ pub fn emit_tests(program: &Program, source: &str, tests: &[usize]) -> String {
     emitter.out
 }
 
-pub fn emit_with(program: &Program, source: &str, checks: bool) -> String {
+pub fn emit_with(program: &Program, sources: &SourceMap, checks: bool) -> String {
     let mut emitter = Emitter {
         program,
-        source,
+        sources,
         out: String::new(),
         temp: 0,
         label: String::new(),
@@ -121,7 +122,7 @@ pub fn emit_with(program: &Program, source: &str, checks: bool) -> String {
 
 pub(crate) struct Emitter<'a> {
     pub(crate) program: &'a Program,
-    pub(crate) source: &'a str,
+    pub(crate) sources: &'a SourceMap,
     pub(crate) out: String,
     pub(crate) temp: usize,
     pub(crate) label: String,

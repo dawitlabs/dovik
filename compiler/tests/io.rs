@@ -3,6 +3,7 @@ use std::process::Command;
 
 use compiler::error::TypeErrorKind::{self, *};
 use compiler::ir::RuntimeError;
+use compiler::source::SourceMap;
 use compiler::types::Type;
 use compiler::{backend, check, interp, ir, lexer, lower, opt, parser, resolve};
 
@@ -206,7 +207,7 @@ fn native_matches_the_interpreter_for_io() {
     let program = lowered(&source);
     let ll = dir.join("prog.ll");
     let binary = dir.join("prog");
-    std::fs::write(&ll, backend::emit(&program, &source)).expect("write ir");
+    std::fs::write(&ll, backend::emit(&program, &SourceMap::single("test.dovk", source.clone()))).expect("write ir");
 
     let build = Command::new("clang")
         .args(["-O2", "-flto=full"])
@@ -351,7 +352,7 @@ fn native_matches_the_interpreter_for_directories() {
     let program = lowered(&source);
     let ll = dir.join("dirs.ll");
     let binary = dir.join("dirs");
-    std::fs::write(&ll, backend::emit(&program, &source)).expect("write ir");
+    std::fs::write(&ll, backend::emit(&program, &SourceMap::single("test.dovk", source.clone()))).expect("write ir");
 
     let build = Command::new("clang")
         .args(["-O2", "-flto=full"])

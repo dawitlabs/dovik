@@ -1,12 +1,11 @@
 use super::value::literal;
 use super::Emitter;
-use crate::error::line_col;
 use crate::ir::{ArithOp, Value};
 use crate::token::Span;
 
 impl Emitter<'_> {
     pub(crate) fn position(&self, span: Span) -> (usize, usize) {
-        line_col(self.source, span.start)
+        self.sources.position(span.start)
     }
 
     pub(crate) fn trap_if(&mut self, condition: &str, code: u8, span: Span) {
