@@ -212,6 +212,7 @@ static void *checked_alloc(size_t bytes) {
 
 void dovik_retain(uint8_t tag, uint64_t word);
 void dovik_release(uint8_t tag, uint64_t word);
+uint64_t dovik_cell_new(uint64_t word);
 static void reclaim(uint8_t tag, uint64_t word);
 
 static inline Header *header_of(uint8_t tag, uint64_t word) {
@@ -856,30 +857,40 @@ static int parse_float_text(const char *text, size_t len, double *out) {
     return 1;
 }
 
-int64_t dovik_parse_int(uint64_t word, uint32_t line, uint32_t column) {
+uint64_t dovik_parse_int(uint64_t word) {
     Str *text = (Str *)(uintptr_t)word;
     long long parsed = 0;
-    if (!parse_int(text->bytes, text->len, &parsed)) dovik_trap(3, line, column);
-    return parsed;
+    if (!parse_int(text->bytes, text->len, &parsed)) return 0;
+    return dovik_cell_new((uint64_t)parsed);
 }
 
-double dovik_parse_float(uint64_t word, uint32_t line, uint32_t column) {
+uint64_t dovik_parse_float(uint64_t word) {
     Str *text = (Str *)(uintptr_t)word;
     double parsed = 0;
-    if (!parse_float_text(text->bytes, text->len, &parsed)) dovik_trap(3, line, column);
-    return parsed;
+    if (!parse_float_text(text->bytes, text->len, &parsed)) return 0;
+
+    uint64_t bits = 0;
+    memcpy(&bits, &parsed, sizeof(bits));
+    return dovik_cell_new(bits);
 }
 
-uint8_t dovik_can_parse_int(uint64_t word) {
-    Str *text = (Str *)(uintptr_t)word;
-    long long parsed = 0;
-    return parse_int(text->bytes, text->len, &parsed) ? 1 : 0;
-}
 
-uint8_t dovik_can_parse_float(uint64_t word) {
-    Str *text = (Str *)(uintptr_t)word;
-    double parsed = 0;
-    return parse_float_text(text->bytes, text->len, &parsed) ? 1 : 0;
+
+uint64_t dovik_dict_get_opt(uint64_t dict, uint64_t kword, uint8_t vtag) {
+    Dict *value = (Dict *)(uintptr_t)dict;
+    if (value->cap == 0) return 0;
+
+    size_t slot = probe(value, kword);
+    if (!value->state[slot]) return 0;
+
+    uint64_t found = value->entries[slot].val;
+
+    if (vtag >= TAG_STR) {
+        dovik_retain(vtag, found);
+        return found;
+    }
+
+    return dovik_cell_new(found);
 }
 
 static int cell_equal(Cell left, Cell right);
@@ -958,9 +969,9 @@ uint8_t dovik_file_exists(uint64_t path) {
     return 1;
 }
 
-uint64_t dovik_read_file(uint64_t path, uint32_t line, uint32_t column) {
+uint64_t dovik_read_file(uint64_t path) {
     FILE *handle = fopen(((Str *)(uintptr_t)path)->bytes, "rb");
-    if (handle == NULL) dovik_trap(6, line, column);
+    if (handle == NULL) return 0;
 
     size_t cap = 4096;
     size_t len = 0;
@@ -986,7 +997,7 @@ uint64_t dovik_read_file(uint64_t path, uint32_t line, uint32_t column) {
 
     if (failed) {
         free(bytes);
-        dovik_trap(6, line, column);
+        return 0;
     }
 
     Str *value = new_string(len);
@@ -1127,19 +1138,19 @@ uint8_t dovik_str_contains(uint64_t text, uint64_t needle) {
     return find_bytes(source, target, 0) != NULL ? 1 : 0;
 }
 
-int64_t dovik_str_index_of(uint64_t text, uint64_t needle, uint32_t line, uint32_t column) {
+uint64_t dovik_str_find(uint64_t text, uint64_t needle) {
     Str *source = (Str *)(uintptr_t)text;
     Str *target = (Str *)(uintptr_t)needle;
     const char *hit = find_bytes(source, target, 0);
 
-    if (hit == NULL) dovik_trap(4, line, column);
+    if (hit == NULL) return 0;
 
     size_t at = (size_t)(hit - source->bytes);
     int64_t scalars = 0;
     for (size_t i = 0; i < at; i++)
         if (!is_continuation((unsigned char)source->bytes[i])) scalars++;
 
-    return scalars;
+    return dovik_cell_new((uint64_t)scalars);
 }
 
 static int is_space(unsigned char byte) {

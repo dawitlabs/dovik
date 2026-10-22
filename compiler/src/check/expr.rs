@@ -45,7 +45,8 @@ impl Checker<'_> {
     fn check_none(&mut self, expected: Option<&Type>, span: Span) -> Type {
         match expected {
             Some(Type::Optional(inner)) => Type::Optional(inner.clone()),
-            Some(Type::Unknown) | None => {
+            Some(Type::Unknown) => Type::Unknown,
+            None => {
                 self.report(TypeErrorKind::CannotInferNone, span);
                 Type::Unknown
             }

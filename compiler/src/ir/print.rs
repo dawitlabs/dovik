@@ -204,6 +204,7 @@ impl fmt::Display for Value {
             Self::Float(value) => write!(f, "{value:?}"),
             Self::Bool(value) => write!(f, "{value}"),
             Self::Str(id) => write!(f, "str{id}"),
+            Self::None => write!(f, "none"),
         }
     }
 }

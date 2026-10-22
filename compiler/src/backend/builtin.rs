@@ -67,34 +67,14 @@ impl Emitter<'_> {
                 }
             }
             Builtin::ParseInt => {
-                if let Some(dest) = dest {
-                    self.line(&format!(
-                        "  %r{dest} = call i64 @dovik_parse_int(i64 {}, i32 {line}, i32 {column})",
-                        words[0]
-                    ));
-                }
+                self.plain_call(dest, &format!("i64 @dovik_parse_int(i64 {})", words[0]))
             }
             Builtin::ParseFloat => {
-                if let Some(dest) = dest {
-                    self.line(&format!(
-                        "  %r{dest} = call double @dovik_parse_float(i64 {}, i32 {line}, i32 {column})",
-                        words[0]
-                    ));
-                }
-            }
-            Builtin::CanParseInt => {
-                self.boolean_call(dest, &format!("@dovik_can_parse_int(i64 {})", words[0]))
-            }
-            Builtin::CanParseFloat => {
-                self.boolean_call(dest, &format!("@dovik_can_parse_float(i64 {})", words[0]))
+                self.plain_call(dest, &format!("i64 @dovik_parse_float(i64 {})", words[0]))
             }
             Builtin::FileExists => {
                 self.boolean_call(dest, &format!("@dovik_file_exists(i64 {})", words[0]))
             }
-            Builtin::Contains => self.boolean_call(
-                dest,
-                &format!("@dovik_str_contains(i64 {}, i64 {})", words[0], words[1]),
-            ),
             Builtin::StartsWith => self.boolean_call(
                 dest,
                 &format!("@dovik_str_starts_with(i64 {}, i64 {})", words[0], words[1]),
@@ -157,17 +137,21 @@ impl Emitter<'_> {
             Builtin::RemoveFile => self.line(&format!(
                 "  call void @dovik_remove_file(i64 {}, i32 {line}, i32 {column})", words[0]
             )),
-            Builtin::IndexOf => self.plain_call(dest, &format!(
-                "i64 @dovik_str_index_of(i64 {}, i64 {}, i32 {line}, i32 {column})",
-                words[0], words[1]
+            Builtin::Find => self.plain_call(dest, &format!(
+                "i64 @dovik_str_find(i64 {}, i64 {})", words[0], words[1]
             )),
+            Builtin::Get => {
+                let value_tag = match &function.registers[dest.unwrap_or(0)] {
+                    Type::Optional(inner) => tag_of(inner),
+                    other => tag_of(other),
+                };
+                self.plain_call(dest, &format!(
+                    "i64 @dovik_dict_get_opt(i64 {}, i64 {}, i8 {value_tag})",
+                    words[0], words[1]
+                ))
+            }
             Builtin::ReadFile => {
-                if let Some(dest) = dest {
-                    self.line(&format!(
-                        "  %r{dest} = call i64 @dovik_read_file(i64 {}, i32 {line}, i32 {column})",
-                        words[0]
-                    ));
-                }
+                self.plain_call(dest, &format!("i64 @dovik_read_file(i64 {})", words[0]))
             }
             Builtin::WriteFile => self.line(&format!(
                 "  call void @dovik_write_file(i64 {}, i64 {}, i32 {line}, i32 {column})",

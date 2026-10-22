@@ -880,3 +880,58 @@ Grapheme segmentation has no equivalent shortcut. `Grapheme_Cluster_Break` is no
 the Rust standard library, so it cannot be generated this way, and approximating a grapheme
 boundary corrupts text silently rather than failing. It needs a vendored UCD extract or a
 dependency, and [DECISIONS.md](DECISIONS.md) D024 leaves that to the project.
+
+## `none` needed its own IR literal, because zero is a real `Int`
+
+Optionals are one machine word with zero meaning `none`, so the obvious lowering for the
+`none` literal was `ir::Value::Int(0)`. The native backend was then correct and the
+interpreter was quietly wrong: it reads `ir::Value::Int(0)` as the integer zero, not as
+absence, so `parse_int("abc") == none` came out `false`.
+
+`ir::Value::None` now exists. The backend prints it as `0` and the interpreter maps it to
+`Value::Absent`. The lesson is narrower than it looks: the interpreter is a *tagged* value
+model and the backend is an untagged one, so any representation trick that relies on a
+sentinel value has to be spelled out in the IR rather than left to each backend to
+reconstruct.
+
+## A narrowed read borrows, which is why assignment is banned inside the block
+
+`OptionalGet` on an `Optional<String>` returns the very pointer the optional holds, without
+retaining it — the same convention `dovik_list_get` uses, and the reason neither appears in
+`ownership::owned_result`. The borrow is safe only because the variable cannot be reassigned
+inside the narrowed block, which [SPEC.md](SPEC.md) 23.4 forbids.
+
+That rule was written for type-system reasons: assigning would have to widen the type
+mid-block or reject a legal `T?`. It turns out to be a memory-safety requirement as well. If
+23.4 is ever relaxed, `OptionalGet` has to start retaining and the register has to become
+owned, in the same change.
+
+## An optional scalar is a pooled cell, and the pool is why it is affordable
+
+`String?`, `List?` and `Dict?` cost nothing: the word is the reference and `none` is zero.
+`Int?`, `Float?` and `Bool?` point at a `Boxed` cell, because there is no spare bit pattern
+in an `Int` to mean absent — every one of the 2^64 is a legal value.
+
+The cell is reference-counted and pooled exactly like strings and lists, so `some(5)` in a
+loop reuses cells instead of calling `malloc`. `Float?` stores the double's bit pattern,
+which is why `dovik_cell_new` takes a `uint64_t` and the backend bitcasts.
+
+Two consequences. `dovik_optional_eq` must unwrap both cells before comparing, and must do it
+through `dovik_eq` with the *inner* tag, or `Float?` comparison would be a bitwise compare and
+would get NaN and `-0.0` wrong. And `get` on a dictionary of references has to retain what it
+returns, because the dictionary still holds it — unlike `d[k]`, whose result is borrowed.
+
+## The three permitted operations came free; the restrictions were already written
+
+[SPEC.md](SPEC.md) 23.3 allows exactly three things with an optional, and almost none of that
+had to be implemented. `Type::is_numeric`, `Type::supports_ordering`, `is_valid_dict_key` and
+every `accepts_first` arm in the builtin checker are **whitelists**, so a new type is rejected
+by all of them by default.
+
+What had to be added was the permission: equality against `none` needed the other operand's
+type as a hint so `none` could be typed, and narrowing needed a scoped override of
+`var_types`. Everything else — no arithmetic, no ordering, no `print`, no `len`, no indexing,
+no dictionary key — was already true the moment `Type::Optional` existed.
+
+This is worth remembering when adding the next type: a whitelist costs more to write once and
+nothing to be correct afterwards.

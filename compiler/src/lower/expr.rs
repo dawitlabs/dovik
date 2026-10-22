@@ -9,7 +9,7 @@ impl Lowerer<'_> {
         let ty = self.typed.type_of(expr.span);
 
         match &expr.kind {
-            ExprKind::None => ir::Value::Int(0),
+            ExprKind::None => ir::Value::None,
             ExprKind::Int(value) => ir::Value::Int(*value as i64),
             ExprKind::Float(value) => ir::Value::Float(*value),
             ExprKind::Bool(value) => ir::Value::Bool(*value),

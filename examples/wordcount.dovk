@@ -7,12 +7,11 @@ if argument_count() != 1:
     usage()
 else:
     path = argument(0)
+    text = read_file(path)
 
-    if not file_exists(path):
+    if text == none:
         print("wordcount: cannot open " + path)
     else:
-        text = read_file(path)
-
         print("lines      " + to_string(len(lines(text)) - 1))
         print("words      " + to_string(count_words(flatten(text))))
         print("scalars    " + to_string(len(text)))

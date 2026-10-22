@@ -200,6 +200,7 @@ impl Emitter<'_> {
             Value::Float(_) => Type::Float,
             Value::Bool(_) => Type::Bool,
             Value::Str(_) => Type::Str,
+            Value::None => Type::Optional(Box::new(Type::Unknown)),
         }
     }
 

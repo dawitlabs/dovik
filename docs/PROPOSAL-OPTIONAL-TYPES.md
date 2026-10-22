@@ -1,12 +1,13 @@
 # Proposal: Optional Types (resolves U8)
 
-**Status:** Proposal. Not implemented, and deliberately not yet merged into
-[SPEC.md](SPEC.md).
+**Status:** **Ratified and implemented.** The normative text is [SPEC.md](SPEC.md) section 23
+and the decision is [DECISIONS.md](DECISIONS.md) D025. This file is the design record and is
+**not** authoritative; where it disagrees with the specification, the specification is right.
 
-[SPEC.md](SPEC.md) section 20 requires that a change to syntax or type rules is recorded in
-the specification *before* the implementation follows. This document exists to be argued
-with and then either folded into SPEC.md as sections 3.5 and 22, or rejected. Nothing in
-the compiler depends on it.
+Two things in it were wrong and are corrected where they appear: it never said how a program
+builds a present optional, so `some` had to be added (section 5), and it did not consider that
+narrowing applies to a variable, which is why `T?` cannot be a collection element
+(section 6).
 
 ## 1. Why
 
@@ -112,6 +113,10 @@ Each pair collapses into one function:
 | `file_exists` + `read_file` | `read_file(path: String) -> String?` |
 | `d[k]`, which traps (12.4) | `get(d: Dict<K, V>, key: K) -> V?` |
 
+**What this table missed:** none of these functions lets a *program* build a present
+optional, so a user function declared `-> Int?` could return `none` or something it was
+handed and nothing else. `some(value)` was added for that, and is the only constructor.
+
 Eight functions become five, the double search in `contains` plus `index_of` disappears, and
 the `file_exists` race stops being expressible.
 
@@ -126,17 +131,24 @@ resolving a section 21 item is expected to break.
 
 ## 6. Representation
 
-An optional costs a flag beside the value. For `Int?`, `Float?` and `Bool?` that is a second
-machine word, so `Int?` is 16 bytes where `Int` is 8. For `String?`, `List?` and `Dict?` the
-null pointer is already unrepresentable in a present value, so no extra space is needed and
-`none` is the zero word.
+An optional is **one** machine word, not a value plus a flag. For `String?`, `List?` and
+`Dict?` the word is the reference and `none` is zero, which this document predicted. For
+`Int?`, `Float?` and `Bool?` the word points at a small pooled reference-counted cell: a
+second machine word would have meant aggregate values in an IR built on single words, which
+would have touched every stage of the compiler to save a pointer hop in the one place
+optionals appear.
 
-The compiler should not promise the compact form, because a program cannot observe the
-difference and committing to it constrains later changes.
+The specification promises the cost model rather than the layout
+([SPEC.md](SPEC.md) 23.5): a present optional of a reference type allocates nothing, a
+present optional of a scalar may allocate, and a hot loop should narrow once.
 
 `T?` may **not** be a dictionary key, for the reason 12.2 excludes `Float`: it would admit a
 key whose equality is defensible but whose ordering and hashing invite mistakes, for no
 demonstrated need.
+
+**Nor may it be a `List` element or a `Dict` value,** which this document missed. Narrowing
+applies to a variable (section 4), so `if xs[0] != none:` narrows nothing and a `List<Int?>`
+would be a container a program can fill and test but never read a value out of.
 
 ## 7. What this costs to build
 

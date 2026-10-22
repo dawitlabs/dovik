@@ -220,6 +220,7 @@ impl Interpreter<'_> {
             IrValue::Int(inner) => Value::Int(*inner),
             IrValue::Float(inner) => Value::Float(*inner),
             IrValue::Bool(inner) => Value::Bool(*inner),
+            IrValue::None => Value::Absent,
             IrValue::Str(id) => self.string(*id),
         }
     }

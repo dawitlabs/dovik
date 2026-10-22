@@ -44,6 +44,7 @@ pub(crate) fn literal(value: &Value) -> String {
             false => "0".to_string(),
         },
         Value::Float(inner) => format!("0x{:016X}", inner.to_bits()),
+        Value::None => "0".to_string(),
         Value::Str(id) => format!("@str.{id}"),
     }
 }

@@ -77,7 +77,7 @@ fn write_then_read_round_trips() {
     let dir = sandbox("round_trip");
     let path = dir.join("note.txt").display().to_string();
     let source = format!(
-        "p = \"{path}\"\nwrite_file(p, \"hello\\n\")\nprint(read_file(p))\nprint(len(read_file(p)))\n"
+        "p = \"{path}\"\nwrite_file(p, \"hello\\n\")\ntext = read_file(p)\nif text != none:\n    print(text)\n    print(len(text))\n"
     );
 
     assert_eq!(printed(&source), "hello\n\n6\n");
@@ -89,7 +89,7 @@ fn writing_truncates_and_appending_does_not() {
     let dir = sandbox("append");
     let path = dir.join("log.txt").display().to_string();
     let source = format!(
-        "p = \"{path}\"\nwrite_file(p, \"a\")\nwrite_file(p, \"b\")\nappend_file(p, \"c\")\nprint(read_file(p))\n"
+        "p = \"{path}\"\nwrite_file(p, \"a\")\nwrite_file(p, \"b\")\nappend_file(p, \"c\")\ntext = read_file(p)\nif text != none:\n    print(text)\n"
     );
 
     assert_eq!(output(&source), ["bc"]);
@@ -99,7 +99,9 @@ fn writing_truncates_and_appending_does_not() {
 fn appending_to_a_missing_file_creates_it() {
     let dir = sandbox("create");
     let path = dir.join("fresh.txt").display().to_string();
-    let source = format!("p = \"{path}\"\nappend_file(p, \"x\")\nprint(read_file(p))\n");
+    let source = format!(
+        "p = \"{path}\"\nappend_file(p, \"x\")\ntext = read_file(p)\nif text != none:\n    print(text)\n"
+    );
 
     assert_eq!(output(&source), ["x"]);
 }
@@ -117,12 +119,12 @@ fn file_exists_reports_both_ways() {
 }
 
 #[test]
-fn reading_a_missing_file_traps() {
+fn reading_a_missing_file_is_none() {
     let dir = sandbox("missing");
     let path = dir.join("nope.txt").display().to_string();
     assert_eq!(
-        trap(&format!("print(read_file(\"{path}\"))\n")),
-        RuntimeError::InputOutput
+        output(&format!("print(read_file(\"{path}\") == none)\n")),
+        ["true"]
     );
 }
 
@@ -137,7 +139,7 @@ fn file_exists_lets_a_program_avoid_the_trap() {
     let dir = sandbox("guarded");
     let path = dir.join("nope.txt").display().to_string();
     let source = format!(
-        "p = \"{path}\"\nif file_exists(p):\n    print(read_file(p))\nelse:\n    print(\"missing\")\n"
+        "p = \"{path}\"\ntext = read_file(p)\nif text != none:\n    print(text)\nelse:\n    print(\"missing\")\n"
     );
 
     assert_eq!(output(&source), ["missing"]);
@@ -168,7 +170,7 @@ fn an_out_of_range_argument_traps() {
 #[test]
 fn io_argument_types_are_enforced() {
     assert_eq!(
-        errors("print(read_file(1))\n"),
+        errors("text = read_file(1)\n"),
         [BuiltinArgument { name: "read_file", found: Type::Int }]
     );
     assert_eq!(
@@ -200,7 +202,7 @@ fn native_matches_the_interpreter_for_io() {
     let dir = sandbox("native");
     let path = dir.join("shared.txt").display().to_string();
     let source = format!(
-        "p = \"{path}\"\nwrite_file(p, \"alpha\\n\")\nappend_file(p, \"beta\\n\")\nprint(file_exists(p))\nprint(len(read_file(p)))\nfor line in read_file(p):\n    print(line)\n"
+        "p = \"{path}\"\nwrite_file(p, \"alpha\\n\")\nappend_file(p, \"beta\\n\")\nprint(file_exists(p))\ntext = read_file(p)\nif text != none:\n    print(len(text))\n    for line in split(text, \"\\n\"):\n        print(line)\n"
     );
 
     let expected = interp::run(&lowered(&source));

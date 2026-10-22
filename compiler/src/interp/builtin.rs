@@ -42,15 +42,9 @@ impl Interpreter<'_> {
             Builtin::HasKey => has_key(&values),
             Builtin::RemoveKey => remove_key(&values),
             Builtin::ToString => Ok(Value::str(rendered(&values[0], &args[0].1))),
-            Builtin::ParseInt => parse_int(&values[0]),
-            Builtin::ParseFloat => parse_float(&values[0]),
-            Builtin::CanParseInt => Ok(Value::Bool(trimmed(&values[0]).parse::<i64>().is_ok())),
-            Builtin::CanParseFloat => Ok(Value::Bool(
-                trimmed(&values[0])
-                    .parse::<f64>()
-                    .is_ok_and(|value| value.is_finite()),
-            )),
-            Builtin::ReadFile => read_file(&values[0]),
+            Builtin::ParseInt => Ok(parse_int(&values[0])),
+            Builtin::ParseFloat => Ok(parse_float(&values[0])),
+            Builtin::ReadFile => Ok(read_file(&values[0])),
             Builtin::WriteFile => write_file(&values[0], &values[1], false),
             Builtin::AppendFile => write_file(&values[0], &values[1], true),
             Builtin::FileExists => Ok(Value::Bool(
@@ -60,10 +54,8 @@ impl Interpreter<'_> {
             Builtin::Split => Ok(split(values[0].as_str(), values[1].as_str())),
             Builtin::Join => Ok(join(&values[0], values[1].as_str())),
             Builtin::Substring => substring(values[0].as_str(), &values[1], &values[2]),
-            Builtin::Contains => Ok(Value::Bool(
-                values[0].as_str().contains(values[1].as_str()),
-            )),
-            Builtin::IndexOf => index_of(values[0].as_str(), values[1].as_str()),
+            Builtin::Find => Ok(find(values[0].as_str(), values[1].as_str())),
+            Builtin::Get => Ok(get(&values[0], &values[1])),
             Builtin::Trim => Ok(Value::str(values[0].as_str().trim())),
             Builtin::StartsWith => Ok(Value::Bool(
                 values[0].as_str().starts_with(values[1].as_str()),
@@ -109,10 +101,29 @@ impl Interpreter<'_> {
     }
 }
 
-fn read_file(path: &Value) -> Result<Value, RuntimeError> {
-    std::fs::read_to_string(path.as_str())
-        .map(Value::str)
-        .map_err(|_| RuntimeError::InputOutput)
+fn read_file(path: &Value) -> Value {
+    match std::fs::read_to_string(path.as_str()) {
+        Ok(text) => Value::some(Value::str(text)),
+        Err(_) => Value::Absent,
+    }
+}
+
+fn find(text: &str, needle: &str) -> Value {
+    match text.find(needle) {
+        Some(byte) => Value::some(Value::Int(text[..byte].chars().count() as i64)),
+        None => Value::Absent,
+    }
+}
+
+fn get(dict: &Value, key: &Value) -> Value {
+    let Value::Dict(entries) = dict else {
+        return Value::Absent;
+    };
+
+    match entries.borrow().get(&key.as_key()) {
+        Some(value) => Value::some(value.clone()),
+        None => Value::Absent,
+    }
 }
 
 fn write_file(path: &Value, contents: &Value, append: bool) -> Result<Value, RuntimeError> {
@@ -175,14 +186,6 @@ fn substring(text: &str, start: &Value, count: &Value) -> Result<Value, RuntimeE
 
     let piece: String = scalars[from as usize..end as usize].iter().collect();
     Ok(Value::str(piece))
-}
-
-fn index_of(text: &str, needle: &str) -> Result<Value, RuntimeError> {
-    let Some(byte) = text.find(needle) else {
-        return Err(RuntimeError::IndexOutOfBounds);
-    };
-
-    Ok(Value::Int(text[..byte].chars().count() as i64))
 }
 
 fn replace(text: &str, from: &str, to: &str) -> String {
@@ -324,16 +327,16 @@ fn remove_key(values: &[Value]) -> Result<Value, RuntimeError> {
     ))
 }
 
-fn parse_int(value: &Value) -> Result<Value, RuntimeError> {
-    trimmed(value)
-        .parse::<i64>()
-        .map(Value::Int)
-        .map_err(|_| RuntimeError::InvalidConversion)
+fn parse_int(value: &Value) -> Value {
+    match trimmed(value).parse::<i64>() {
+        Ok(parsed) => Value::some(Value::Int(parsed)),
+        Err(_) => Value::Absent,
+    }
 }
 
-fn parse_float(value: &Value) -> Result<Value, RuntimeError> {
+fn parse_float(value: &Value) -> Value {
     match trimmed(value).parse::<f64>() {
-        Ok(parsed) if parsed.is_finite() => Ok(Value::Float(parsed)),
-        _ => Err(RuntimeError::InvalidConversion),
+        Ok(parsed) if parsed.is_finite() => Value::some(Value::Float(parsed)),
+        _ => Value::Absent,
     }
 }

@@ -1,6 +1,6 @@
 use crate::types::Type;
 
-pub const NAMES: [&str; 42] = [
+pub const NAMES: [&str; 40] = [
     "print",
     "len",
     "to_int",
@@ -13,8 +13,6 @@ pub const NAMES: [&str; 42] = [
     "to_string",
     "parse_int",
     "parse_float",
-    "can_parse_int",
-    "can_parse_float",
     "read_file",
     "write_file",
     "append_file",
@@ -24,8 +22,7 @@ pub const NAMES: [&str; 42] = [
     "split",
     "join",
     "substring",
-    "contains",
-    "index_of",
+    "find",
     "trim",
     "starts_with",
     "ends_with",
@@ -43,6 +40,7 @@ pub const NAMES: [&str; 42] = [
     "remove_dir",
     "remove_file",
     "some",
+    "get",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,8 +57,6 @@ pub enum Builtin {
     ToString,
     ParseInt,
     ParseFloat,
-    CanParseInt,
-    CanParseFloat,
     ReadFile,
     WriteFile,
     AppendFile,
@@ -70,8 +66,7 @@ pub enum Builtin {
     Split,
     Join,
     Substring,
-    Contains,
-    IndexOf,
+    Find,
     Trim,
     StartsWith,
     EndsWith,
@@ -89,6 +84,7 @@ pub enum Builtin {
     RemoveDir,
     RemoveFile,
     Some,
+    Get,
 }
 
 impl Builtin {
@@ -106,8 +102,6 @@ impl Builtin {
             "to_string" => Self::ToString,
             "parse_int" => Self::ParseInt,
             "parse_float" => Self::ParseFloat,
-            "can_parse_int" => Self::CanParseInt,
-            "can_parse_float" => Self::CanParseFloat,
             "read_file" => Self::ReadFile,
             "write_file" => Self::WriteFile,
             "append_file" => Self::AppendFile,
@@ -117,8 +111,7 @@ impl Builtin {
             "split" => Self::Split,
             "join" => Self::Join,
             "substring" => Self::Substring,
-            "contains" => Self::Contains,
-            "index_of" => Self::IndexOf,
+            "find" => Self::Find,
             "trim" => Self::Trim,
             "starts_with" => Self::StartsWith,
             "ends_with" => Self::EndsWith,
@@ -136,6 +129,7 @@ impl Builtin {
             "remove_dir" => Self::RemoveDir,
             "remove_file" => Self::RemoveFile,
             "some" => Self::Some,
+            "get" => Self::Get,
             _ => return None,
         })
     }
@@ -154,8 +148,6 @@ impl Builtin {
             Self::ToString => "to_string",
             Self::ParseInt => "parse_int",
             Self::ParseFloat => "parse_float",
-            Self::CanParseInt => "can_parse_int",
-            Self::CanParseFloat => "can_parse_float",
             Self::ReadFile => "read_file",
             Self::WriteFile => "write_file",
             Self::AppendFile => "append_file",
@@ -165,8 +157,7 @@ impl Builtin {
             Self::Split => "split",
             Self::Join => "join",
             Self::Substring => "substring",
-            Self::Contains => "contains",
-            Self::IndexOf => "index_of",
+            Self::Find => "find",
             Self::Trim => "trim",
             Self::StartsWith => "starts_with",
             Self::EndsWith => "ends_with",
@@ -184,6 +175,7 @@ impl Builtin {
             Self::RemoveDir => "remove_dir",
             Self::RemoveFile => "remove_file",
             Self::Some => "some",
+            Self::Get => "get",
         }
     }
 
@@ -198,10 +190,10 @@ impl Builtin {
             | Self::AppendFile
             | Self::Split
             | Self::Join
-            | Self::Contains
-            | Self::IndexOf
+            | Self::Find
             | Self::StartsWith
-            | Self::EndsWith => 2,
+            | Self::EndsWith
+            | Self::Get => 2,
             Self::ArgumentCount | Self::ReadInput | Self::Now | Self::Clock => 0,
             _ => 1,
         }
@@ -219,12 +211,12 @@ impl Builtin {
             | Self::CreateDir
             | Self::RemoveDir
             | Self::RemoveFile => Type::Unit,
-            Self::Len | Self::ToInt | Self::ParseInt | Self::ArgumentCount | Self::IndexOf => {
-                Type::Int
-            }
-            Self::ToFloat | Self::ParseFloat | Self::Now | Self::Clock => Type::Float,
+            Self::Len | Self::ToInt | Self::ArgumentCount => Type::Int,
+            Self::ToFloat | Self::Now | Self::Clock => Type::Float,
+            Self::ParseInt | Self::Find => Type::Optional(Box::new(Type::Int)),
+            Self::ParseFloat => Type::Optional(Box::new(Type::Float)),
+            Self::ReadFile => Type::Optional(Box::new(Type::Str)),
             Self::ToString
-            | Self::ReadFile
             | Self::Argument
             | Self::Join
             | Self::Substring
@@ -236,10 +228,7 @@ impl Builtin {
             Self::Split | Self::ListDir => Type::List(Box::new(Type::Str)),
             Self::HasKey
             | Self::RemoveKey
-            | Self::CanParseInt
-            | Self::CanParseFloat
             | Self::FileExists
-            | Self::Contains
             | Self::StartsWith
             | Self::EndsWith
             | Self::IsDir => Type::Bool,
@@ -248,8 +237,12 @@ impl Builtin {
                 _ => Type::Unknown,
             },
             Self::Some => match first {
-                Type::Unknown => Type::Unknown,
+                Type::Unknown | Type::Unit | Type::Optional(_) => Type::Unknown,
                 other => Type::Optional(Box::new(other.clone())),
+            },
+            Self::Get => match first {
+                Type::Dict(_, value) => Type::Optional(value.clone()),
+                _ => Type::Unknown,
             },
         }
     }

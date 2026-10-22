@@ -885,7 +885,7 @@ Removal and key-presence tests are standard-library functions, not syntax (11.2,
 
 Reading a key that is not present is a **runtime** error (15.2). There is no default value and no implicit insertion on read.
 
-A safe-lookup API that represents absence explicitly requires a way to express "a value or nothing", which the initial type system does not have. See U8 in section 21.
+The safe form is `get(d, k)`, which returns `V?` ([STDLIB.md](STDLIB.md) 3, section 23). `d[k]` keeps trapping deliberately: a program that knows the key is present should not have to narrow, and this error stays for the case where it is wrong.
 
 ### 12.5 Empty Dictionaries
 

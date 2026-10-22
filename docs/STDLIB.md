@@ -49,13 +49,16 @@ in 9.6.
 
 | Signature | Behaviour |
 | --- | --- |
+| `get(d: Dict<K, V>, key: K) -> V?` | The value, or `none` when the key is absent |
 | `has_key(d: Dict<K, V>, key: K) -> Bool` | Whether the key is present |
 | `remove_key(d: Dict<K, V>, key: K) -> Bool` | Removes it; returns whether it was there |
 
-`remove_key` returns a `Bool` rather than the removed value, because returning `V`
-would have to fail when the key is absent, and the initial language has no way to
-express "a value or nothing" (U8). It does not trap on an absent key: removal is
-idempotent, unlike the read in 12.4.
+`get` is the safe read [SPEC.md](SPEC.md) 12.4 asks for. `d[key]` still traps on a missing
+key, deliberately: a program that knows the key is there should not have to narrow, and
+12.4's error stays for the case where it is wrong.
+
+`remove_key` still returns a `Bool` rather than the removed value. It could now return `V?`,
+and that is left open below rather than changed on the way past.
 
 There is deliberately **no `keys` function.** [SPEC.md](SPEC.md) 12.6 says a program
 cannot observe the order of a dictionary's entries, and returning a `List<K>` would
@@ -70,29 +73,26 @@ parsing" as required before realistic programs can be written.
 | Signature | Behaviour |
 | --- | --- |
 | `to_string(value) -> String` | Accepts `Int`, `Float`, `Bool`, `String`. Formats exactly as `print` does (6.7) |
-| `parse_int(text: String) -> Int` | Surrounding whitespace is ignored. A failure is a runtime error |
-| `parse_float(text: String) -> Float` | As above. A result that is not finite is a failure |
-| `can_parse_int(text: String) -> Bool` | Whether `parse_int` would succeed |
-| `can_parse_float(text: String) -> Bool` | Whether `parse_float` would succeed |
+| `parse_int(text: String) -> Int?` | Surrounding whitespace is ignored. `none` when the text is not an integer |
+| `parse_float(text: String) -> Float?` | As above. `none` when the result would not be finite |
 
 `to_string` accepting several argument types is a fixed property of that function,
 like `print` and `len`, not user-definable overloading.
 
-Parsing comes in pairs because the error model has no recoverable errors
-([SPEC.md](SPEC.md) 15.2) and no optional type (U8). A program that cannot accept a
-trap asks first:
+Parsing returns an optional ([SPEC.md](SPEC.md) 23) rather than trapping, so one call
+replaces the guard-and-accessor pair these functions used to come in:
 
 ```dovk
-if can_parse_int(text):
-    print(parse_int(text))
+parsed = parse_int(text)
+
+if parsed != none:
+    print(parsed)
 else:
     print(0)
 ```
 
-A failed parse reports the existing `invalid conversion` error (`DVK5004`), the same
-one `to_int` raises. [SPEC.md](SPEC.md) 15.2 lists that error as "an invalid `to_int`
-conversion"; its wording should widen to cover parsing, or parsing should get an
-error of its own. That is an open question.
+`can_parse_int` and `can_parse_float` are gone. They existed only because the error model
+had no way to say "not a number", and the one search they saved is now the only search.
 
 ## 5. Files
 
@@ -101,25 +101,31 @@ so it is library rather than a language change.
 
 | Signature | Behaviour |
 | --- | --- |
-| `read_file(path: String) -> String` | The whole file as text. A failure is a runtime error |
+| `read_file(path: String) -> String?` | The whole file as text, or `none` when it cannot be read |
 | `write_file(path: String, contents: String) -> Unit` | Creates or truncates. A failure is a runtime error |
 | `append_file(path: String, contents: String) -> Unit` | Creates if absent, otherwise appends |
 | `file_exists(path: String) -> Bool` | Whether the path can be opened for reading |
 
-Failures trap rather than return a status, for the same reason parsing does: the error model
-has no recoverable errors ([SPEC.md](SPEC.md) 15.2) and no optional type (U8). `file_exists`
-is the predicate that lets a program avoid the trap, exactly as `can_parse_int` does:
+`read_file` returns an optional, so there is nothing to guard:
 
 ```dovk
-if file_exists(path):
-    print(read_file(path))
+text = read_file(path)
+
+if text != none:
+    print(text)
 else:
     print("missing")
 ```
 
-`file_exists` is a check, not a guarantee. A file can disappear between the test and the
-read, and then the read traps. There is no way to express that race away without a result
-type.
+This is where optional types earn their place. The old form asked `file_exists(path)` and
+then read, and the file could disappear between the two calls — a race
+[STDLIB.md](STDLIB.md) had to document as unavoidable. One call cannot have that race.
+
+`file_exists` survives, because "is there a file here" is a reasonable question to ask
+without reading the file. It is no longer a guard for anything.
+
+Writing still traps. A failed write is not an absence, and there is nothing useful to
+return instead.
 
 Reading a file yields text, not bytes. Invalid UTF-8 is replaced rather than rejected, since
 `String` is defined as UTF-8 text (3.1) and there is no byte type to return instead.
@@ -147,8 +153,7 @@ scalar values, never bytes.
 | `split(text: String, separator: String) -> List<String>` | Splits on every occurrence. Empty fields are kept |
 | `join(parts: List<String>, separator: String) -> String` | The inverse of `split` |
 | `substring(text: String, start: Int, count: Int) -> String` | `count` scalars from scalar `start`. Out of range is a runtime error |
-| `contains(text: String, needle: String) -> Bool` | Whether `needle` occurs |
-| `index_of(text: String, needle: String) -> Int` | Scalar position of the first occurrence. Absent is a runtime error |
+| `find(text: String, needle: String) -> Int?` | Scalar position of the first occurrence, or `none` |
 | `trim(text: String) -> String` | Removes leading and trailing whitespace |
 | `starts_with(text: String, prefix: String) -> Bool` | |
 | `ends_with(text: String, suffix: String) -> Bool` | |
@@ -156,13 +161,14 @@ scalar values, never bytes.
 | `lower(text: String) -> String` | As above |
 | `replace(text: String, from: String, to: String) -> String` | Every occurrence. An empty `from` changes nothing |
 
-`contains` pairs with `index_of` the way `file_exists` pairs with `read_file`: the predicate
-exists so a program can avoid the trap, because the error model has no way to return
-"not found".
+`find` replaces `contains` and `index_of`, which were two calls doing one job and searched
+the string twice:
 
 ```dovk
-if contains(line, "="):
-    key = substring(line, 0, index_of(line, "="))
+at = find(line, "=")
+
+if at != none:
+    key = substring(line, 0, at)
 ```
 
 Three decisions worth knowing:
@@ -189,6 +195,7 @@ Three decisions worth knowing:
 | --- | --- |
 | `read_input() -> String` | All of standard input as text. A failure is a runtime error |
 | `assert(condition: Bool) -> Unit` | Does nothing when true; a runtime error when false |
+| `some(value: T) -> T?` | A present optional ([SPEC.md](SPEC.md) 23.1) |
 
 `read_input` reads to end of input rather than a line at a time, which needs no end-of-input
 predicate and composes with `split`:
@@ -324,13 +331,11 @@ Named by [SPEC.md](SPEC.md) 17 as library surface, still with no implementation:
 ## 13. Open Decisions
 
 - Every name above. They are chosen, not ratified.
-- Whether a failed parse keeps `DVK5004` or gets its own runtime error.
-- Whether `remove_key` returning `Bool` survives the arrival of optional types (U8),
-  or becomes `remove_key(d, k) -> V?`.
+- Whether `remove_key` should now return `V?` rather than `Bool`.
 - Whether dictionaries ever gain an iteration form, which 12.6 currently forbids.
 - Whether `insert` at `len(xs)` should instead be a separate function, keeping every
   index argument in the language uniform at `0 .. len - 1`.
-- Whether reading a file should replace invalid UTF-8 or trap on it.
+- Whether reading a file should replace invalid UTF-8 or report `none`.
 - Whether `argument` should include the program name at index zero.
 - Whether file errors deserve distinct codes — not found, permission denied, is a
   directory — rather than one `DVK5007`.
@@ -345,6 +350,6 @@ Named by [SPEC.md](SPEC.md) 17 as library surface, still with no implementation:
 - Whether `create_dir` should create missing parents, or gain a second function that does.
 - Whether `remove_dir` should ever recurse.
 - Whether `list_dir` should return names or full paths.
-- Whether `index_of` should return a scalar position or a value usable directly with
+- Whether `find` should return a scalar position or a value usable directly with
   `substring` — they are the same today and would diverge if byte offsets were ever
   exposed.

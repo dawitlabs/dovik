@@ -166,7 +166,9 @@ fn a_check_survives_when_the_operand_is_unknown() {
         "a list element could be anything"
     );
     assert_eq!(
-        overflow_checks("n = parse_int(\"5\")\nprint(n * n)\n"),
+        overflow_checks(
+            "p = parse_int(\"5\")\nif p != none:\n    print(p * p)\n"
+        ),
         1,
         "a parsed value could be anything"
     );

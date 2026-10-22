@@ -130,47 +130,89 @@ print(\"n=\" + to_string(7))
 #[test]
 fn parsing_numbers() {
     let source = "\
-print(parse_int(\"123\"))
-print(parse_int(\"-7\"))
-print(parse_float(\"1.5\"))
-print(can_parse_int(\"42\"))
-print(can_parse_int(\"abc\"))
-print(can_parse_float(\"1.5\"))
-print(can_parse_float(\"\"))
+a = parse_int(\"123\")
+b = parse_int(\"-7\")
+c = parse_float(\"1.5\")
+
+if a != none:
+    print(a)
+if b != none:
+    print(b)
+if c != none:
+    print(c)
+
+print(parse_int(\"abc\") == none)
+print(parse_float(\"\") == none)
 ";
     assert_eq!(
         output(source),
-        ["123", "-7", "1.5", "true", "false", "true", "false"]
+        ["123", "-7", "1.5", "true", "true"]
     );
 }
 
 #[test]
 fn parsing_surrounding_whitespace_is_tolerated() {
-    assert_eq!(output("print(parse_int(\" 42 \"))\n"), ["42"]);
+    let source = "\
+n = parse_int(\" 42 \")
+
+if n != none:
+    print(n)
+";
+    assert_eq!(output(source), ["42"]);
 }
 
 #[test]
-fn a_failed_parse_traps() {
+fn a_failed_parse_is_none_rather_than_a_trap() {
     assert_eq!(
-        trap("text = \"abc\"\nprint(parse_int(text))\n"),
-        RuntimeError::InvalidConversion
+        output("print(parse_int(\"abc\") == none)\n"),
+        ["true"]
     );
     assert_eq!(
-        trap("text = \"abc\"\nprint(parse_float(text))\n"),
-        RuntimeError::InvalidConversion
+        output("print(parse_float(\"abc\") == none)\n"),
+        ["true"]
     );
 }
 
 #[test]
-fn can_parse_lets_a_program_avoid_the_trap() {
+fn narrowing_replaces_the_can_parse_guard() {
     let source = "\
 text = \"abc\"
-if can_parse_int(text):
-    print(parse_int(text))
+parsed = parse_int(text)
+
+if parsed != none:
+    print(parsed)
 else:
     print(0)
 ";
     assert_eq!(output(source), ["0"]);
+}
+
+#[test]
+fn get_reads_a_dictionary_without_trapping() {
+    let source = "\
+d: Dict<String, Int> = {}
+d[\"a\"] = 1
+
+hit = get(d, \"a\")
+if hit != none:
+    print(hit)
+
+print(get(d, \"b\") == none)
+";
+    assert_eq!(output(source), ["1", "true"]);
+}
+
+#[test]
+fn optionals_compare_by_content() {
+    let source = "\
+a = parse_int(\"5\")
+b = parse_int(\"5\")
+c = parse_int(\"6\")
+print(a == b)
+print(a == c)
+print(a == none)
+";
+    assert_eq!(output(source), ["true", "false", "false"]);
 }
 
 #[test]
@@ -205,8 +247,8 @@ fn arity_is_enforced() {
         [ArgumentCount { name: "append".into(), expected: 2, found: 1 }]
     );
     assert_eq!(
-        errors("print(parse_int(\"1\", \"2\"))\n"),
-        [ArgumentCount { name: "parse_int".into(), expected: 1, found: 2 }]
+        errors("print(to_int(1.0, 2.0))\n"),
+        [ArgumentCount { name: "to_int".into(), expected: 1, found: 2 }]
     );
 }
 
@@ -242,7 +284,7 @@ const CORPUS: &[(&str, &str)] = &[
     ),
     (
         "std_parse",
-        "print(parse_int(\"77\"))\nprint(parse_float(\"2.25\"))\nprint(can_parse_int(\"x\"))\nprint(can_parse_float(\"3.5\"))\n",
+        "n = parse_int(\"77\")\nif n != none:\n    print(n)\nf = parse_float(\"2.25\")\nif f != none:\n    print(f)\nprint(parse_int(\"x\") == none)\nd: Dict<String, Int> = {}\nd[\"k\"] = 9\nhit = get(d, \"k\")\nif hit != none:\n    print(hit)\nprint(get(d, \"z\") == none)\n",
     ),
     (
         "std_sort",

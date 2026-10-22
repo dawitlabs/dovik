@@ -114,44 +114,42 @@ fn substring_out_of_range_traps() {
 }
 
 #[test]
-fn index_of_reports_a_scalar_position() {
-    assert_eq!(output("print(index_of(\"héllo wörld\", \"wörld\"))\n"), ["6"]);
-    assert_eq!(output("print(index_of(\"abc\", \"a\"))\n"), ["0"]);
-    assert_eq!(output("print(index_of(\"abc\", \"\"))\n"), ["0"]);
+fn find_reports_a_scalar_position() {
+    let source = "\
+at = find(\"héllo\", \"llo\")
+
+if at != none:
+    print(at)
+";
+    assert_eq!(output(source), ["2"]);
+    assert_eq!(output("print(find(\"abc\", \"z\") == none)
+"), ["true"]);
 }
 
 #[test]
-fn index_of_traps_when_absent_and_contains_is_the_guard() {
-    assert_eq!(
-        trap("needle = \"zzz\"\nprint(index_of(\"abc\", needle))\n"),
-        RuntimeError::IndexOutOfBounds
-    );
-
+fn find_replaces_the_contains_guard() {
     let source = "\
-needle = \"zzz\"
-if contains(\"abc\", needle):
-    print(index_of(\"abc\", needle))
+line = \"key=value\"
+at = find(line, \"=\")
+
+if at != none:
+    print(substring(line, 0, at))
 else:
-    print(0 - 1)
+    print(line)
 ";
-    assert_eq!(output(source), ["-1"]);
+    assert_eq!(output(source), ["key"]);
 }
 
 #[test]
-fn contains_starts_with_and_ends_with() {
-    let source = "\
-print(contains(\"héllo\", \"éll\"))
-print(contains(\"héllo\", \"zzz\"))
-print(starts_with(\"dovik\", \"dov\"))
-print(starts_with(\"dovik\", \"vik\"))
-print(ends_with(\"dovik\", \"vik\"))
-print(ends_with(\"dovik\", \"dov\"))
-print(starts_with(\"ab\", \"abc\"))
-";
-    assert_eq!(
-        output(source),
-        ["true", "false", "true", "false", "true", "false", "false"]
-    );
+fn starts_with_and_ends_with() {
+    assert_eq!(output("print(starts_with(\"dovik\", \"do\"))
+"), ["true"]);
+    assert_eq!(output("print(starts_with(\"dovik\", \"vik\"))
+"), ["false"]);
+    assert_eq!(output("print(ends_with(\"dovik\", \"vik\"))
+"), ["true"]);
+    assert_eq!(output("print(ends_with(\"dovik\", \"do\"))
+"), ["false"]);
 }
 
 #[test]
@@ -216,8 +214,10 @@ parts = split(trim(line), \" \")
 print(len(parts))
 print(join(parts, \"|\"))
 print(substring(\"héllo wörld\", 6, 5))
-print(index_of(\"héllo wörld\", \"wörld\"))
-print(contains(\"héllo\", \"éll\"))
+at = find(\"héllo wörld\", \"wörld\")
+if at != none:
+    print(at)
+print(find(\"héllo\", \"éll\") == none)
 print(starts_with(\"dovik\", \"dov\"))
 print(ends_with(\"dovik\", \"vik\"))
 print(upper(\"dovik\"))

@@ -70,16 +70,13 @@ fn hint(builtin: Builtin) -> Option<Type> {
         Builtin::ToFloat => Some(Type::Int),
         Builtin::ParseInt
         | Builtin::ParseFloat
-        | Builtin::CanParseInt
-        | Builtin::CanParseFloat
         | Builtin::ReadFile
         | Builtin::WriteFile
         | Builtin::AppendFile
         | Builtin::FileExists
         | Builtin::Split
         | Builtin::Substring
-        | Builtin::Contains
-        | Builtin::IndexOf
+        | Builtin::Find
         | Builtin::Trim
         | Builtin::StartsWith
         | Builtin::EndsWith
@@ -107,19 +104,16 @@ fn accepts_first(builtin: Builtin, found: &Type) -> bool {
         Builtin::ToInt => *found == Type::Float,
         Builtin::ToFloat => *found == Type::Int,
         Builtin::Append | Builtin::Insert | Builtin::RemoveAt => matches!(found, Type::List(_)),
-        Builtin::HasKey | Builtin::RemoveKey => matches!(found, Type::Dict(..)),
+        Builtin::HasKey | Builtin::RemoveKey | Builtin::Get => matches!(found, Type::Dict(..)),
         Builtin::ParseInt
         | Builtin::ParseFloat
-        | Builtin::CanParseInt
-        | Builtin::CanParseFloat
         | Builtin::ReadFile
         | Builtin::WriteFile
         | Builtin::AppendFile
         | Builtin::FileExists
         | Builtin::Split
         | Builtin::Substring
-        | Builtin::Contains
-        | Builtin::IndexOf
+        | Builtin::Find
         | Builtin::Trim
         | Builtin::StartsWith
         | Builtin::EndsWith
@@ -162,13 +156,12 @@ fn remaining_types(builtin: Builtin, first: &Type) -> Vec<Type> {
         Builtin::Append => vec![element],
         Builtin::Insert => vec![Type::Int, element],
         Builtin::RemoveAt => vec![Type::Int],
-        Builtin::HasKey | Builtin::RemoveKey => vec![key],
+        Builtin::HasKey | Builtin::RemoveKey | Builtin::Get => vec![key],
         Builtin::WriteFile
         | Builtin::AppendFile
         | Builtin::Split
         | Builtin::Join
-        | Builtin::Contains
-        | Builtin::IndexOf
+        | Builtin::Find
         | Builtin::StartsWith
         | Builtin::EndsWith => vec![Type::Str],
         Builtin::Substring => vec![Type::Int, Type::Int],

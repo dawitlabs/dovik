@@ -56,6 +56,7 @@ pub struct Inst {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Reg(RegId),
+    None,
     Int(i64),
     Float(f64),
     Bool(bool),
@@ -237,11 +238,8 @@ fn builtin_error(which: crate::builtins::Builtin) -> Option<RuntimeError> {
 
     match which {
         Builtin::Insert | Builtin::RemoveAt => Some(RuntimeError::IndexOutOfBounds),
-        Builtin::ToInt | Builtin::ParseInt | Builtin::ParseFloat => {
-            Some(RuntimeError::InvalidConversion)
-        }
-        Builtin::ReadFile
-        | Builtin::WriteFile
+        Builtin::ToInt => Some(RuntimeError::InvalidConversion),
+        Builtin::WriteFile
         | Builtin::AppendFile
         | Builtin::ReadInput
         | Builtin::ListDir
@@ -249,9 +247,7 @@ fn builtin_error(which: crate::builtins::Builtin) -> Option<RuntimeError> {
         | Builtin::RemoveDir
         | Builtin::RemoveFile => Some(RuntimeError::InputOutput),
         Builtin::Assert => Some(RuntimeError::AssertionFailed),
-        Builtin::Argument | Builtin::Substring | Builtin::IndexOf => {
-            Some(RuntimeError::IndexOutOfBounds)
-        }
+        Builtin::Argument | Builtin::Substring => Some(RuntimeError::IndexOutOfBounds),
         _ => None,
     }
 }
