@@ -224,6 +224,7 @@ impl Lowerer<'_> {
                 dest,
                 list: target,
                 index: key,
+                checked: true,
             },
         };
 

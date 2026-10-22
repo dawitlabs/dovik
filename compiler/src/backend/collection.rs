@@ -16,14 +16,23 @@ impl Emitter<'_> {
                     ));
                 }
             }
-            InstKind::ListGet { dest, list, index } => {
+            InstKind::ListGet { dest, list, index, checked } => {
                 let (line, column) = self.position(span);
                 let word = self.next_temp();
-                self.line(&format!(
-                    "  {word} = call i64 @dovik_list_get(i64 {}, i64 {}, i32 {line}, i32 {column})",
-                    literal(list),
-                    literal(index)
-                ));
+
+                if *checked {
+                    self.line(&format!(
+                        "  {word} = call i64 @dovik_list_get(i64 {}, i64 {}, i32 {line}, i32 {column})",
+                        literal(list),
+                        literal(index)
+                    ));
+                } else {
+                    self.line(&format!(
+                        "  {word} = call i64 @dovik_list_get_fast(i64 {}, i64 {})",
+                        literal(list),
+                        literal(index)
+                    ));
+                }
                 let ty = function.registers[*dest].clone();
                 self.from_word(*dest, &word, &ty);
             }

@@ -116,8 +116,12 @@ impl fmt::Display for InstKind {
             Self::ListNew { dest, element, items } => {
                 write!(f, "r{dest} = list.new [{element}] {}", list(items))
             }
-            Self::ListGet { dest, list: target, index } => {
-                write!(f, "r{dest} = list.get {target}, {index}")
+            Self::ListGet { dest, list: target, index, checked } => {
+                let suffix = match checked {
+                    true => "",
+                    false => ".unchecked",
+                };
+                write!(f, "r{dest} = list.get{suffix} {target}, {index}")
             }
             Self::ListSet { list: target, index, value } => {
                 write!(f, "list.set {target}, {index}, {value}")

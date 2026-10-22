@@ -394,3 +394,26 @@ and silently disable in-place append.
 Pooling does not affect the leak counter: `live_objects` is decremented on release
 whether or not the memory is recycled, so `DOVIK_CHECK_LEAKS` still measures ownership
 rather than allocator behaviour.
+
+## Immutable strings memoize their hash; mutation must invalidate it
+
+A `Str` caches its FNV hash after the first dictionary operation that needs it. This is
+only sound because [SPEC.md](SPEC.md) 10.3 makes strings immutable — the bytes cannot
+change under the cache.
+
+Except through in-place append, which is the one place the bytes do change.
+`dovik_str_concat` therefore clears `hashed` on the in-place path. Forgetting that
+returns stale hashes and silently loses dictionary entries.
+
+Equality also short-circuits: identical pointers are equal, differing lengths are not,
+and two memoized hashes that differ settle it without a `memcmp`. Literals are shared
+from one global per literal, so the pointer path fires often in real code.
+
+## The dictionary is one array of entries, for the cache
+
+Keys, values and occupancy were three parallel arrays, which cost three cache misses per
+probe and made Dovik slower than C at dictionary lookup despite C recomputing its hash
+every time. They are now one `Entry` array, and `TAG_EMPTY` in a key's tag marks a free
+slot so no separate occupancy array is needed.
+
+Nothing may store a real value with tag 255.

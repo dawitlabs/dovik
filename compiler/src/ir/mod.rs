@@ -139,7 +139,12 @@ pub enum InstKind {
         element: Type,
         items: Vec<Value>,
     },
-    ListGet { dest: RegId, list: Value, index: Value },
+    ListGet {
+        dest: RegId,
+        list: Value,
+        index: Value,
+        checked: bool,
+    },
     ListSet {
         list: Value,
         index: Value,
@@ -194,9 +199,13 @@ impl InstKind {
             Self::FloatDiv { .. } => Some(RuntimeError::DivisionByZero),
             Self::IntRem { .. } => Some(RuntimeError::RemainderByZero),
             Self::FloatToInt { .. } => Some(RuntimeError::InvalidConversion),
-            Self::StringIndex { .. } | Self::ListGet { .. } | Self::ListSet { .. } => {
+            Self::StringIndex { .. } | Self::ListSet { .. } => {
                 Some(RuntimeError::IndexOutOfBounds)
             }
+            Self::ListGet { checked, .. } => match checked {
+                true => Some(RuntimeError::IndexOutOfBounds),
+                false => None,
+            },
             Self::DictGet { .. } => Some(RuntimeError::MissingKey),
             Self::Builtin { which, .. } => builtin_error(*which),
             _ => None,

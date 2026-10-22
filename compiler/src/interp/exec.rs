@@ -134,7 +134,7 @@ impl Interpreter<'_> {
                 let items: Vec<Value> = items.iter().map(|item| self.value(item, frame)).collect();
                 frame.registers[*dest] = Value::list(items);
             }
-            InstKind::ListGet { dest, list, index } => {
+            InstKind::ListGet { dest, list, index, .. } => {
                 let list = self.value(list, frame);
                 let index = self.value(index, frame).as_int();
                 let Value::List(items) = &list else {

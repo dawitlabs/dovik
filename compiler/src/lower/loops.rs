@@ -119,6 +119,7 @@ impl Lowerer<'_> {
                 dest: value,
                 list,
                 index: ir::Value::Reg(current),
+                checked: false,
             },
             span,
         );
