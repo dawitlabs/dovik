@@ -15,7 +15,7 @@ usage:
   dovik build <file.dovk> [-o <out>] [options]
   dovik run <file.dovk> [options]
   dovik check <file.dovk> [options]
-  dovik format <file.dovk>
+  dovik format <file.dovk> [--check] [--write]
   dovik test
   dovik --version
   dovik --help
@@ -27,6 +27,8 @@ options:
   --emit-ir       write the Dovik IR to stdout instead of an executable
   --emit-tokens   write the token stream to stdout instead of an executable
   --no-opt        skip optimization
+  --write         rewrite the file in place (format only)
+  --check         exit 1 if the file is not already formatted (format only)
 ";
 
 pub struct Options {
@@ -34,6 +36,8 @@ pub struct Options {
     pub optimize: bool,
     pub output: Option<String>,
     pub emit: Emit,
+    pub write: bool,
+    pub check_only: bool,
 }
 
 #[derive(PartialEq, Eq)]
@@ -62,10 +66,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
         "build" => with_file(rest, pipeline::build),
         "run" => with_file(rest, pipeline::run),
         "check" => with_file(rest, pipeline::check),
-        "format" => {
-            eprintln!("dovik format is not implemented yet");
-            ExitCode::FAILURE
-        }
+        "format" => with_file(rest, pipeline::format),
         "test" => {
             eprintln!(
                 "dovik test is not implemented: Dovik has no way to declare a test yet, so there is nothing for it to run"
@@ -89,6 +90,8 @@ fn with_file(
         optimize: true,
         output: None,
         emit: Emit::Executable,
+        write: false,
+        check_only: false,
     };
     let mut path = None;
     let mut pending = args.iter();
@@ -100,6 +103,8 @@ fn with_file(
             "--emit-llvm" => options.emit = Emit::Llvm,
             "--emit-ir" => options.emit = Emit::Ir,
             "--emit-tokens" => options.emit = Emit::Tokens,
+            "--write" => options.write = true,
+            "--check" => options.check_only = true,
             "-o" => options.output = pending.next().cloned(),
             other if other.starts_with('-') => {
                 eprintln!("unknown option `{other}`");

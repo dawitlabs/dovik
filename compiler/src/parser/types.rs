@@ -70,7 +70,11 @@ impl Parser<'_> {
             args.push(self.parse_type()?);
         }
 
-        self.expect(&TokenKind::Gt, "`>` to close the type parameters")?;
+        if !self.eat_type_close() {
+            self.error_here("`>` to close the type parameters");
+            return None;
+        }
+
         Some(args)
     }
 

@@ -5,7 +5,7 @@ use super::report::write_stdout;
 use super::{Emit, Options, Report};
 use crate::diagnostic::{self, Diagnostic};
 use crate::error::line_col;
-use crate::{backend, check, ir, lexer, lower, opt, parser, resolve};
+use crate::{backend, check, format as formatter, ir, lexer, lower, opt, parser, resolve};
 
 pub struct Compiled {
     pub program: ir::Program,
@@ -26,6 +26,61 @@ pub fn check(path: &str, source: &str, options: &Options) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
+    let report = Report {
+        path,
+        source,
+        json: options.json,
+    };
+
+    let (tokens, lex_errors) = lexer::lex(source);
+
+    if !lex_errors.is_empty() {
+        report.emit(&diagnostic::from_lex(&lex_errors));
+        return ExitCode::FAILURE;
+    }
+
+    let (_, parse_errors) = parser::parse(source, &tokens);
+
+    if !parse_errors.is_empty() {
+        report.emit(&diagnostic::from_parse(&parse_errors));
+        report.note("refusing to format a file that does not parse");
+        return ExitCode::FAILURE;
+    }
+
+    let Some(formatted) = formatter::format(source) else {
+        report.note("could not format this file");
+        return ExitCode::FAILURE;
+    };
+
+    if options.check_only {
+        return match formatted == source {
+            true => ExitCode::SUCCESS,
+            false => {
+                report.note("file is not formatted");
+                ExitCode::FAILURE
+            }
+        };
+    }
+
+    if options.write {
+        if formatted == source {
+            return ExitCode::SUCCESS;
+        }
+
+        return match std::fs::write(path, &formatted) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => {
+                report.note(&format!("could not write: {err}"));
+                ExitCode::FAILURE
+            }
+        };
+    }
+
+    write_stdout(formatted.lines().map(str::to_string));
+    ExitCode::SUCCESS
 }
 
 pub fn build(path: &str, source: &str, options: &Options) -> ExitCode {

@@ -8,9 +8,14 @@ use crate::token::{self, Span, Token, TokenKind};
 const INDENT_WIDTH: usize = 4;
 
 pub fn lex(source: &str) -> (Vec<Token>, Vec<LexError>) {
+    let (tokens, _, errors) = lex_with_trivia(source);
+    (tokens, errors)
+}
+
+pub fn lex_with_trivia(source: &str) -> (Vec<Token>, Vec<Span>, Vec<LexError>) {
     let mut lexer = Lexer::new(source);
     lexer.run();
-    (lexer.tokens, lexer.errors)
+    (lexer.tokens, lexer.comments, lexer.errors)
 }
 
 struct Lexer<'src> {
@@ -21,6 +26,7 @@ struct Lexer<'src> {
     indents: Vec<usize>,
     brackets: Vec<(char, usize)>,
     at_line_start: bool,
+    comments: Vec<Span>,
 }
 
 impl<'src> Lexer<'src> {
@@ -33,6 +39,7 @@ impl<'src> Lexer<'src> {
             indents: vec![0],
             brackets: Vec::new(),
             at_line_start: true,
+            comments: Vec::new(),
         }
     }
 
@@ -154,9 +161,13 @@ impl<'src> Lexer<'src> {
     }
 
     fn skip_comment(&mut self) {
+        let start = self.pos;
+
         while self.peek().is_some_and(|c| c != '\n' && c != '\r') {
             self.bump();
         }
+
+        self.comments.push(Span::new(start, self.pos));
     }
 
     fn finish(&mut self) {

@@ -14,6 +14,8 @@ pub fn parse(source: &str, tokens: &[Token]) -> (Program, Vec<ParseError>) {
         pos: 0,
         block_depth: 0,
         errors: Vec::new(),
+        split_eq: None,
+        eq_token: TokenKind::Eq,
     };
 
     let statements = parser.parse_statements_until_eof();
@@ -26,6 +28,8 @@ struct Parser<'src> {
     pos: usize,
     block_depth: usize,
     errors: Vec<ParseError>,
+    split_eq: Option<Span>,
+    eq_token: TokenKind,
 }
 
 impl<'src> Parser<'src> {

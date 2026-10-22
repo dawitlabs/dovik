@@ -199,3 +199,38 @@ and deletes it. An earlier CLI exposed the IR interpreter as `--run`, which
 contradicted D016; the interpreter is reachable only as a library, from tests.
 
 Do not reintroduce a user-facing flag that interprets.
+
+## `>=` closing a type parameter list is a lexical ambiguity
+
+`names: List<String>= []` lexes `>=` as one token, so the type parameter list never
+closes. [SPEC.md](SPEC.md) 3.1 argues `<` and `>` in a type are unambiguous because
+Dovik has no shift operator, which disposes of `>>` but not of `>=`.
+
+`Parser::eat_type_close` splits the token: it accepts `GtEq` where a type expects
+`>`, and leaves a synthetic `=` at the second half of the span for the next read.
+The formatter resolves the same ambiguity independently, from its own type-context
+tracking, because it works on tokens and never consults the parser.
+
+Two places therefore know this rule. Changing one without the other makes
+`dovik format` emit source that no longer parses.
+
+## The formatter cannot repair indentation
+
+Indentation is semantic ([SPEC.md](SPEC.md) 2.4) and a width that is not a multiple
+of four is a lexical error. Six spaces could mean one level or two, and nothing in
+the file says which, so there is no intended structure to recover. `dovik format`
+normalizes spacing, type-name casing, comment spacing and blank runs in a file that
+already lexes and parses; it is not a repair tool.
+
+It also refuses to format a file that does not parse, so it can never turn broken
+source into differently broken source.
+
+## The formatter works on tokens, not the AST
+
+Comments and blank lines are not in the AST, so an AST-driven formatter would
+delete them. `lexer::lex_with_trivia` returns comment spans alongside the tokens,
+and blank lines are recovered by comparing source line numbers between logical
+lines — the lexer emits no token for a blank line at all.
+
+`tests/format.rs` asserts that formatting a program cannot change what it prints.
+That test is the reason to trust the token approach; keep it passing.

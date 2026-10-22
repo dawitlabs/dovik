@@ -5,11 +5,19 @@ use crate::token::{Span, TokenKind};
 
 impl<'src> Parser<'src> {
     pub(super) fn kind(&self) -> &TokenKind {
+        if self.split_eq.is_some() {
+            return &self.eq_token;
+        }
+
         let index = self.pos.min(self.tokens.len().saturating_sub(1));
         &self.tokens[index].kind
     }
 
     pub(super) fn span(&self) -> Span {
+        if let Some(span) = self.split_eq {
+            return span;
+        }
+
         let index = self.pos.min(self.tokens.len().saturating_sub(1));
         self.tokens[index].span
     }
@@ -19,9 +27,28 @@ impl<'src> Parser<'src> {
     }
 
     pub(super) fn advance(&mut self) {
+        if self.split_eq.take().is_some() {
+            self.pos += usize::from(self.pos + 1 < self.tokens.len());
+            return;
+        }
+
         if self.pos + 1 < self.tokens.len() {
             self.pos += 1;
         }
+    }
+
+    pub(super) fn eat_type_close(&mut self) -> bool {
+        if self.eat(&TokenKind::Gt) {
+            return true;
+        }
+
+        if !self.at(&TokenKind::GtEq) {
+            return false;
+        }
+
+        let span = self.span();
+        self.split_eq = Some(Span::new(span.start + 1, span.end));
+        true
     }
 
     pub(super) fn eat(&mut self, kind: &TokenKind) -> bool {

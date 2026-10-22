@@ -460,3 +460,28 @@ fn empty_program() {
     assert_eq!(parse("").statements.len(), 0);
     assert_eq!(parse("# just a comment\n").statements.len(), 0);
 }
+
+#[test]
+fn a_type_close_followed_by_assignment_splits_the_token() {
+
+
+    match only("names: List<String>= []\n") {
+        StmtKind::Assign { ty, .. } => {
+            assert_eq!(render_type(&ty.expect("annotation").kind), "List<String>")
+        }
+        other => panic!("{other:?}"),
+    }
+
+    match only("grid: List<List<Int>>= []\n") {
+        StmtKind::Assign { ty, .. } => {
+            assert_eq!(render_type(&ty.expect("annotation").kind), "List<List<Int>>")
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_real_greater_or_equal_still_lexes_as_one_token() {
+    assert_eq!(shape_of("a >= b"), "(a >= b)");
+    assert_eq!(shape_of("a>=b"), "(a >= b)");
+}

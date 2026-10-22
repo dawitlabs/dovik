@@ -4,6 +4,7 @@ pub mod check;
 pub mod cli;
 pub mod diagnostic;
 pub mod error;
+pub mod format;
 pub mod interp;
 pub mod ir;
 pub mod lexer;

@@ -276,13 +276,67 @@ fn emit_flags_write_to_stdout() {
 }
 
 #[test]
-fn unimplemented_commands_say_so() {
-    let sandbox = Sandbox::new("unimplemented_commands_say_so");
-    let format = sandbox.dovik(&["format", "x.dovk"]);
-    assert_eq!(format.code, 1);
-    assert!(format.stderr.contains("not implemented"));
-
+fn test_explains_why_it_cannot_run() {
+    let sandbox = Sandbox::new("test_explains_why_it_cannot_run");
     let test = sandbox.dovik(&["test"]);
     assert_eq!(test.code, 1);
     assert!(test.stderr.contains("no way to declare a test"));
+}
+
+#[test]
+fn format_writes_to_stdout_by_default() {
+    let sandbox = Sandbox::new("format_writes_to_stdout_by_default");
+    let path = sandbox.write("messy.dovk", "x=1+2\n");
+    let result = sandbox.dovik(&["format", path.to_str().expect("path")]);
+
+    assert_eq!(result.code, 0, "{:?}", result.stderr);
+    assert_eq!(result.stdout, "x = 1 + 2\n");
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("read"),
+        "x=1+2\n",
+        "stdout mode must not touch the file"
+    );
+}
+
+#[test]
+fn format_check_fails_on_unformatted_input() {
+    let sandbox = Sandbox::new("format_check_fails_on_unformatted_input");
+    let messy = sandbox.write("messy.dovk", "x=1\n");
+    assert_eq!(
+        sandbox.dovik(&["format", "--check", messy.to_str().expect("path")]).code,
+        1
+    );
+
+    let tidy = sandbox.write("tidy.dovk", "x = 1\n");
+    assert_eq!(
+        sandbox.dovik(&["format", "--check", tidy.to_str().expect("path")]).code,
+        0
+    );
+}
+
+#[test]
+fn format_write_rewrites_the_file() {
+    let sandbox = Sandbox::new("format_write_rewrites_the_file");
+    let path = sandbox.write("messy.dovk", "x=1+2\n");
+
+    assert_eq!(
+        sandbox.dovik(&["format", "--write", path.to_str().expect("path")]).code,
+        0
+    );
+    assert_eq!(std::fs::read_to_string(&path).expect("read"), "x = 1 + 2\n");
+    assert_eq!(
+        sandbox.dovik(&["format", "--check", path.to_str().expect("path")]).code,
+        0
+    );
+}
+
+#[test]
+fn format_refuses_a_file_that_does_not_parse() {
+    let sandbox = Sandbox::new("format_refuses_a_file_that_does_not_parse");
+    let path = sandbox.write("broken.dovk", "1 = 2\n");
+    let result = sandbox.dovik(&["format", path.to_str().expect("path")]);
+
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("does not parse"), "{:?}", result.stderr);
+    assert_eq!(result.stdout, "");
 }
