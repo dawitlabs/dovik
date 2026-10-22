@@ -405,3 +405,23 @@ The first index of a string still pays one pass over its bytes, so a program tha
 The sixteen-scalar chunk was chosen for being obviously small enough rather than by tuning, which [RUNTIME.md](RUNTIME.md) records as open.
 
 **Status:** Accepted. Supersedes the cost model in D026. Specified in [SPEC.md](SPEC.md) 10.4.
+
+## D029: No Manifest, No Dependency Management, No Incremental Compilation
+
+**Decision:** `dovik build entry.dovk` stays the whole of build configuration. There is no project manifest, no dependency management, and no incremental compilation or build cache. All three are absent on purpose rather than pending.
+
+**Reason:** Each one was measured or reasoned against a demonstrated need, and none has one.
+
+**A manifest has nothing to describe.** Imports are filesystem paths relative to the importing file ([SPEC.md](SPEC.md) 22.3), so the compiler finds the whole program from the entry file. The only thing a manifest would carry today is the output name, which `-o` already carries. A file whose entire content is a default is worse than no file.
+
+**Dependency management needs an ecosystem first.** It means fetching code the programmer did not write, from somewhere, and that brings a registry, versions, resolution, and a trust boundary — a design project in its own right, and a security surface. Dovik has one author and no third-party modules. The trigger is clear: when a Dovik program wants code from outside its own repository, this gets designed, and not before.
+
+**Incremental compilation targets 17% of a build.** Measured on a generated 4,000-line program with 400 functions across nine modules: `dovik check`, which is the entire frontend, takes **85 ms**, and a full `dovik build` takes **495 ms**. The difference is `clang` with `-flto=full`, which is whole-program by construction and is what several of Dovik's performance results depend on.
+
+So caching the frontend could save at most 85 ms per build, and less than that in practice because only the changed module's share is saved. The price is a cache, an invalidation rule, and a new class of bug in which a stale artifact produces a wrong binary. `dovik check` at 85 ms is already the fast feedback loop; the slow part is one `clang` invocation that the architecture wants whole.
+
+**Trade-off:** A larger program will eventually make 495 ms uncomfortable, and when it does the number to attack is the 410 ms spent in `clang`, not the 85 ms of frontend that a cache would address. Giving up full LTO for faster builds is a trade against [BENCHMARKS.md](BENCHMARKS.md) and should be made with numbers rather than by reflex.
+
+Multi-file projects already work without any of this ([SPEC.md](SPEC.md) 22), which is what makes "not yet" an honest answer rather than a deferral of something missing.
+
+**Status:** Accepted. Recorded in [CLI.md](CLI.md) 5 and 6.

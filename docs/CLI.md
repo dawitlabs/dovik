@@ -77,9 +77,13 @@ needs one to compile a program.
 
 ## 6. Open Decisions
 
-- Project manifest format.
-- Dependency management.
-- Incremental compilation and caching. The whole import graph is compiled on every build.
+- Project manifest format, and dependency management. Both are deliberately absent rather than
+  pending; see [DECISIONS.md](DECISIONS.md) D029 for the measurement and the trigger that would
+  change it.
+- Incremental compilation. Also absent by measurement rather than by omission: on a 4,000-line
+  program across nine modules, `dovik check` takes 85 ms and a full `dovik build` takes 495 ms,
+  so the whole frontend is 17% of a build and the rest is `clang` with full link-time
+  optimization, which is whole-program by design (D029).
 - Whether the `test_` prefix is the right convention now that a test file can be a module of
   its own.
 - Whether `dovik test` should collect tests from the whole import graph rather than the entry

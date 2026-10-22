@@ -107,9 +107,9 @@ Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 2
 
 - Define module and import semantics. *(done — [SPEC.md](SPEC.md) 22, [DECISIONS.md](DECISIONS.md) D021)*
 - Support larger multi-file programs. *(done — the entry file's import graph compiles as one program)*
-- Introduce project configuration.
-- Establish dependency management.
-- Improve incremental compilation where practical.
+- Introduce project configuration. *(not needed yet — [DECISIONS.md](DECISIONS.md) D029)*
+- Establish dependency management. *(waits for a program that wants code it did not write — D029)*
+- Improve incremental compilation where practical. *(measured and declined — the frontend is 17% of a build — D029)*
 
 **Completion criterion:** Dovik can support maintainable multi-module applications.
 

@@ -310,14 +310,20 @@ no way to say which failure occurred ([PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTI
 
 Named by [SPEC.md](SPEC.md) 17 as library surface, still with no implementation:
 
-- **Grapheme segmentation and normalization** (10.4). Both need Unicode Character Database
-  properties — `Grapheme_Cluster_Break` for UAX #29, the decomposition and composition
-  tables for normalization — and neither is derivable from anything the toolchain already
-  carries. Full case conversion was generated from the Rust standard library's own tables
-  ([DECISIONS.md](DECISIONS.md) D024); `char::to_uppercase` exists, a grapheme-break
-  property does not. Supplying these needs either a vendored extract of the UCD in this
-  repository or a dependency, and that is a decision about what the project carries rather
-  than a function to name.
+- **Grapheme segmentation and normalization** (10.4). Case conversion was generated from the
+  Rust standard library's own tables ([DECISIONS.md](DECISIONS.md) D024), and these cannot be.
+
+  UAX #29 needs `Grapheme_Cluster_Break`. Most of it could be approximated from properties
+  that *are* reachable — general category gives the combining marks, the Hangul jamo blocks
+  and the regional indicators are fixed ranges — but `Extended_Pictographic` is not derivable
+  from any of them, and rule GB11 needs it. Without GB11 an emoji family sequence counts as
+  three clusters instead of one: a wrong answer, silently, which is worse than not having the
+  function. Normalization needs the decomposition and composition tables, which are not
+  reachable at all.
+
+  So this needs either a vendored extract of the UCD committed to this repository or a
+  dependency that carries one. That is a decision about what the project carries, and it is
+  open.
 - **Calendar operations.** `now()` exists; turning a timestamp into a year and a month
   does not.
 - **Descending order.** `sort` only ascends, and with no function values there is no
