@@ -40,7 +40,6 @@ is_student = true
 
 #[test]
 fn annotations_must_match_exactly() {
-    // spec 4.1's own example: an annotation never triggers a conversion.
     assert_eq!(
         errors("height: Float = 2\n"),
         [AnnotationMismatch { annotated: Type::Float, found: Type::Int }]
@@ -50,7 +49,6 @@ fn annotations_must_match_exactly() {
 
 #[test]
 fn reassignment_cannot_change_type() {
-    // spec 4.3's own example.
     ok("age = 23\nage = 24\n");
     assert_eq!(
         errors("age = 23\nage = 25.5\n"),
@@ -64,7 +62,6 @@ fn reassignment_cannot_change_type() {
 
 #[test]
 fn mixed_numeric_operands_are_rejected() {
-    // spec 6.1: `1 + 2.5` is an error.
     assert_eq!(
         errors("x = 1 + 2.5\n"),
         [BinaryOperands { op: "+", left: Type::Int, right: Type::Float }]
@@ -76,7 +73,6 @@ fn mixed_numeric_operands_are_rejected() {
 #[test]
 fn string_concatenation() {
     ok("x = \"Hello, \" + \"Dawit\"\n");
-    // spec 6.1: no implicit stringification.
     assert_eq!(
         errors("x = \"count: \" + 5\n"),
         [BinaryOperands { op: "+", left: Type::Str, right: Type::Int }]
@@ -85,7 +81,6 @@ fn string_concatenation() {
 
 #[test]
 fn plus_does_not_join_collections() {
-    // spec 6.1: `+` does not concatenate lists or merge dictionaries.
     assert_eq!(
         errors("a: List<Int> = [1]\nb: List<Int> = [2]\nc = a + b\n"),
         [BinaryOperands { op: "+", left: list(Type::Int), right: list(Type::Int) }]
@@ -94,7 +89,6 @@ fn plus_does_not_join_collections() {
 
 #[test]
 fn division_always_yields_float() {
-    // spec 6.2, with its own examples.
     ok("result: Float = 7 / 2\nratio: Float = 7.0 / 2\n");
     assert_eq!(
         errors("x: Int = 7 / 2\n"),
@@ -104,7 +98,6 @@ fn division_always_yields_float() {
 
 #[test]
 fn remainder_is_int_only() {
-    // spec 6.3.
     ok("x = 7 % 3\n");
     assert_eq!(
         errors("x = 7.0 % 3.0\n"),
@@ -114,13 +107,11 @@ fn remainder_is_int_only() {
 
 #[test]
 fn comparison_requires_matching_types() {
-    // spec 6.4.
     ok("a = 1 < 2\nb = 1.5 >= 0.5\nc = \"a\" < \"b\"\n");
     assert_eq!(
         errors("x = 1 < 2.0\n"),
         [BinaryOperands { op: "<", left: Type::Int, right: Type::Float }]
     );
-    // Bool has no ordering, which is why comparisons do not chain (6.6).
     assert_eq!(
         errors("x = 1 < 2 < 3\n"),
         [BinaryOperands { op: "<", left: Type::Bool, right: Type::Int }]
@@ -129,7 +120,6 @@ fn comparison_requires_matching_types() {
 
 #[test]
 fn equality_covers_more_types_than_ordering() {
-    // spec 6.4 and 13.
     ok("a = true == false\nb: List<Int> = [1]\nc = b == b\n");
     assert_eq!(
         errors("x = true < false\n"),
@@ -139,7 +129,6 @@ fn equality_covers_more_types_than_ordering() {
 
 #[test]
 fn logical_operators_need_bool() {
-    // spec 6.5: no type has implicit truthiness.
     ok("x = true and not false\n");
     assert_eq!(
         errors("x = 1 and true\n"),
@@ -150,7 +139,6 @@ fn logical_operators_need_bool() {
 
 #[test]
 fn conditions_must_be_bool() {
-    // spec 8.1: `if count:` is an error.
     assert_eq!(errors("count = 1\nif count:\n    print(1)\n"), [ConditionNotBool(Type::Int)]);
     assert_eq!(errors("while 1:\n    print(1)\n"), [ConditionNotBool(Type::Int)]);
     ok("count = 1\nif count > 0:\n    print(1)\n");
@@ -164,7 +152,6 @@ fn unary_minus() {
 
 #[test]
 fn integer_literal_range() {
-    // spec 2.8 / 7.1: the minimum is reachable only through a folded unary minus.
     ok("x = 9223372036854775807\n");
     ok("y = -9223372036854775808\n");
     assert_eq!(errors("x = 9223372036854775808\n"), [IntegerLiteralOutOfRange]);
@@ -172,7 +159,6 @@ fn integer_literal_range() {
 
 #[test]
 fn list_elements_share_one_type() {
-    // spec 11.1's own examples.
     ok("numbers = [1, 2, 3]\nnames = [\"Dawit\", \"Abel\"]\ngrid = [[1, 2], [3, 4]]\n");
     assert_eq!(
         errors("mixed = [1, \"hello\"]\n"),
@@ -186,7 +172,6 @@ fn list_elements_share_one_type() {
 
 #[test]
 fn empty_literals_need_an_annotation() {
-    // spec 11.4 and 12.5, with their own examples.
     ok("numbers: List<Int> = []\nages: Dict<String, Int> = {}\n");
     assert_eq!(errors("values = []\n"), [CannotInferEmptyList]);
     assert_eq!(errors("values = {}\n"), [CannotInferEmptyDict]);
@@ -195,7 +180,6 @@ fn empty_literals_need_an_annotation() {
 
 #[test]
 fn an_empty_literal_takes_a_parameter_type() {
-    // spec 11.4 names a parameter type as a source for the element type.
     ok("function f(xs: List<Int>):\n    print(len(xs))\n\nf([])\n");
 }
 
@@ -214,7 +198,6 @@ fn dictionary_literals() {
 
 #[test]
 fn float_keys_are_rejected() {
-    // spec 12.2: NaN and signed zero make float keys unreliable.
     assert_eq!(errors("d = {1.5: 1}\n"), [InvalidDictKeyType(Type::Float)]);
     assert_eq!(
         errors("d: Dict<Float, Int> = {}\n"),
@@ -229,7 +212,6 @@ fn float_keys_are_rejected() {
 
 #[test]
 fn list_indexing() {
-    // spec 11.3.
     ok("xs = [1, 2]\nfirst: Int = xs[0]\n");
     assert_eq!(
         errors("xs = [1, 2]\ny = xs[\"a\"]\n"),
@@ -240,7 +222,6 @@ fn list_indexing() {
 
 #[test]
 fn dictionary_indexing() {
-    // spec 12.4: the key expression's type must equal K.
     ok("ages = {\"Dawit\": 23}\nage: Int = ages[\"Dawit\"]\n");
     assert_eq!(
         errors("ages = {\"Dawit\": 23}\nx = ages[1]\n"),
@@ -250,7 +231,6 @@ fn dictionary_indexing() {
 
 #[test]
 fn string_indexing_yields_a_string() {
-    // spec 10.4: there is no character type.
     ok("s = \"abc\"\nfirst: String = s[0]\n");
     assert_eq!(
         errors("s = \"abc\"\nx: Int = s[0]\n"),
@@ -260,25 +240,21 @@ fn string_indexing_yields_a_string() {
 
 #[test]
 fn strings_cannot_be_mutated() {
-    // spec 10.3: `s[0] = "x"` is a compile-time error.
     assert_eq!(errors("s = \"abc\"\ns[0] = \"x\"\n"), [StringsAreImmutable]);
 }
 
 #[test]
 fn index_assignment_checks_the_element_type() {
-    // spec 11.2: mutation can never change a list's element type.
     ok("xs = [1, 2]\nxs[0] = 10\n");
     assert!(matches!(
         errors("xs = [1, 2]\nxs[0] = \"a\"\n").as_slice(),
         [ReassignMismatch { expected: Type::Int, found: Type::Str, .. }]
     ));
-    // spec 12.3: index assignment inserts or overwrites.
     ok("ages = {\"Dawit\": 23}\nages[\"Marta\"] = 30\n");
 }
 
 #[test]
 fn iteration() {
-    // spec 8.3.
     ok("names = [\"Dawit\"]\nfor name in names:\n    print(name)\n");
     ok("for scalar in \"abc\":\n    print(scalar)\n");
     assert_eq!(
@@ -298,7 +274,6 @@ fn the_loop_variable_has_the_element_type() {
 
 #[test]
 fn calls_check_arity_and_types() {
-    // spec 5.4's own examples.
     let base = "function multiply(a: Int, b: Int):\n    return a * b\n\n";
     ok(&format!("{base}result: Int = multiply(3, 5)\n"));
     assert_eq!(
@@ -313,14 +288,12 @@ fn calls_check_arity_and_types() {
 
 #[test]
 fn return_type_inference() {
-    // spec 5.2: inferred from the body.
     ok("function add(a: Int, b: Int):\n    return a + b\n\nx: Int = add(1, 2)\n");
     ok("function f() -> Bool:\n    return true\n\nb: Bool = f()\n");
 }
 
 #[test]
 fn returns_must_agree() {
-    // spec 5.2: no union types to unify differing returns with.
     assert_eq!(
         errors("function f(flag: Bool):\n    if flag:\n        return 1\n    return \"two\"\n"),
         [ReturnTypeMismatch { expected: Type::Int, found: Type::Str }]
@@ -337,14 +310,12 @@ fn an_annotated_return_type_is_enforced() {
 
 #[test]
 fn unit_functions() {
-    // spec 5.3.
     ok("function greet(name: String):\n    print(\"Hello, \" + name)\n\ngreet(\"Dawit\")\n");
     ok("function early(flag: Bool):\n    if flag:\n        return\n    print(1)\n");
 }
 
 #[test]
 fn a_unit_result_is_not_a_value() {
-    // spec 5.3: `x = print("hi")` is a compile-time error.
     assert_eq!(errors("x = print(\"hi\")\n"), [UnitAsValue]);
     assert_eq!(
         errors("function f():\n    print(1)\n\nx = f()\n"),
@@ -359,7 +330,6 @@ fn a_unit_result_is_not_a_value() {
 
 #[test]
 fn every_path_must_return_a_value() {
-    // spec 5.3: a reachable path falling off the end is an error.
     assert!(matches!(
         errors("function f(flag: Bool) -> Int:\n    if flag:\n        return 1\n").as_slice(),
         [MissingReturn { .. }]
@@ -372,7 +342,6 @@ function f(flag: Bool) -> Int:
         return 2
 ");
     ok("function f(flag: Bool) -> Int:\n    if flag:\n        return 1\n    return 2\n");
-    // A loop never counts as returning: the compiler does not reason about whether it runs.
     assert!(matches!(
         errors("function f() -> Int:\n    while true:\n        return 1\n").as_slice(),
         [MissingReturn { .. }]
@@ -381,7 +350,6 @@ function f(flag: Bool) -> Int:
 
 #[test]
 fn mutual_recursion_infers_through_a_base_case() {
-    // spec 5.5: the base case is where inference starts.
     ok("\
 function is_even(n: Int) -> Bool:
     if n == 0:
@@ -408,7 +376,6 @@ function is_odd(n: Int):
 
 #[test]
 fn a_cycle_without_a_base_case_needs_an_annotation() {
-    // spec 5.5's own example: neither return gives inference anywhere to start.
     let source = "\
 function ping(n: Int):
     return pong(n)
@@ -437,7 +404,6 @@ function factorial(n: Int):
 
 #[test]
 fn builtins() {
-    // spec 6.7.
     ok("print(1)\nprint(1.5)\nprint(true)\nprint(\"a\")\n");
     ok("a: Int = len(\"abc\")\nb: Int = len([1])\nc: Int = len({\"k\": 1})\n");
     ok("a: Int = to_int(1.5)\nb: Float = to_float(1)\n");
@@ -463,7 +429,6 @@ fn builtins() {
 
 #[test]
 fn functions_are_not_values() {
-    // No function values exist, so a bare name can only be called.
     assert_eq!(
         errors("function f():\n    print(1)\n\nx = f\n"),
         [FunctionAsValue("f".into())]
@@ -483,7 +448,6 @@ fn return_outside_a_function() {
 
 #[test]
 fn one_mistake_reports_once() {
-    // An unknown type poisons quietly: the bad call is reported, its result is not.
     let source = "\
 function f(a: Int) -> Int:
     return a
@@ -497,7 +461,6 @@ z = x * 2
 
 #[test]
 fn reference_semantics_do_not_copy() {
-    // spec 3.4's own example shape.
     ok("\
 a = [1, 2, 3]
 b = a

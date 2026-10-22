@@ -5,12 +5,9 @@ use crate::resolve::SymbolKind;
 use crate::token::Span;
 use crate::types::Type;
 
-/// One past `Int::MAX`; legal only as the operand of a unary minus (spec 2.8).
 const INT_MIN_MAGNITUDE: u64 = 9_223_372_036_854_775_808;
 
 impl Checker<'_> {
-    /// Checks an expression in a position that consumes its value, which `Unit` may not
-    /// reach (spec 5.3).
     pub(crate) fn value_of(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
         let found = self.check_expr(expr, expected);
 
@@ -57,7 +54,6 @@ impl Checker<'_> {
             return Type::Unknown;
         };
 
-        // Dovik has no function values, so a bare function or built-in name is not a value.
         match symbol.kind {
             SymbolKind::Function => {
                 self.report(TypeErrorKind::FunctionAsValue(name.to_string()), span);
@@ -73,8 +69,6 @@ impl Checker<'_> {
 
     fn check_unary(&mut self, op: UnaryOp, operand: &Expr, span: Span) -> Type {
         if op == UnaryOp::Neg {
-            // Spec 2.8 folds a minus into the literal, which is what makes
-            // `-9223372036854775808` the one way to write `Int`'s minimum.
             if let ExprKind::Int(value) = operand.kind {
                 if value > INT_MIN_MAGNITUDE {
                     self.report(TypeErrorKind::IntegerLiteralOutOfRange, span);
@@ -111,12 +105,9 @@ impl Checker<'_> {
         }
 
         let accepted = match op {
-            // Spec 6.1: same type on both sides; `+` also concatenates two strings.
             BinaryOp::Add => lhs == rhs && (lhs.is_numeric() || lhs == Type::Str),
             BinaryOp::Sub | BinaryOp::Mul => lhs == rhs && lhs.is_numeric(),
-            // Spec 6.3: two `Int`s only.
             BinaryOp::Rem => lhs == Type::Int && rhs == Type::Int,
-            // Spec 6.2: the one operator that mixes `Int` and `Float`.
             BinaryOp::Div => lhs.is_numeric() && rhs.is_numeric(),
             BinaryOp::Eq | BinaryOp::Ne => lhs == rhs && lhs.supports_equality(),
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
@@ -144,7 +135,6 @@ impl Checker<'_> {
         let (key, element) = match &container {
             Type::List(item) => (Type::Int, (**item).clone()),
             Type::Dict(key, value) => ((**key).clone(), (**value).clone()),
-            // Spec 10.4: indexing a string yields a single-scalar string.
             Type::Str => (Type::Int, Type::Str),
             Type::Unknown => (Type::Unknown, Type::Unknown),
             _ => {
@@ -166,8 +156,6 @@ impl Checker<'_> {
         element
     }
 
-    /// Spec 11.4: an empty literal has no element type of its own and takes one from the
-    /// surrounding annotation or parameter type.
     fn check_list(&mut self, items: &[Expr], expected: Option<&Type>, span: Span) -> Type {
         let hint = match expected {
             Some(Type::List(item)) => Some((**item).clone()),
@@ -256,7 +244,6 @@ impl Checker<'_> {
 
 fn result_of(op: BinaryOp, operand: &Type) -> Type {
     match op {
-        // Spec 6.2: division always yields `Float`, whatever it was given.
         BinaryOp::Div => Type::Float,
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem => operand.clone(),
         _ => Type::Bool,

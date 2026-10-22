@@ -7,12 +7,9 @@ impl Checker<'_> {
     pub(crate) fn check_stmt(&mut self, statement: &Stmt) {
         match &statement.kind {
             StmtKind::Assign { target, ty, value } => self.check_assign(target, ty.as_ref(), value),
-            // A call statement is the one place a `Unit` result is allowed (spec 5.3).
             StmtKind::Expr(expr) => {
                 self.check_expr(expr, None);
             }
-            // Nested functions are rejected by the parser and cannot be called, so there is
-            // no signature to check them against.
             StmtKind::Function(_) => {}
             StmtKind::If { arms, else_block } => {
                 for (condition, block) in arms {
@@ -55,8 +52,6 @@ impl Checker<'_> {
         }
     }
 
-    /// Spec 8.3: a `List<T>` yields `T`, a `String` yields single-scalar `String`s, and a
-    /// `Dict` is not iterable.
     fn element_type(&mut self, iterable: &Expr) -> Type {
         let found = self.value_of(iterable, None);
 
@@ -125,7 +120,6 @@ impl Checker<'_> {
         let (key, element) = match &container {
             Type::List(item) => (Type::Int, (**item).clone()),
             Type::Dict(key, item) => ((**key).clone(), (**item).clone()),
-            // Spec 10.3: strings are immutable.
             Type::Str => {
                 self.report(TypeErrorKind::StringsAreImmutable, span);
                 (Type::Int, Type::Unknown)

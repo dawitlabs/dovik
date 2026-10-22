@@ -10,7 +10,6 @@ fn errors(source: &str) -> Vec<ResolveErrorKind> {
     resolve::resolve(&program).1.into_iter().map(|e| e.kind).collect()
 }
 
-/// Errors from a source that is deliberately also a parse error.
 fn errors_unchecked(source: &str) -> Vec<ResolveErrorKind> {
     let (tokens, _) = lexer::lex(source);
     let (program, _) = parser::parse(source, &tokens);
@@ -28,7 +27,6 @@ fn declaration_then_reassignment() {
 
 #[test]
 fn reassignment_in_a_loop_does_not_declare() {
-    // spec 9.2: the inner `total` reassigns the outer one.
     let source = "total = 0\nwhile total < 10:\n    total = total + 1\n";
     ok(source);
 
@@ -36,14 +34,12 @@ fn reassignment_in_a_loop_does_not_declare() {
     let (program, _) = parser::parse(source, &tokens);
     let (resolution, _) = resolve::resolve(&program);
 
-    // Only the first `total` declares.
     let declaring = resolution.declares.len();
     assert_eq!(declaring, 1, "exactly one declaration of `total`");
 }
 
 #[test]
 fn block_locals_are_not_visible_outside() {
-    // spec 9.2's own example.
     assert_eq!(
         errors("ready = true\nif ready:\n    message = \"go\"\nprint(message)\n"),
         [UndefinedName("message".into())]
@@ -58,7 +54,6 @@ fn undefined_names() {
 
 #[test]
 fn use_before_declaration_in_source_order() {
-    // spec 8.5: a variable must be declared before it is referenced.
     assert_eq!(errors("print(later)\nlater = 1\n"), [UndefinedName("later".into())]);
 }
 
@@ -78,7 +73,6 @@ fn builtins_cannot_be_redeclared() {
 
 #[test]
 fn functions_are_visible_across_the_whole_module() {
-    // spec 5.5: mutual recursion works because signatures are collected first.
     ok("\
 function is_even(n: Int) -> Bool:
     if n == 0:
@@ -111,7 +105,6 @@ fn duplicate_declarations() {
 
 #[test]
 fn a_variable_and_a_function_cannot_share_a_name() {
-    // spec 9.5: two declarations in one scope, whether variables, functions, or one of each.
     assert!(matches!(
         errors("f = 1\nfunction f():\n    return 2\n").as_slice(),
         [DuplicateDeclaration { .. }]
@@ -120,8 +113,6 @@ fn a_variable_and_a_function_cannot_share_a_name() {
 
 #[test]
 fn assignment_to_a_visible_name_reassigns_rather_than_shadows() {
-    // spec 9.2 is mechanical: the parameter is visible in the block, so `x = 1` reassigns
-    // it. `=` can never shadow, which is exactly how 9.3's ban is enforced for it.
     ok("function f(x: Int):\n    if x > 0:\n        x = 1\n    return x\n");
     ok("\
 function f(flag: Bool) -> Int:
@@ -136,8 +127,6 @@ function f(flag: Bool) -> Int:
 
 #[test]
 fn a_loop_variable_cannot_shadow_an_enclosing_binding() {
-    // A `for` declares its variable unconditionally (8.3), so unlike `=` it can shadow —
-    // and 9.3 forbids it.
     assert!(matches!(
         errors("function f(i: Int) -> Int:\n    for i in [1]:\n        print(i)\n    return i\n")
             .as_slice(),
@@ -147,7 +136,6 @@ fn a_loop_variable_cannot_shadow_an_enclosing_binding() {
 
 #[test]
 fn a_parameter_may_shadow_a_global() {
-    // spec 9.3's permitted exception, with its own example.
     ok("\
 name = \"Dovik\"
 
@@ -158,9 +146,6 @@ function greet(name: String):
 
 #[test]
 fn assignment_cannot_turn_a_global_into_a_local() {
-    // 9.3 says a local may reuse a global's name, but 9.4 says an assignment to a global
-    // is an error and is "specifically not reinterpreted as declaring a new local". 9.4 is
-    // the more specific rule, so only a parameter or loop variable can shadow a global.
     assert_eq!(
         errors("total = 0\n\nfunction f() -> Int:\n    total = 5\n    return total\n"),
         [AssignToGlobal("total".into())]
@@ -188,7 +173,6 @@ fn a_body_cannot_assign_to_a_function_name() {
 
 #[test]
 fn a_loop_variable_may_not_shadow_a_function() {
-    // The 9.3 exception names module-scope *variables*; a function name is not covered.
     assert!(matches!(
         errors("function g():\n    return 1\nfunction f():\n    for g in [1]:\n        print(g)\n")
             .as_slice(),
@@ -198,7 +182,6 @@ fn a_loop_variable_may_not_shadow_a_function() {
 
 #[test]
 fn functions_cannot_assign_to_globals() {
-    // spec 9.4, with its own example.
     assert_eq!(
         errors("counter = 0\n\nfunction bump():\n    counter = counter + 1\n"),
         [AssignToGlobal("counter".into())]
@@ -212,7 +195,6 @@ fn module_scope_may_assign_to_globals() {
 
 #[test]
 fn a_function_cannot_read_a_global_declared_after_it() {
-    // spec 9.4: a function may read any global visible where the function is declared.
     assert_eq!(
         errors("function f() -> Int:\n    return later\n\nlater = 1\n"),
         [UndefinedName("later".into())]
@@ -221,8 +203,6 @@ fn a_function_cannot_read_a_global_declared_after_it() {
 
 #[test]
 fn a_module_call_cannot_reach_a_later_global() {
-    // spec 8.5: `early` is callable here, but it reaches `late_reader`, which reads a
-    // global whose initializer has not run yet.
     let source = "\
 function early() -> Int:
     return late_reader()
@@ -254,7 +234,6 @@ x = reader()
 
 #[test]
 fn reserved_type_names() {
-    // spec 3.2: every case variant is reserved.
     assert_eq!(errors("int = 5\n"), [ReservedTypeName("int".into())]);
     assert_eq!(errors("INT = 5\n"), [ReservedTypeName("INT".into())]);
     assert_eq!(errors("String = 5\n"), [ReservedTypeName("String".into())]);
@@ -262,8 +241,6 @@ fn reserved_type_names() {
         errors("function string(a: Int):\n    return a\n"),
         [ReservedTypeName("string".into())]
     );
-    // One mistake, one error: the reserved name still binds, so `print(Dict)` does not
-    // report a second, misleading "not defined".
     assert_eq!(
         errors("items: List<Int> = []\nfor Dict in items:\n    print(Dict)\n"),
         [ReservedTypeName("Dict".into())]
@@ -285,8 +262,6 @@ fn break_and_continue_need_a_loop() {
 
 #[test]
 fn break_does_not_escape_a_function_into_an_enclosing_loop() {
-    // Functions are module-level, so a loop can never enclose one; the counter still has
-    // to reset per function rather than leak in.
     assert_eq!(
         errors_unchecked("while true:\n    function f():\n        break\n"),
         [BreakOutsideLoop]
@@ -295,7 +270,6 @@ fn break_does_not_escape_a_function_into_an_enclosing_loop() {
 
 #[test]
 fn the_loop_variable_cannot_be_assigned() {
-    // spec 8.3.
     assert_eq!(
         errors("for name in [\"a\"]:\n    name = \"b\"\n"),
         [AssignToLoopVariable("name".into())]
@@ -321,7 +295,6 @@ fn the_loop_variable_may_not_shadow_a_local() {
 
 #[test]
 fn a_function_cannot_mutate_a_global_collection() {
-    // Conservative reading of 9.4 — see the note in the commit message.
     assert_eq!(
         errors("xs: List<Int> = [1]\n\nfunction f():\n    xs[0] = 2\n"),
         [MutateGlobalInFunction("xs".into())]
@@ -330,13 +303,11 @@ fn a_function_cannot_mutate_a_global_collection() {
 
 #[test]
 fn a_function_may_mutate_a_parameter() {
-    // spec 9.6: mutation through a reference-typed parameter is visible to the caller.
     ok("function mutate(xs: List<Int>):\n    xs[0] = 99\n");
 }
 
 #[test]
 fn rebinding_a_parameter_is_allowed() {
-    // spec 9.6: rebinding affects only the local binding.
     ok("function rebind(xs: List<Int>):\n    xs = [9]\n");
 }
 
@@ -347,7 +318,6 @@ fn module_scope_may_mutate_a_global() {
 
 #[test]
 fn assigning_a_function_name_at_module_scope_is_a_duplicate_declaration() {
-    // spec 9.5 counts this as two declarations of one name, in either order.
     assert!(matches!(
         errors("function f():\n    return 1\nf = 2\n").as_slice(),
         [DuplicateDeclaration { .. }]

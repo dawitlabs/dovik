@@ -3,9 +3,6 @@ use crate::error::LexErrorKind;
 use crate::token::{Span, TokenKind};
 
 impl Lexer<'_> {
-    /// Consumes leading whitespace at the start of a logical line and emits the
-    /// `Indent`/`Dedent` tokens it implies. Blank and comment-only lines are skipped
-    /// without affecting the indent stack (spec 2.4).
     pub(super) fn open_line(&mut self) {
         loop {
             let start = self.pos;
@@ -86,7 +83,6 @@ impl Lexer<'_> {
 
         if self.current_indent() != width {
             self.error(LexErrorKind::InconsistentDedent(width), start);
-            // Reopen at the observed width so every Dedent still pairs with an Indent.
             self.open_block(width, start);
         }
     }

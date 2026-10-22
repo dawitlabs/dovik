@@ -251,7 +251,6 @@ fn integers() {
 
 #[test]
 fn integer_magnitude_allows_the_folded_minimum() {
-    // spec 2.8: `-9223372036854775808` is legal, so the magnitude reaches one past Int::MAX.
     assert_eq!(
         kinds("-9223372036854775808"),
         [Minus, Int(9_223_372_036_854_775_808), Newline, Eof]

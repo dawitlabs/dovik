@@ -2,9 +2,6 @@ use super::Lexer;
 use crate::error::LexErrorKind;
 use crate::token::TokenKind;
 
-/// One past `Int::MAX`. The lexer accepts it because spec 2.8 folds a unary minus into
-/// an integer literal, which makes `-9223372036854775808` legal; rejecting the bare
-/// positive form is the parser's job, since only it can see the minus.
 const MAX_INT_MAGNITUDE: u64 = 9_223_372_036_854_775_808;
 
 const MAX_UNICODE_ESCAPE_DIGITS: usize = 6;
@@ -75,8 +72,6 @@ impl Lexer<'_> {
         }
     }
 
-    /// Decodes one escape into `out`. A bad escape is recorded and skipped so the rest of
-    /// the literal still lexes.
     fn scan_escape(&mut self, out: &mut String) {
         let start = self.pos;
         self.bump();
@@ -127,12 +122,8 @@ impl Lexer<'_> {
             return self.error(LexErrorKind::UnicodeEscapeTooManyDigits, start);
         }
 
-        // Six hex digits always fit in a u32, so the fallback is unreachable; u32::MAX
-        // would be rejected by `from_u32` anyway.
         let value = u32::from_str_radix(digits, 16).unwrap_or(u32::MAX);
 
-        // `from_u32` rejects exactly the two cases spec 10.1 names: surrogates and
-        // anything above U+10FFFF.
         match char::from_u32(value) {
             Some(ch) => out.push(ch),
             None => self.error(LexErrorKind::UnicodeEscapeOutOfRange(value), start),

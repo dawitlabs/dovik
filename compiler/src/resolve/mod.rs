@@ -26,8 +26,6 @@ pub fn resolve(program: &Program) -> (Resolution, Vec<ResolveError>) {
     (resolution, resolver.errors)
 }
 
-/// What later passes need from this one: which binding every name occurrence refers to,
-/// and which assignments declare rather than reassign (spec 9.2).
 #[derive(Debug, Clone)]
 pub struct Resolution {
     pub symbols: Vec<Symbol>,
@@ -89,7 +87,6 @@ pub(crate) struct Scope {
     pub(crate) names: HashMap<String, BindingId>,
 }
 
-/// A module-scope call, and every function it can reach, for the ordering check in 8.5.
 #[derive(Debug, Default)]
 pub(crate) struct CallGraph {
     pub(crate) nodes: Vec<FunctionNode>,
@@ -124,7 +121,6 @@ pub(crate) struct Resolver {
     pub(crate) declares: HashSet<Span>,
     pub(crate) errors: Vec<ResolveError>,
     pub(crate) graph: CallGraph,
-    /// Module-statement index each global was declared at, for the 8.5 ordering check.
     pub(crate) global_positions: HashMap<BindingId, usize>,
     pub(crate) statement_index: usize,
     pub(crate) current_function: Option<usize>,
@@ -168,8 +164,6 @@ impl Resolver {
         }
     }
 
-    /// Every module-level signature is collected before any body is checked, which is what
-    /// lets a body call a function declared further down the file (spec 5.5).
     fn collect_function_signatures(&mut self, program: &Program) {
         for statement in &program.statements {
             let StmtKind::Function(decl) = &statement.kind else {
@@ -210,8 +204,6 @@ impl Resolver {
         self.current_function = previous;
     }
 
-    /// A function body is its own scope and its own loop nesting: `break` inside it can
-    /// never see a loop outside it.
     pub(crate) fn resolve_function_body(&mut self, decl: &FunctionDecl) {
         let previous_depth = std::mem::replace(&mut self.loop_depth, 0);
 

@@ -11,8 +11,6 @@ pub enum Type {
     Unit,
     List(Box<Type>),
     Dict(Box<Type>, Box<Type>),
-    /// A type that could not be determined. It compares equal to everything, so one real
-    /// error does not produce a second one everywhere the bad value flows.
     Unknown,
 }
 
@@ -40,23 +38,18 @@ impl Type {
         matches!(self, Self::Int | Self::Float)
     }
 
-    /// Spec 12.2: `Int`, `Bool`, and `String` are the only permitted key types.
     pub fn is_valid_dict_key(&self) -> bool {
         matches!(self, Self::Int | Self::Bool | Self::Str | Self::Unknown)
     }
 
-    /// Spec 13: `==` and `!=` apply to every type but `Unit`.
     pub fn supports_equality(&self) -> bool {
         !matches!(self, Self::Unit)
     }
 
-    /// Spec 6.4: `<` `>` `<=` `>=` apply to `Int`, `Float`, and `String`.
     pub fn supports_ordering(&self) -> bool {
         matches!(self, Self::Int | Self::Float | Self::Str | Self::Unknown)
     }
 
-    /// Whether a value of this type is acceptable where `other` is required. `Unknown`
-    /// matches anything, in either position and at any depth.
     pub fn matches(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Unknown, _) | (_, Self::Unknown) => true,
@@ -66,7 +59,6 @@ impl Type {
         }
     }
 
-    /// Whether this type mentions `Unit` anywhere. `Unit` is a return type only (5.3).
     pub fn mentions_unit(&self) -> bool {
         match self {
             Self::Unit => true,

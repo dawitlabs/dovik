@@ -89,7 +89,6 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// A closed pipe (`| head`) is not an error worth panicking over.
 fn write_lines(lines: impl Iterator<Item = String>) {
     let mut out = io::stdout().lock();
 

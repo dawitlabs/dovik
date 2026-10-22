@@ -6,15 +6,11 @@ impl Resolver {
     pub(crate) fn resolve_stmt(&mut self, statement: &Stmt) {
         match &statement.kind {
             StmtKind::Assign { target, value, .. } => {
-                // The initializer is resolved first, so a declaration cannot refer to the
-                // name it declares (spec 9.2).
                 self.resolve_expr(value);
                 self.resolve_assign(target);
             }
             StmtKind::Expr(expr) => self.resolve_expr(expr),
             StmtKind::Function(decl) => {
-                // The parser already reported the nesting; resolving the body anyway
-                // surfaces the name errors inside it.
                 self.resolve_function_body(decl);
             }
             StmtKind::If { arms, else_block } => {
@@ -39,8 +35,6 @@ impl Resolver {
             } => {
                 self.resolve_expr(iterable);
                 self.loop_depth += 1;
-                // The loop variable is scoped to the body (spec 8.3), so it is declared in
-                // the body's own scope rather than one of its own.
                 self.push_scope(ScopeKind::Block);
                 self.declare(variable, SymbolKind::LoopVar);
                 for inner in &body.statements {
@@ -100,16 +94,12 @@ impl Resolver {
 
         let error = match symbol {
             SymbolKind::Global if self.in_function() => {
-                // Spec 9.4: this is an error, and specifically not a new local.
                 Some(ResolveErrorKind::AssignToGlobal(ident.name.clone()))
             }
             SymbolKind::LoopVar => Some(ResolveErrorKind::AssignToLoopVariable(
                 ident.name.clone(),
             )),
-            // Spec 6.7: a built-in cannot be redeclared anywhere.
             SymbolKind::Builtin => Some(ResolveErrorKind::RedeclaresBuiltin(ident.name.clone())),
-            // At module scope this is a second declaration of one name (spec 9.5). Inside a
-            // body it is an attempt to assign to the function itself.
             SymbolKind::Function if !self.in_function() => {
                 Some(ResolveErrorKind::DuplicateDeclaration {
                     name: ident.name.clone(),
@@ -128,10 +118,6 @@ impl Resolver {
         }
     }
 
-    /// `xs[i] = v` mutates rather than rebinds, so 9.4's assignment ban does not apply on
-    /// its own terms. Spec 9.4 still limits a function's effects to its arguments, its
-    /// return value, and mutation through reference-typed parameters — which does not
-    /// include a global. Rejecting is the conservative reading; see the note in README.
     fn check_mutation_target(&mut self, object: &Expr) {
         if !self.in_function() {
             return;
@@ -220,8 +206,6 @@ impl Resolver {
         });
     }
 
-    /// Records a call edge, or — at module scope — a call site the 8.5 ordering check must
-    /// examine.
     fn record_call(&mut self, callee: &Expr) {
         let ExprKind::Name(name) = &callee.kind else {
             return;

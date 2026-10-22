@@ -5,8 +5,6 @@ use crate::token::{Span, TokenKind};
 
 impl<'src> Parser<'src> {
     pub(super) fn kind(&self) -> &TokenKind {
-        // The lexer always terminates the stream with `Eof`, so clamping here means the
-        // parser reads `Eof` forever instead of panicking at the end of input.
         let index = self.pos.min(self.tokens.len().saturating_sub(1));
         &self.tokens[index].kind
     }
@@ -61,8 +59,6 @@ impl<'src> Parser<'src> {
         })
     }
 
-    /// Consumes the line break that terminates a simple statement, returning the offset
-    /// the statement ends at. End of file is accepted so a file need not end in a break.
     pub(super) fn expect_end_of_line(&mut self) -> Option<usize> {
         if self.at(&TokenKind::Eof) {
             return Some(self.span().start);
@@ -99,9 +95,6 @@ impl<'src> Parser<'src> {
         self.errors.push(ParseError { kind, span });
     }
 
-    /// Discards an indented region that no block header claimed, which happens when the
-    /// header itself failed to parse. Reporting every token inside it would bury the one
-    /// error that matters.
     pub(super) fn skip_orphaned_block(&mut self) -> bool {
         if !self.at(&TokenKind::Indent) {
             return false;
@@ -129,20 +122,13 @@ impl<'src> Parser<'src> {
         true
     }
 
-    /// Orphaned layout is a consequence of an earlier error, not an error itself — unless
-    /// nothing has gone wrong yet, in which case staying silent would hide a real bug.
     pub(super) fn note_orphaned_layout(&mut self) {
         if self.errors.is_empty() {
             self.error_here("a statement");
         }
     }
 
-    /// Skips to the start of the next statement after an error, so one bad line does not
-    /// cascade. Layout tokens are left in place: the block structure is still trustworthy.
     pub(super) fn synchronize(&mut self) {
-        // A statement can fail after it has already consumed its own line break, which
-        // leaves the cursor on the next statement. Skipping then would throw away a good
-        // line and, with it, any error that line would have reported.
         if self.at_statement_boundary() {
             return;
         }

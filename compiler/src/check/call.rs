@@ -39,7 +39,6 @@ impl Checker<'_> {
         Type::Unknown
     }
 
-    /// Spec 5.4: positional arguments, exact types, no conversion and no defaults.
     fn check_function_call(&mut self, name: String, args: &[Expr], span: Span) -> Type {
         let Some(&index) = self.by_name.get(&name) else {
             return Type::Unknown;
@@ -79,8 +78,6 @@ impl Checker<'_> {
         self.signatures[index].return_type.clone().unwrap_or(Type::Unknown)
     }
 
-    /// Spec 6.7. `print` and `len` accept several argument types; that is fixed, not
-    /// user-definable overloading.
     fn check_builtin_call(&mut self, name: String, args: &[Expr], span: Span) -> Type {
         if args.len() != 1 {
             let kind = TypeErrorKind::ArgumentCount {

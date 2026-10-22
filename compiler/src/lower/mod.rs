@@ -1,4 +1,8 @@
+mod call;
 mod expr;
+mod literal;
+mod loops;
+mod slots;
 mod stmt;
 
 use std::collections::HashMap;
@@ -7,6 +11,8 @@ use crate::ast::{FunctionDecl, Program as Ast, StmtKind};
 use crate::check::Typed;
 use crate::ir;
 use crate::resolve::{BindingId, Resolution, SymbolKind};
+
+pub(crate) use slots::Place;
 use crate::token::Span;
 use crate::types::Type;
 
@@ -44,13 +50,11 @@ pub(crate) struct Lowerer<'a> {
     strings: HashMap<String, ir::StrId>,
     globals: HashMap<BindingId, ir::GlobalId>,
     functions: HashMap<String, ir::FuncId>,
-    /// Local slot for each binding in the function being lowered.
     slots: HashMap<BindingId, ir::LocalId>,
     pub(crate) blocks: Vec<ir::Block>,
     pub(crate) registers: Vec<Type>,
     pub(crate) locals: Vec<ir::Local>,
     pub(crate) current: ir::BlockId,
-    /// Header and exit of each enclosing loop, for break and continue.
     pub(crate) loops: Vec<(ir::BlockId, ir::BlockId)>,
 }
 
@@ -80,8 +84,6 @@ impl Lowerer<'_> {
         }
     }
 
-    /// Reserve an id for every function before lowering any body, so a call to a function
-    /// declared further down the file has somewhere to point (spec 5.5).
     fn declare_functions(&mut self) {
         for statement in &self.ast.statements {
             let StmtKind::Function(decl) = &statement.kind else {
@@ -131,7 +133,6 @@ impl Lowerer<'_> {
 
         self.lower_statements(&decl.body.statements);
 
-        // Spec 5.3: a `Unit` function may simply run off the end.
         self.seal(ir::Terminator::Return(None));
 
         ir::Function {
@@ -144,7 +145,6 @@ impl Lowerer<'_> {
         }
     }
 
-    /// Spec 8.5: top-level statements run in source order, so they become one function.
     fn lower_entry(&mut self) {
         let ast = self.ast;
         self.begin_body();
@@ -195,8 +195,6 @@ impl Lowerer<'_> {
         self.blocks.len() - 1
     }
 
-    /// Finishes the current block if nothing has terminated it yet. A block whose
-    /// terminator is already set has returned or jumped, and must not be overwritten.
     pub(crate) fn seal(&mut self, terminator: ir::Terminator) {
         if matches!(
             self.blocks[self.current].terminator,
@@ -228,66 +226,9 @@ impl Lowerer<'_> {
         id
     }
 
-    /// A slot the lowerer needs for itself — a loop cursor, a short-circuit result. It
-    /// deliberately claims no binding, so it can never be found by a name lookup.
-    pub(crate) fn temp_slot(&mut self, name: &str, ty: Type) -> ir::LocalId {
-        self.locals.push(ir::Local {
-            name: name.to_string(),
-            ty,
-        });
-        self.locals.len() - 1
-    }
-
-    pub(crate) fn declare_slot(&mut self, span: Span, name: &str, ty: Type) -> ir::LocalId {
-        let slot = self.locals.len();
-        self.locals.push(ir::Local {
-            name: name.to_string(),
-            ty,
-        });
-
-        if let Some(id) = self.resolution.binding_id(span) {
-            self.slots.insert(id, slot);
-        }
-
-        slot
-    }
-
-    /// Where a name lives. A binding is either a module-scope global or a slot in the
-    /// function being lowered; functions never write globals (spec 9.4).
-    pub(crate) fn place_of(&mut self, span: Span, name: &str) -> Place {
-        let Some(id) = self.resolution.binding_id(span) else {
-            return Place::Missing;
-        };
-
-        if let Some(&slot) = self.slots.get(&id) {
-            return Place::Local(slot);
-        }
-
-        if let Some(&global) = self.globals.get(&id) {
-            return Place::Global(global);
-        }
-
-        let ty = self.type_of_binding(span);
-        Place::Local(self.declare_slot(span, name, ty))
-    }
-
-    pub(crate) fn type_of_binding(&self, span: Span) -> Type {
-        self.resolution
-            .binding_id(span)
-            .and_then(|id| self.typed.var_types.get(&id))
-            .cloned()
-            .unwrap_or(Type::Unknown)
-    }
-
     pub(crate) fn function_id(&self, name: &str) -> Option<ir::FuncId> {
         self.functions.get(name).copied()
     }
-}
-
-pub(crate) enum Place {
-    Local(ir::LocalId),
-    Global(ir::GlobalId),
-    Missing,
 }
 
 fn placeholder(name: &str) -> ir::Function {

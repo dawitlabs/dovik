@@ -25,8 +25,6 @@ pub struct Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtKind {
-    /// `x = e`, `x: T = e`, and `xs[i] = e`. Whether this declares or reassigns is a
-    /// resolver question (spec 9.2), so both surface forms land on one node.
     Assign {
         target: AssignTarget,
         ty: Option<TypeNode>,

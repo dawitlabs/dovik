@@ -45,9 +45,6 @@ impl Lowerer<'_> {
     }
 
     fn lower_unary(&mut self, op: UnaryOp, operand: &Expr, span: Span, ty: Type) -> ir::Value {
-        // Spec 2.8 folds a minus into an integer literal, which is the only way to write
-        // `Int`'s minimum. Folding here keeps the IR from emitting a negation that would
-        // itself overflow.
         if op == UnaryOp::Neg {
             if let ExprKind::Int(value) = operand.kind {
                 return ir::Value::Int((value as i128 * -1) as i64);
@@ -76,8 +73,6 @@ impl Lowerer<'_> {
         span: Span,
         ty: Type,
     ) -> ir::Value {
-        // Spec 6.5: `and` and `or` short-circuit, so they are control flow rather than an
-        // instruction that evaluates both sides.
         if matches!(op, BinaryOp::And | BinaryOp::Or) {
             return self.lower_short_circuit(op, left, right, span);
         }
@@ -135,8 +130,6 @@ impl Lowerer<'_> {
         ir::Value::Reg(dest)
     }
 
-    /// Spec 6.2: `/` always yields `Float`, so `Int` operands are widened explicitly here
-    /// rather than left for the backend to infer.
     fn lower_division(
         &mut self,
         left: &Expr,
@@ -210,91 +203,6 @@ impl Lowerer<'_> {
         ir::Value::Reg(dest)
     }
 
-    fn lower_call(&mut self, callee: &Expr, args: &[Expr], span: Span, ty: Type) -> ir::Value {
-        let ExprKind::Name(name) = &callee.kind else {
-            return ir::Value::Int(0);
-        };
-
-        if let Some(value) = self.lower_builtin(name, args, span, ty.clone()) {
-            return value;
-        }
-
-        let Some(function) = self.function_id(name) else {
-            return ir::Value::Int(0);
-        };
-
-        let args: Vec<ir::Value> = args.iter().map(|arg| self.lower_expr(arg)).collect();
-
-        let dest = match ty {
-            Type::Unit => None,
-            _ => Some(self.register(ty)),
-        };
-
-        self.emit(ir::InstKind::Call { dest, function, args }, span);
-
-        match dest {
-            Some(dest) => ir::Value::Reg(dest),
-            None => ir::Value::Int(0),
-        }
-    }
-
-    fn lower_builtin(
-        &mut self,
-        name: &str,
-        args: &[Expr],
-        span: Span,
-        ty: Type,
-    ) -> Option<ir::Value> {
-        if self.function_id(name).is_some() || args.len() != 1 {
-            return None;
-        }
-
-        let argument_type = self.typed.type_of(args[0].span);
-
-        match name {
-            "print" => {
-                let value = self.lower_expr(&args[0]);
-                self.emit(
-                    ir::InstKind::Print {
-                        ty: argument_type,
-                        value,
-                    },
-                    span,
-                );
-                Some(ir::Value::Int(0))
-            }
-            "len" => {
-                let value = self.lower_expr(&args[0]);
-                let dest = self.register(Type::Int);
-                self.emit(
-                    ir::InstKind::Len {
-                        dest,
-                        ty: argument_type,
-                        value,
-                    },
-                    span,
-                );
-                Some(ir::Value::Reg(dest))
-            }
-            "to_int" => {
-                let value = self.lower_expr(&args[0]);
-                let dest = self.register(Type::Int);
-                self.emit(ir::InstKind::FloatToInt { dest, value }, span);
-                Some(ir::Value::Reg(dest))
-            }
-            "to_float" => {
-                let value = self.lower_expr(&args[0]);
-                let dest = self.register(Type::Float);
-                self.emit(ir::InstKind::IntToFloat { dest, value }, span);
-                Some(ir::Value::Reg(dest))
-            }
-            _ => {
-                let _ = ty;
-                None
-            }
-        }
-    }
-
     fn lower_index(&mut self, object: &Expr, index: &Expr, span: Span, ty: Type) -> ir::Value {
         let container = self.typed.type_of(object.span);
         let target = self.lower_expr(object);
@@ -320,50 +228,6 @@ impl Lowerer<'_> {
         };
 
         self.emit(kind, span);
-        ir::Value::Reg(dest)
-    }
-
-    fn lower_list(&mut self, items: &[Expr], span: Span, ty: Type) -> ir::Value {
-        let values: Vec<ir::Value> = items.iter().map(|item| self.lower_expr(item)).collect();
-
-        let element = match &ty {
-            Type::List(item) => (**item).clone(),
-            _ => Type::Unknown,
-        };
-
-        let dest = self.register(ty);
-        self.emit(
-            ir::InstKind::ListNew {
-                dest,
-                element,
-                items: values,
-            },
-            span,
-        );
-        ir::Value::Reg(dest)
-    }
-
-    fn lower_dict(&mut self, entries: &[(Expr, Expr)], span: Span, ty: Type) -> ir::Value {
-        let values: Vec<(ir::Value, ir::Value)> = entries
-            .iter()
-            .map(|(key, value)| (self.lower_expr(key), self.lower_expr(value)))
-            .collect();
-
-        let (key, value) = match &ty {
-            Type::Dict(key, value) => ((**key).clone(), (**value).clone()),
-            _ => (Type::Unknown, Type::Unknown),
-        };
-
-        let dest = self.register(ty);
-        self.emit(
-            ir::InstKind::DictNew {
-                dest,
-                key,
-                value,
-                entries: values,
-            },
-            span,
-        );
         ir::Value::Reg(dest)
     }
 }

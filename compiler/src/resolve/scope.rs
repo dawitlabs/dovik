@@ -4,7 +4,6 @@ use super::{BindingId, Resolver, Scope, ScopeKind, Symbol, SymbolKind};
 use crate::ast::Ident;
 use crate::error::ResolveErrorKind;
 
-/// Every case variant of a built-in type name is reserved (spec 3.2).
 const RESERVED_TYPE_NAMES: [&str; 7] = ["int", "float", "bool", "string", "list", "dict", "unit"];
 
 enum Shadowing {
@@ -33,8 +32,6 @@ impl Resolver {
     }
 
     pub(crate) fn declare(&mut self, ident: &Ident, kind: SymbolKind) -> Option<BindingId> {
-        // Reported, but the name is still bound below: bailing out here would make every
-        // later use of it a second, misleading "not defined" error.
         if RESERVED_TYPE_NAMES.contains(&ident.name.to_ascii_lowercase().as_str()) {
             self.error(
                 ResolveErrorKind::ReservedTypeName(ident.name.clone()),
@@ -90,9 +87,6 @@ impl Resolver {
         Some(id)
     }
 
-    /// Spec 9.3: shadowing is banned, except that a parameter or local may reuse the name
-    /// of a module-scope *variable*. A module-scope function name is not covered by that
-    /// exception, so shadowing one stays an error.
     fn shadowing(&self, name: &str) -> Shadowing {
         let inside_function = self
             .scopes
@@ -131,7 +125,6 @@ impl Resolver {
             .expect("the builtin scope is never popped")
     }
 
-    /// Locals declared at module scope are globals; everywhere else they are locals.
     pub(crate) fn variable_kind(&self) -> SymbolKind {
         match self.current_scope().kind {
             ScopeKind::Module => SymbolKind::Global,

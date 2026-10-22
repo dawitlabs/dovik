@@ -35,8 +35,6 @@ fn expr_of(source: &str) -> Expr {
     }
 }
 
-/// Renders an expression as a fully parenthesized string, so precedence is checked by
-/// shape rather than by eyeballing a nested debug dump.
 fn shape(expr: &Expr) -> String {
     match &expr.kind {
         ExprKind::Int(v) => v.to_string(),
@@ -182,7 +180,6 @@ fn type_errors() {
 
 #[test]
 fn declaration_requires_an_initializer() {
-    // spec 4.2: `age: Int` on its own is a syntax error.
     assert_eq!(
         errors("age: Int\n"),
         [Expected { what: "`=` — every declaration needs an initializer", found: "a line break" }]
@@ -205,7 +202,6 @@ fn precedence_matches_the_spec_table() {
 
 #[test]
 fn comparisons_do_not_chain() {
-    // spec 6.6: `a < b < c` parses as `(a < b) < c`.
     assert_eq!(shape_of("a < b < c"), "((a < b) < c)");
 }
 
@@ -230,7 +226,6 @@ fn literals() {
 
 #[test]
 fn multi_line_literals_ignore_layout() {
-    // spec 2.3: an expression may span lines while a bracket is open.
     assert_eq!(shape_of("[\n    1,\n    2\n]"), "[1, 2]");
 }
 
@@ -367,7 +362,6 @@ fn bare_return() {
 
 #[test]
 fn nested_functions_are_rejected() {
-    // spec 5.1: module level only.
     let source = "function outer():\n    function inner():\n        return 1\n";
     assert_eq!(errors(source), [NestedFunction]);
 }
@@ -414,14 +408,11 @@ fn recovery_reports_one_error_per_bad_line() {
     let (tokens, _) = lexer::lex(source);
     let (program, errors) = parser::parse(source, &tokens);
     assert_eq!(errors.len(), 2, "{errors:?}");
-    // The two good lines still produce statements.
     assert_eq!(program.statements.len(), 2);
 }
 
 #[test]
 fn an_error_does_not_swallow_the_next_line() {
-    // `1 = 2` reports its error only after consuming the line break, so recovery must
-    // not treat the cursor as mid-statement and skip the line that follows.
     let source = "1 = 2\ny = [1, 2,]\n";
     assert_eq!(
         errors(source),
@@ -460,8 +451,6 @@ fn spans_cover_the_statement() {
 
 #[test]
 fn trailing_commas_are_rejected() {
-    // The spec does not permit them; forbidding now keeps allowing them later
-    // a non-breaking change.
     assert!(!errors("x = [1, 2,]\n").is_empty());
     assert!(!errors("function f(a: Int,):\n    return a\n").is_empty());
 }

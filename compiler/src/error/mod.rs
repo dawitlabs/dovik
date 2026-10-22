@@ -8,7 +8,6 @@ pub use lex::{LexError, LexErrorKind};
 pub use parse::{ParseError, ParseErrorKind};
 pub use resolve::{ResolveError, ResolveErrorKind};
 
-/// Byte offset to 1-based line and column, for diagnostics.
 pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
     let before = &source[..offset.min(source.len())];
     let line = before.matches('\n').count() + 1;

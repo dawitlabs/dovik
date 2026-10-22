@@ -46,8 +46,6 @@ impl Parser<'_> {
         }
     }
 
-    /// Comparisons are left-associative and do not chain: spec 6.6 has `a < b < c` parse
-    /// as `(a < b) < c`, which the type checker then rejects.
     fn parse_comparison(&mut self) -> Option<Expr> {
         let mut left = self.parse_additive()?;
 

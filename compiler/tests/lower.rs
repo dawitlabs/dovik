@@ -62,8 +62,6 @@ function f(n: Int) -> Int:
 
 #[test]
 fn checked_arithmetic_is_explicit() {
-    // ARCHITECTURE section 4: the IR must represent each required check, so that no later
-    // pass can discard one.
     let program = build("x = 1 + 2\ny = 7 % 3\nz: Float = 7 / 2\nw = to_int(1.5)\n");
     let checks = program.checks();
 
@@ -91,7 +89,6 @@ fn dictionary_reads_carry_a_missing_key_check() {
     let checks = program.checks();
 
     assert!(checks.contains(&RuntimeError::MissingKey));
-    // Writing a key inserts it, so it cannot be missing (spec 12.3).
     assert_eq!(
         checks
             .iter()
@@ -103,14 +100,12 @@ fn dictionary_reads_carry_a_missing_key_check() {
 
 #[test]
 fn float_arithmetic_is_unchecked() {
-    // spec 7.3: only division can fail.
     let program = build("x = 1.5 + 2.5\ny = 1.5 * 2.0\nz = -1.5\n");
     assert_eq!(program.checks(), []);
 }
 
 #[test]
 fn integer_arithmetic_is_checked() {
-    // spec 7.2: never wraps silently.
     let program = build("x = 1 + 2\ny = -x\n");
     assert_eq!(
         program.checks(),
@@ -120,7 +115,6 @@ fn integer_arithmetic_is_checked() {
 
 #[test]
 fn division_widens_int_operands() {
-    // spec 6.2: `Int` operands are converted to `Float` before dividing.
     let rendered = text("x: Float = 7 / 2\n");
     assert!(rendered.contains("int.to_float 7"), "{rendered}");
     assert!(rendered.contains("int.to_float 2"), "{rendered}");
@@ -143,8 +137,6 @@ fn string_concatenation_is_not_integer_addition() {
 
 #[test]
 fn the_integer_minimum_is_folded() {
-    // spec 2.8: the minimum is only reachable as a folded literal, so the IR must not
-    // emit a negation that would itself overflow.
     let program = build("x = -9223372036854775808\n");
     assert_eq!(program.checks(), []);
     assert!(text("x = -9223372036854775808\n").contains("-9223372036854775808"));
@@ -152,8 +144,6 @@ fn the_integer_minimum_is_folded() {
 
 #[test]
 fn logical_operators_short_circuit() {
-    // spec 6.5: the right operand is not evaluated when the left decides the result, so
-    // this is control flow rather than one instruction.
     let program = build("function f() -> Bool:\n    return true\n\nx = false and f()\n");
     let main = entry(&program);
     let branches = main
@@ -164,7 +154,6 @@ fn logical_operators_short_circuit() {
 
     assert!(branches >= 1, "expected a branch for `and`");
 
-    // The call must not sit in the same block as the condition.
     let condition_block = main
         .blocks
         .iter()
@@ -181,7 +170,6 @@ fn logical_operators_short_circuit() {
 
 #[test]
 fn globals_are_separate_from_locals() {
-    // spec 9.4: a function reads globals but never writes them.
     let program = build("limit = 10\n\nfunction under(n: Int) -> Bool:\n    return n < limit\n");
     assert_eq!(program.globals.len(), 1);
     assert_eq!(program.globals[0].name, "limit");
@@ -193,7 +181,6 @@ fn globals_are_separate_from_locals() {
 
 #[test]
 fn top_level_statements_become_one_entry_point() {
-    // spec 8.5.
     let program = build("a = 1\nb = 2\nprint(a + b)\n");
     let main = entry(&program);
     assert_eq!(main.name, "main");
@@ -229,8 +216,6 @@ fn iteration_over_a_list_walks_an_index() {
 
 #[test]
 fn iteration_over_a_string_uses_a_cursor() {
-    // spec 10.4: indexing by scalar position is O(n), so a loop that re-indexed would be
-    // quadratic. The cursor keeps it linear.
     let rendered = text("for c in \"abc\":\n    print(c)\n");
     assert!(rendered.contains("string.next"), "{rendered}");
     assert!(rendered.contains("string.byte_len"), "{rendered}");
@@ -266,7 +251,6 @@ fn continue_jumps_to_the_loop_header() {
 
 #[test]
 fn calls_point_at_functions_declared_later() {
-    // spec 5.5.
     let program = build("\
 function first() -> Int:
     return second()
@@ -280,7 +264,6 @@ function second() -> Int:
 
 #[test]
 fn a_unit_call_has_no_destination() {
-    // spec 5.3: calling a Unit function is a statement, not an expression.
     let program = build("function greet():\n    print(1)\n\ngreet()\n");
     let body = instructions(&program, "main");
     assert!(
@@ -297,7 +280,6 @@ fn string_literals_are_interned_once() {
 
 #[test]
 fn structural_comparison_keeps_the_operand_type() {
-    // spec 13: list and dict equality is structural, so the backend needs the type.
     let rendered = text("a: List<Int> = [1]\nb: List<Int> = [2]\nc = a == b\n");
     assert!(rendered.contains("cmp.eq [List<Int>]"), "{rendered}");
 }

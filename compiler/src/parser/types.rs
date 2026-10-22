@@ -14,7 +14,6 @@ impl Parser<'_> {
         self.advance();
 
         let name = &self.source[name_span.start..name_span.end];
-        // spec 3.2: built-in type names are case-insensitive.
         let lowered = name.to_ascii_lowercase();
         let mut args = self.parse_type_arguments()?;
         let span = Span::new(name_span.start, self.previous_end());
@@ -61,8 +60,6 @@ impl Parser<'_> {
         Some(TypeNode { kind, span })
     }
 
-    /// `<A, B>` after a type name. Absent parameters are an empty list, which lets the
-    /// caller report arity against the spec's fixed arities rather than guessing.
     fn parse_type_arguments(&mut self) -> Option<Vec<TypeNode>> {
         if !self.eat(&TokenKind::Lt) {
             return Some(Vec::new());
@@ -73,8 +70,6 @@ impl Parser<'_> {
             args.push(self.parse_type()?);
         }
 
-        // Nested parameters close with `>` `>`; spec 3.1 has no shift operator to collide
-        // with, so the lexer never produces a single `>>` token.
         self.expect(&TokenKind::Gt, "`>` to close the type parameters")?;
         Some(args)
     }
