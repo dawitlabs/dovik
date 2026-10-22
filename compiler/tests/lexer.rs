@@ -311,3 +311,11 @@ function factorial(n: Int) -> Int:
     assert_eq!(kinds.iter().filter(|k| **k == Dedent).count(), 2);
     assert_eq!(kinds.last(), Some(&Eof));
 }
+
+#[test]
+fn a_dot_outside_a_number_is_rejected() {
+    assert_eq!(errors("xs.append(2)"), [UnexpectedChar('.')]);
+    assert_eq!(errors("text.length"), [UnexpectedChar('.')]);
+    assert_eq!(errors("module.function()"), [UnexpectedChar('.')]);
+    assert_eq!(errors("1.5"), []);
+}

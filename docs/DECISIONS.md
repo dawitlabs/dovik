@@ -170,7 +170,7 @@ No new mutation syntax was introduced to say this. The only collection mutation 
 
 **Reason:** Method syntax requires member-access expressions and a story about where methods live. Neither is needed to ship the core language.
 
-**Trade-off:** `append(numbers, 4)` reads worse than `numbers.append(4)`, and adding method syntax later would invalidate every existing call site. See [SPEC.md](SPEC.md) U4.
+**Trade-off:** `append(numbers, 4)` reads worse than `numbers.append(4)`. Made permanent by D023, which resolves U4 the same way and gives the reason that decided it.
 
 **Status:** Provisional.
 
@@ -248,7 +248,7 @@ NaN remains reachable from other operations, such as `inf - inf`, so the rules a
 
 Imported names landing in the *existing* module scope rather than a new scope layer means [SPEC.md](SPEC.md) 9.1 is unchanged and three rules already on the books handle every new collision: 9.5 rejects an import that duplicates a local declaration or another import, and 9.3 rejects one that reuses a built-in name. A module system that needed no new scope rules is the cheapest one available.
 
-Flat imports rather than `module.name` avoid claiming the dot. A qualified form needs a member-access expression, and U4 has not decided whether Dovik gets one; once `.` means module access nobody would accept it meaning something different for `xs.append(v)`.
+Flat imports rather than `module.name` avoid claiming the dot. A qualified form needs a member-access expression, which D023 then decided the language will not have at all.
 
 Rejecting cycles rather than half-initializing keeps the guarantee 8.5 already makes. Python accepts cycles and hands out partly-constructed modules; Dovik would rather name the cycle.
 
@@ -277,3 +277,21 @@ The guard-page approach was chosen over a depth counter because a counter costs 
 The threshold also stops being portable. A native build fails at whatever the operating system's stack limit allows, the interpreter at its own frame limit, and the same program can therefore survive in one and fail in the other. Specifying a fixed depth would have made them agree at the cost of making the native build slower and the limit arbitrary.
 
 **Status:** Accepted. Resolves U7. Specified in [SPEC.md](SPEC.md) 5.5 and 15.2.
+
+## D023: Functions Only, and No Member Access At All
+
+**Decision:** Dovik has no method-call syntax and no member-access expression. `.` appears only inside a numeric literal. `xs.append(v)`, `text.length`, and `module.function()` are all syntax errors, and every operation is a function call. D014 made this provisional for the initial version; this makes it the language's answer.
+
+**Reason:** The appealing middle option was sugar — `value.function(args)` resolving to `function(value, args)`, with one definition and no new type-system machinery. It does not survive contact with the library.
+
+Applied uniformly, it makes `5.print()`, `xs.len()`, and `"a".to_string()` legal, because `print`, `len`, and `to_string` already take their subject first like every other function. Nothing in the rule distinguishes a collection operation from a conversion, so the sugar admits nonsense along with the cases it was wanted for.
+
+Applied selectively, it needs a marker on the declaration saying which functions may be called this way. That is no longer sugar: it is a second kind of function, with a rule about which kind each call site may use, in a language whose case for existing is that there is one way to do things (D018).
+
+There is also a sequencing argument. User-defined types are deferred ([SPEC.md](SPEC.md) 16), and claiming `.` now would fix its meaning before the feature that most wants it exists. [DECISIONS.md](DECISIONS.md) D021 already relied on the dot being unclaimed when it chose flat imports over `module.name`.
+
+**Trade-off:** Nested calls read inside-out, and this is the real cost. `join(split(text, tab), " ")` evaluates right to left while reading left to right, which is exactly the readability complaint method chaining answers. Naming does not fix it; `xs.map(f).filter(g)` has no equivalent here.
+
+What would fix it is a composition operator rather than a dot: an operator cannot be mistaken for field access, needs no marker on any declaration, and does not pre-commit `.`. None is proposed, and nothing in this decision blocks one later. Resolving U4 this way costs no rewrites, which was the risk that made it urgent — every day it stayed open added call sites that a reversal would have invalidated.
+
+**Status:** Accepted. Resolves U4. Specified in [SPEC.md](SPEC.md) 6.8, 6.9, 11.2, and 16.

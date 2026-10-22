@@ -481,6 +481,28 @@ Redeclaring a built-in name at module scope is a compile-time error (no shadowin
 
 The rest of the built-in and standard-library surface is not specified here; see section 17.
 
+### 6.8 Calls
+
+A call is a name followed by parenthesised arguments. The callee is always a name: a built-in, a function declared in the module, or a name the module imports (22.4). A call on anything else is a compile-time error (5.6).
+
+### 6.9 No Member Access
+
+Dovik has no member-access expression. `.` appears only inside a numeric literal. All of these are syntax errors:
+
+```dovk
+numbers.append(4)      # no method-call syntax
+text.length            # no field access
+module.function()       # no qualified names (22.4)
+```
+
+Every operation is a function call: `append(numbers, 4)`, `len(text)`.
+
+This is a decision about the whole language, not an omission waiting to be filled. A uniform `value.function(args)` sugar that resolved to `function(value, args)` would make `5.print()`, `xs.len()`, and `"a".to_string()` legal, because `print`, `len`, and `to_string` take their subject first like every other function. Restricting the sugar to a chosen set of functions needs a marker on the declaration, at which point it is no longer sugar but a second kind of function.
+
+The cost is real and is accepted: nested calls read inside-out. `join(split(text, tab), " ")` applies right to left while reading left to right, and no amount of naming fixes that. What would fix it is a composition operator rather than a dot — an operator cannot be mistaken for field access and does not pre-commit `.` before user-defined types exist (16). None is proposed here.
+
+> Settled as D023 in [DECISIONS.md](DECISIONS.md).
+
 ---
 
 ## 7. Numeric Semantics
@@ -801,7 +823,7 @@ numbers[0] = 10
 
 The assigned value's type must equal `T`; mutation can never change a list's element type.
 
-Growing and shrinking a list — appending, inserting, removing — is done through **functions**, not methods. Dovik has no method-call syntax in the initial version, so `numbers.append(4)` is a syntax error. The specific function names are standard-library surface and are not fixed here; see section 17 and U4 in section 21.
+Growing and shrinking a list — appending, inserting, removing — is done through **functions**, not methods. `numbers.append(4)` is a syntax error (6.9). The specific function names are standard-library surface and are not fixed here; see section 17.
 
 ### 11.3 Indexing
 
@@ -983,7 +1005,7 @@ These are named here only to record that they are deliberately absent from the i
 - **Concurrency.** No threads, no async/await, no memory model. The runtime promises no thread safety for mutable collections.
 - **User-defined types**, generics, interfaces, and operator overloading.
 - **Exceptions**, `try`/`catch`, and error values.
-- **Method-call syntax** (U4), **optional/nullable types** (U8), **integer division** (6.2), **conditional expressions** (8.1), **ranges** (8.3), and **nested functions** (5.1).
+- **Method-call syntax and member access** (6.9), **optional/nullable types** (U8), **integer division** (6.2), **conditional expressions** (8.1), **ranges** (8.3), and **nested functions** (5.1).
 
 Adding any of these is a language change governed by section 20.
 
@@ -996,7 +1018,7 @@ The standard library is specified separately and incrementally. It will cover co
 Two constraints bind it:
 
 1. Standard-library operations obey this specification's type rules and error model. A library function cannot introduce implicit conversion, dynamic typing, or recoverable errors.
-2. Until method-call syntax exists (U4), every library operation is a function call.
+2. Every library operation is a function call (6.9).
 
 The surface needed before realistic programs can be written includes string formatting beyond `print` (6.7), string-to-number parsing (7.5), and list growth (11.2).
 
@@ -1048,6 +1070,7 @@ Identifiers are stable. A resolved question keeps its number and is listed below
 | **U2** — division by zero | A zero divisor is a runtime error for all operand types, including `0 / 0` (6.2, 7.4) | [DECISIONS.md](DECISIONS.md) D020 |
 | **U6** — mutual recursion | Supported; signatures are collected before bodies are checked, and only a genuinely circular return type needs an explicit annotation (5.5, 8.5) | [DECISIONS.md](DECISIONS.md) D019 |
 | **U7** — stack exhaustion and out-of-memory | Both are runtime errors with diagnostics and no source location; the thresholds are implementation-defined (5.5, 15.2) | [DECISIONS.md](DECISIONS.md) D022 |
+| **U4** — method-call syntax versus functions | Functions only. There is no member-access expression and no method syntax (6.9, 11.2, 16) | [DECISIONS.md](DECISIONS.md) D023 |
 
 The shadowing question that D011 settled was never a numbered entry here; it is recorded in [DECISIONS.md](DECISIONS.md) D011 and specified in 9.3 and 9.6.
 
@@ -1060,14 +1083,6 @@ The shadowing question that D011 settled was never a numbered entry here; it is 
 Alternatives: index by scalar and accept O(n), with `for` as the fast path; index by byte, which is O(1) but lets a program split a scalar; store UTF-32, which is O(1) but up to four times the memory; keep scalar indexing but add a cursor type, which is a new type.
 
 **Blocks:** the string representation in [RUNTIME.md](RUNTIME.md), and Roadmap Phase 6.
-
-### U4 — Method-call syntax versus functions
-
-The initial version has no method syntax, so collection operations are functions: `append(xs, v)` rather than `xs.append(v)`. The library surface in section 17 depends on which way this goes, and switching later invalidates every call site.
-
-Alternatives: functions only; add `value.function(args)` as sugar that resolves to the same function; add real methods, which means a member-access expression and a bigger type system.
-
-**Blocks:** the standard-library API, Roadmap Phases 5 and 6.
 
 ### U5 — Shared mutable module state
 
@@ -1138,7 +1153,7 @@ Importing a name the named module does not declare at module scope is a compile-
 
 **Imports do not re-export.** A name imported by module A is not importable *from* A. Every module names the modules it depends on directly.
 
-There is no qualified access. `text.split(line)` is not valid syntax, because Dovik has no member-access expression (U4).
+There is no qualified access. `text.split(line)` is not valid syntax, because Dovik has no member-access expression (6.9).
 
 ### 22.5 Initialization order
 

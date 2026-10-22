@@ -16,7 +16,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Blocked by:** nothing.
 
-**Still open, and gating later phases only:** U3 and U7 gate Phase 6, U4 gates Phases 5 and 6, U5 will surface in Phase 5, and U8 gates the standard-library error strategy. None of them blocks Phases 2 through 4.
+**Still open, and gating later phases only:** U3 gates Phase 6, U5 will surface in Phase 5, and U8 gates the standard-library error strategy. U4 and U7 are resolved ([DECISIONS.md](DECISIONS.md) D023 and D022). None of the rest blocks Phases 2 through 4.
 
 ## Phase 2: Compiler Foundation
 
@@ -65,7 +65,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Completion criterion:** Dovik supports its documented core language features, with tests for the runtime errors in [SPEC.md](SPEC.md) 15.2 — including division by zero for both `Int` and `Float` operands.
 
-**Blocked by:** **U4** (method syntax versus functions), which fixes the shape of every collection operation — switching later invalidates every call site. **U5** (shared mutable module state) will likely surface here, since programs this size start to need it. U2 is resolved ([DECISIONS.md](DECISIONS.md) D020), so `/` can be implemented.
+**Blocked by:** **U5** (shared mutable module state) will likely surface here, since programs this size start to need it, and [SPEC.md](SPEC.md) 22.1 deliberately closed the module-as-shared-state door rather than opening it. U2 and U4 are resolved ([DECISIONS.md](DECISIONS.md) D020 and D023).
 
 ## Phase 6: Runtime and Standard Library
 

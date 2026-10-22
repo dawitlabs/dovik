@@ -1,14 +1,14 @@
 # Dovik Standard Library
 
 **Status:** First increment implemented. Every name here is a decision, not yet a
-contract — [SPEC.md](SPEC.md) 11.2 and U4 deliberately leave these names unfixed,
+contract — [SPEC.md](SPEC.md) 11.2 deliberately leaves these names unfixed,
 and [SPEC.md](SPEC.md) 17 specifies the library separately and incrementally.
 
 Two constraints from [SPEC.md](SPEC.md) 17 bind everything below:
 
 1. A library function obeys the specification's type rules and error model. None
    introduces implicit conversion, dynamic typing, or a recoverable error.
-2. Until method-call syntax exists (U4), every operation is a function call.
+2. Every operation is a function call ([SPEC.md](SPEC.md) 6.9).
    `numbers.append(4)` is a syntax error; `append(numbers, 4)` is the form.
 
 Library functions live in the built-in scope ([SPEC.md](SPEC.md) 9.1) and cannot be
