@@ -58,7 +58,7 @@ impl Lowerer<'_> {
         let kind = match (op, &operand_type) {
             (UnaryOp::Not, _) => ir::InstKind::Not { dest, value },
             (UnaryOp::Neg, Type::Float) => ir::InstKind::FloatNeg { dest, value },
-            (UnaryOp::Neg, _) => ir::InstKind::IntNeg { dest, value },
+            (UnaryOp::Neg, _) => ir::InstKind::IntNeg { dest, value, checked: true },
         };
 
         self.emit(kind, span);
@@ -123,7 +123,7 @@ impl Lowerer<'_> {
         let kind = match operand_type {
             Type::Str => ir::InstKind::StringConcat { dest, lhs, rhs },
             Type::Float => ir::InstKind::FloatArith { dest, op, lhs, rhs },
-            _ => ir::InstKind::IntArith { dest, op, lhs, rhs },
+            _ => ir::InstKind::IntArith { dest, op, lhs, rhs, checked: true },
         };
 
         self.emit(kind, span);

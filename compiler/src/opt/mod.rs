@@ -1,4 +1,5 @@
-mod escape;
+pub(crate) mod escape;
+mod range;
 mod fold;
 
 use crate::error::{TypeError, TypeErrorKind};
@@ -22,6 +23,8 @@ fn optimize_function(function: &mut Function, errors: &mut Vec<TypeError>) {
     for block in &mut function.blocks {
         fold::fold_block(block, &escaping, errors);
     }
+
+    range::elide_checks(function);
 
     for block in &mut function.blocks {
         let Terminator::Branch {

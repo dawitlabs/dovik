@@ -100,6 +100,7 @@ pub enum InstKind {
         op: ArithOp,
         lhs: Value,
         rhs: Value,
+        checked: bool,
     },
     FloatArith {
         dest: RegId,
@@ -109,7 +110,11 @@ pub enum InstKind {
     },
     IntRem { dest: RegId, lhs: Value, rhs: Value },
     FloatDiv { dest: RegId, lhs: Value, rhs: Value },
-    IntNeg { dest: RegId, value: Value },
+    IntNeg {
+        dest: RegId,
+        value: Value,
+        checked: bool,
+    },
     FloatNeg { dest: RegId, value: Value },
     Not { dest: RegId, value: Value },
 
@@ -195,7 +200,10 @@ impl RuntimeError {
 impl InstKind {
     pub fn runtime_error(&self) -> Option<RuntimeError> {
         match self {
-            Self::IntArith { .. } | Self::IntNeg { .. } => Some(RuntimeError::IntegerOverflow),
+            Self::IntArith { checked, .. } | Self::IntNeg { checked, .. } => match checked {
+                true => Some(RuntimeError::IntegerOverflow),
+                false => None,
+            },
             Self::FloatDiv { .. } => Some(RuntimeError::DivisionByZero),
             Self::IntRem { .. } => Some(RuntimeError::RemainderByZero),
             Self::FloatToInt { .. } => Some(RuntimeError::InvalidConversion),

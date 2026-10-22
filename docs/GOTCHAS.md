@@ -437,3 +437,46 @@ Consequences to respect:
 - `Dict` keeps occupancy in a separate `state` byte array allocated in the same block as
   the entries. One byte per slot packs 64 per cache line, so a probe usually tests
   occupancy without touching the 16-byte entry at all.
+
+## The overflow-check elision is an interval analysis, and its limits are structural
+
+`src/opt/range.rs` proves an integer operation cannot overflow and drops its check.
+[SPEC.md](SPEC.md) 7.2 requires overflow to be an error *when it happens*; it does not
+require emitting a check where overflow is impossible, and
+[ARCHITECTURE.md](ARCHITECTURE.md) section 3 grants the same reasoning for bounds checks.
+D009 is untouched.
+
+Four things it took to make this work, each of which was a bug first:
+
+1. **Globals must be tracked, not just locals.** Every module-scope variable is a global,
+   so in `main` — where most loops live — tracking only locals proves nothing. This is
+   sound because [SPEC.md](SPEC.md) 9.4 forbids a function from writing a global, so
+   within any function only that function's own stores can change one.
+2. **The update must be monotone.** `entry[block] = incoming` oscillated forever: widening
+   made a header wide, the guard then narrowed the body, and the back edge carried a
+   *smaller* range back. It must be `entry[block].join(incoming)`.
+3. **Widen only at loop headers.** Widening every block destroyed the guard-narrowed
+   bound inside the loop body, which is the whole point of the analysis.
+4. **States must be canonical.** A missing key means `Unknown`, so `{}` and
+   `{r0: Unknown}` are the same state but compare unequal. Every state is pruned of
+   `Unknown` entries or the fixpoint never terminates.
+
+A `BUDGET` caps the worklist and returns "elide nothing" when exhausted, so a bug in
+convergence can only cost optimization, never correctness.
+
+**What it cannot do.** It bounds induction variables, because the loop guard narrows them.
+It cannot bound a loop *accumulator* — `total = total + i % 7` widens to the full `Int`
+range — because that needs the trip count multiplied by the per-iteration increment, which
+is scalar evolution, not interval arithmetic. `arith` therefore still carries one check and
+still does not vectorize.
+
+Tests in `tests/opt.rs` pin both directions: a bounded induction variable loses its check,
+while a parameter, a list element, a parsed value, a loop accumulator and a loose
+`n < 1000` guard all keep theirs. The native trap tests remain the backstop.
+
+## Benchmark medians on this machine run 1.3-1.5x the minimum
+
+The development laptop throttles. A single run reported collection work as 30.6 ms when
+fifteen runs put the minimum at 24.5 ms, and reported Dovik beating C on `calls` when it
+does not. Take the minimum of many runs, and re-measure anything that looks like a new
+result before believing it.

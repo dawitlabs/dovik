@@ -145,6 +145,7 @@ impl Lowerer<'_> {
                     op: ir::ArithOp::Add,
                     lhs: ir::Value::Reg(before),
                     rhs: ir::Value::Int(1),
+                    checked: true,
                 },
                 span,
             );

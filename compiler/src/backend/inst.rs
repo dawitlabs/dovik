@@ -49,8 +49,8 @@ impl Emitter<'_> {
                 self.line(&format!("  store {ty} {operand}, ptr @g{global}"));
                 self.line(&format!("  call void @dovik_release(i8 {tag}, i64 {previous})"));
             }
-            InstKind::IntArith { dest, op, lhs, rhs } => {
-                self.checked_arith(*dest, *op, lhs, rhs, span)
+            InstKind::IntArith { dest, op, lhs, rhs, checked } => {
+                self.int_arith(*dest, *op, lhs, rhs, span, *checked)
             }
             InstKind::FloatArith { dest, op, lhs, rhs } => {
                 let name = match op {
@@ -66,8 +66,8 @@ impl Emitter<'_> {
             }
             InstKind::IntRem { dest, lhs, rhs } => self.remainder(*dest, lhs, rhs, span),
             InstKind::FloatDiv { dest, lhs, rhs } => self.divide(*dest, lhs, rhs, span),
-            InstKind::IntNeg { dest, value } => {
-                self.checked_arith(*dest, ArithOp::Sub, &Value::Int(0), value, span)
+            InstKind::IntNeg { dest, value, checked } => {
+                self.int_arith(*dest, ArithOp::Sub, &Value::Int(0), value, span, *checked)
             }
             InstKind::FloatNeg { dest, value } => {
                 self.line(&format!("  %r{dest} = fneg double {}", literal(value)));

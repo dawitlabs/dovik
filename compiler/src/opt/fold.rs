@@ -35,7 +35,7 @@ pub(crate) fn fold_block(
 
 fn fold_inst(inst: &Inst, errors: &mut Vec<TypeError>) -> Option<(usize, Value)> {
     match &inst.kind {
-        InstKind::IntArith { dest, op, lhs, rhs } => {
+        InstKind::IntArith { dest, op, lhs, rhs, .. } => {
             let (lhs, rhs) = (literal(lhs)?, literal(rhs)?);
             let result = apply(*op, &lhs, &rhs);
             Some((*dest, check(result, inst.span, errors)?))
@@ -55,7 +55,7 @@ fn fold_inst(inst: &Inst, errors: &mut Vec<TypeError>) -> Option<(usize, Value)>
             let result = runtime::divide(&lhs, &rhs);
             Some((*dest, check(result, inst.span, errors)?))
         }
-        InstKind::IntNeg { dest, value } | InstKind::FloatNeg { dest, value } => {
+        InstKind::IntNeg { dest, value, .. } | InstKind::FloatNeg { dest, value } => {
             let value = literal(value)?;
             let result = runtime::negate(&value);
             Some((*dest, check(result, inst.span, errors)?))

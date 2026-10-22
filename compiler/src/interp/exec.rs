@@ -67,7 +67,7 @@ impl Interpreter<'_> {
                 let value = self.value(value, frame);
                 self.globals[*global] = value;
             }
-            InstKind::IntArith { dest, op, lhs, rhs }
+            InstKind::IntArith { dest, op, lhs, rhs, .. }
             | InstKind::FloatArith { dest, op, lhs, rhs } => {
                 let lhs = self.value(lhs, frame);
                 let rhs = self.value(rhs, frame);
@@ -88,7 +88,7 @@ impl Interpreter<'_> {
                 let rhs = self.value(rhs, frame);
                 frame.registers[*dest] = trap(runtime::divide(&lhs, &rhs), span)?;
             }
-            InstKind::IntNeg { dest, value } | InstKind::FloatNeg { dest, value } => {
+            InstKind::IntNeg { dest, value, .. } | InstKind::FloatNeg { dest, value } => {
                 let value = self.value(value, frame);
                 frame.registers[*dest] = trap(runtime::negate(&value), span)?;
             }

@@ -84,15 +84,25 @@ impl fmt::Display for InstKind {
             Self::StoreLocal { local, value } => write!(f, "store %{local}, {value}"),
             Self::LoadGlobal { dest, global } => write!(f, "r{dest} = load @{global}"),
             Self::StoreGlobal { global, value } => write!(f, "store @{global}, {value}"),
-            Self::IntArith { dest, op, lhs, rhs } => {
-                write!(f, "r{dest} = int.{op} {lhs}, {rhs}")
+            Self::IntArith { dest, op, lhs, rhs, checked } => {
+                let suffix = match checked {
+                    true => "",
+                    false => ".unchecked",
+                };
+                write!(f, "r{dest} = int.{op}{suffix} {lhs}, {rhs}")
             }
             Self::FloatArith { dest, op, lhs, rhs } => {
                 write!(f, "r{dest} = float.{op} {lhs}, {rhs}")
             }
             Self::IntRem { dest, lhs, rhs } => write!(f, "r{dest} = int.rem {lhs}, {rhs}"),
             Self::FloatDiv { dest, lhs, rhs } => write!(f, "r{dest} = float.div {lhs}, {rhs}"),
-            Self::IntNeg { dest, value } => write!(f, "r{dest} = int.neg {value}"),
+            Self::IntNeg { dest, value, checked } => {
+                let suffix = match checked {
+                    true => "",
+                    false => ".unchecked",
+                };
+                write!(f, "r{dest} = int.neg{suffix} {value}")
+            }
             Self::FloatNeg { dest, value } => write!(f, "r{dest} = float.neg {value}"),
             Self::Not { dest, value } => write!(f, "r{dest} = not {value}"),
             Self::IntToFloat { dest, value } => write!(f, "r{dest} = int.to_float {value}"),

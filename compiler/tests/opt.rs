@@ -144,12 +144,82 @@ fn float_overflow_still_folds_to_infinity() {
     assert_eq!(interp::run(&folded(&source)).output, ["inf"]);
 }
 
+fn overflow_checks(source: &str) -> usize {
+    folded(source)
+        .checks()
+        .iter()
+        .filter(|check| **check == RuntimeError::IntegerOverflow)
+        .count()
+}
+
 #[test]
-fn checks_on_non_constant_operands_survive() {
-    let program = folded("x = 1\ny = x + 1\n");
+fn a_check_survives_when_the_operand_is_unknown() {
+    assert_eq!(
+        overflow_checks("function f(n: Int) -> Int:\n    return n + 1\n\nprint(f(3))\n"),
+        1,
+        "a parameter could be anything, so the check must stay"
+    );
+    assert_eq!(
+        overflow_checks("xs: List<Int> = [1]\ny = xs[0] + 1\nprint(y)\n"),
+        1,
+        "a list element could be anything"
+    );
+    assert_eq!(
+        overflow_checks("n = parse_int(\"5\")\nprint(n * n)\n"),
+        1,
+        "a parsed value could be anything"
+    );
+}
+
+#[test]
+fn a_loop_accumulator_keeps_its_check() {
+    let source = "total = 0\ni = 0\nwhile i < 100:\n    total = total + i\n    i = i + 1\nprint(total)\n";
     assert!(
-        program.checks().contains(&RuntimeError::IntegerOverflow),
-        "a runtime operand keeps its check"
+        overflow_checks(source) >= 1,
+        "the accumulator is not bounded by the analysis, so its check must stay"
+    );
+}
+
+#[test]
+fn a_bounded_induction_variable_loses_its_check() {
+    let source = "i = 0\nwhile i < 100:\n    i = i + 1\nprint(i)\n";
+    assert_eq!(
+        overflow_checks(source),
+        0,
+        "the loop guard bounds i, so i + 1 provably fits"
+    );
+}
+
+#[test]
+fn a_check_survives_near_the_integer_limit() {
+    let source = "\
+function risky(n: Int) -> Int:
+    if n > 9000000000000000000:
+        return n + n
+    return 0
+
+print(risky(1))
+";
+    assert!(
+        overflow_checks(source) >= 1,
+        "a guard that permits huge values must not license eliding"
+    );
+}
+
+#[test]
+fn multiplication_is_not_elided_without_tight_bounds() {
+    let source = "\
+function scale(n: Int) -> Int:
+    if n < 1000:
+        return n * n
+    return 0
+
+print(scale(3))
+";
+    assert_eq!(
+        overflow_checks(source),
+        1,
+        "n < 1000 leaves n unbounded below, so n * n can overflow"
     );
 }
 

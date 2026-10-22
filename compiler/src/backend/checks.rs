@@ -30,8 +30,8 @@ impl Emitter<'_> {
         self.label = cont;
     }
 
-    pub(crate) fn checked_arith(&mut self, dest: usize, op: ArithOp, lhs: &Value, rhs: &Value, span: Span) {
-        if !self.checks {
+    pub(crate) fn int_arith(&mut self, dest: usize, op: ArithOp, lhs: &Value, rhs: &Value, span: Span, checked: bool) {
+        if !self.checks || !checked {
             let plain = match op {
                 ArithOp::Add => "add",
                 ArithOp::Sub => "sub",
