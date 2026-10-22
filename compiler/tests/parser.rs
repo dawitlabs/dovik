@@ -37,6 +37,7 @@ fn expr_of(source: &str) -> Expr {
 
 fn shape(expr: &Expr) -> String {
     match &expr.kind {
+        ExprKind::None => "none".to_string(),
         ExprKind::Int(v) => v.to_string(),
         ExprKind::Float(v) => format!("{v}"),
         ExprKind::Str(v) => format!("{v:?}"),
@@ -148,6 +149,7 @@ fn render_type(kind: &TypeKind) -> String {
         TypeKind::Dict(key, value) => {
             format!("Dict<{}, {}>", render_type(&key.kind), render_type(&value.kind))
         }
+        TypeKind::Optional(inner) => format!("{}?", render_type(&inner.kind)),
     }
 }
 

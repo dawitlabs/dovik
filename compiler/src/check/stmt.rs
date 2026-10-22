@@ -1,5 +1,6 @@
 use super::Checker;
-use crate::ast::{AssignTarget, Block, Expr, Stmt, StmtKind};
+use crate::ast::{AssignTarget, BinaryOp, Block, Expr, ExprKind, Stmt, StmtKind};
+use crate::resolve::BindingId;
 use crate::error::TypeErrorKind;
 use crate::types::Type;
 
@@ -11,15 +12,7 @@ impl Checker<'_> {
                 self.check_expr(expr, None);
             }
             StmtKind::Function(_) => {}
-            StmtKind::If { arms, else_block } => {
-                for (condition, block) in arms {
-                    self.check_condition(condition);
-                    self.check_block(block);
-                }
-                if let Some(block) = else_block {
-                    self.check_block(block);
-                }
-            }
+            StmtKind::If { arms, else_block } => self.check_if(arms, else_block.as_ref()),
             StmtKind::While { condition, body } => {
                 self.check_condition(condition);
                 self.check_block(body);
@@ -36,6 +29,85 @@ impl Checker<'_> {
             StmtKind::Return(value) => self.check_return(value.as_ref(), statement.span),
             StmtKind::Break | StmtKind::Continue => {}
         }
+    }
+
+    fn check_if(&mut self, arms: &[(Expr, Block)], else_block: Option<&Block>) {
+        for (condition, block) in arms {
+            self.check_condition(condition);
+
+            match self.narrowing(condition) {
+                Some((binding, narrowed, present)) if present => {
+                    self.with_narrowed(binding, narrowed, |checker| checker.check_block(block));
+                }
+                _ => self.check_block(block),
+            }
+        }
+
+        let Some(block) = else_block else {
+            return;
+        };
+
+        let narrowing = match arms {
+            [(condition, _)] => self.narrowing(condition),
+            _ => None,
+        };
+
+        match narrowing {
+            Some((binding, narrowed, present)) if !present => {
+                self.with_narrowed(binding, narrowed, |checker| checker.check_block(block));
+            }
+            _ => self.check_block(block),
+        }
+    }
+
+    fn narrowing(&mut self, condition: &Expr) -> Option<(BindingId, Type, bool)> {
+        let ExprKind::Binary { op, left, right } = &condition.kind else {
+            return None;
+        };
+
+        let present = match op {
+            BinaryOp::Ne => true,
+            BinaryOp::Eq => false,
+            _ => return None,
+        };
+
+        let (name, _) = match (&left.kind, &right.kind) {
+            (ExprKind::Name(name), ExprKind::None) => (name, left.span),
+            (ExprKind::None, ExprKind::Name(name)) => (name, right.span),
+            _ => return None,
+        };
+
+        let span = match (&left.kind, &right.kind) {
+            (ExprKind::Name(_), ExprKind::None) => left.span,
+            _ => right.span,
+        };
+
+        let _ = name;
+        let binding = self.resolution.binding_id(span)?;
+
+        match self.var_types.get(&binding) {
+            Some(Type::Optional(inner)) => Some((binding, (**inner).clone(), present)),
+            _ => None,
+        }
+    }
+
+    fn with_narrowed(
+        &mut self,
+        binding: BindingId,
+        narrowed: Type,
+        body: impl FnOnce(&mut Self),
+    ) {
+        let previous = self.var_types.insert(binding, narrowed);
+        self.narrowed.push(binding);
+
+        body(self);
+
+        self.narrowed.pop();
+
+        match previous {
+            Some(ty) => self.var_types.insert(binding, ty),
+            None => self.var_types.remove(&binding),
+        };
     }
 
     fn check_block(&mut self, block: &Block) {
@@ -73,7 +145,17 @@ impl Checker<'_> {
         value: &Expr,
     ) {
         match target {
-            AssignTarget::Name(name) => match annotation {
+            AssignTarget::Name(name) => {
+                if let Some(binding) = self.resolution.binding_id(name.span) {
+                    if self.narrowed.contains(&binding) {
+                        let kind = TypeErrorKind::AssignToNarrowed(name.name.clone());
+                        self.report(kind, name.span);
+                        self.value_of(value, None);
+                        return;
+                    }
+                }
+
+                match annotation {
                 Some(node) => {
                     let annotated = self.annotation_type(node);
                     let found = self.value_of(value, Some(&annotated));
@@ -105,7 +187,8 @@ impl Checker<'_> {
                         self.report(kind, value.span);
                     }
                 }
-            },
+                }
+            }
             AssignTarget::Index {
                 object,
                 index,

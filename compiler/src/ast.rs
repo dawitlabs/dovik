@@ -99,6 +99,7 @@ pub struct Expr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
+    None,
     Int(u64),
     Float(f64),
     Str(String),
@@ -163,4 +164,5 @@ pub enum TypeKind {
     Unit,
     List(Box<TypeNode>),
     Dict(Box<TypeNode>, Box<TypeNode>),
+    Optional(Box<TypeNode>),
 }

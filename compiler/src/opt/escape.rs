@@ -36,7 +36,9 @@ pub(crate) fn escaping_registers(function: &mut Function) -> HashSet<RegId> {
 
 pub(crate) fn destinations(kind: &InstKind) -> Vec<RegId> {
     match kind {
-        InstKind::LoadLocal { dest, .. }
+        InstKind::OptionalSome { dest, .. }
+        | InstKind::OptionalGet { dest, .. }
+        | InstKind::LoadLocal { dest, .. }
         | InstKind::LoadGlobal { dest, .. }
         | InstKind::IntArith { dest, .. }
         | InstKind::FloatArith { dest, .. }

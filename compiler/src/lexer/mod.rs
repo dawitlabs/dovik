@@ -116,6 +116,7 @@ impl<'src> Lexer<'src> {
             '*' => TokenKind::Star,
             '/' => TokenKind::Slash,
             '%' => TokenKind::Percent,
+            '?' => TokenKind::Question,
             ',' => TokenKind::Comma,
             ':' => TokenKind::Colon,
             '-' if self.eat('>') => TokenKind::Arrow,

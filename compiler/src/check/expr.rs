@@ -27,6 +27,7 @@ impl Checker<'_> {
 
     fn check_expr_kind(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
         match &expr.kind {
+            ExprKind::None => self.check_none(expected, expr.span),
             ExprKind::Int(value) => self.check_int_literal(*value, expr.span),
             ExprKind::Float(_) => Type::Float,
             ExprKind::Str(_) => Type::Str,
@@ -38,6 +39,24 @@ impl Checker<'_> {
             ExprKind::Index { object, index } => self.check_index(object, index),
             ExprKind::List(items) => self.check_list(items, expected, expr.span),
             ExprKind::Dict(entries) => self.check_dict(entries, expected, expr.span),
+        }
+    }
+
+    fn check_none(&mut self, expected: Option<&Type>, span: Span) -> Type {
+        match expected {
+            Some(Type::Optional(inner)) => Type::Optional(inner.clone()),
+            Some(Type::Unknown) | None => {
+                self.report(TypeErrorKind::CannotInferNone, span);
+                Type::Unknown
+            }
+            Some(other) => {
+                let kind = TypeErrorKind::AnnotationMismatch {
+                    annotated: other.clone(),
+                    found: Type::Optional(Box::new(Type::Unknown)),
+                };
+                self.report(kind, span);
+                Type::Unknown
+            }
         }
     }
 
@@ -97,8 +116,25 @@ impl Checker<'_> {
     }
 
     fn check_binary(&mut self, op: BinaryOp, left: &Expr, right: &Expr, span: Span) -> Type {
-        let lhs = self.value_of(left, None);
-        let rhs = self.value_of(right, None);
+        let comparing = matches!(op, BinaryOp::Eq | BinaryOp::Ne);
+
+        let (lhs, rhs) = match (comparing, &left.kind, &right.kind) {
+            (true, ExprKind::None, _) => {
+                let rhs = self.value_of(right, None);
+                let lhs = self.value_of(left, Some(&rhs));
+                (lhs, rhs)
+            }
+            (true, _, _) => {
+                let lhs = self.value_of(left, None);
+                let rhs = self.value_of(right, Some(&lhs));
+                (lhs, rhs)
+            }
+            _ => {
+                let lhs = self.value_of(left, None);
+                let rhs = self.value_of(right, None);
+                (lhs, rhs)
+            }
+        };
 
         if lhs.is_unknown() || rhs.is_unknown() {
             return result_of(op, &lhs);

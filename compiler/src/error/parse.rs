@@ -26,6 +26,7 @@ pub enum ParseErrorKind {
     ImportNotFirst,
     EmptyImportList,
     AbsoluteImportPath,
+    NestedOptional,
 }
 
 impl fmt::Display for ParseErrorKind {
@@ -60,6 +61,10 @@ impl fmt::Display for ParseErrorKind {
             Self::AbsoluteImportPath => {
                 write!(f, "an import path must be relative to this file")
             }
+            Self::NestedOptional => write!(
+                f,
+                "`T??` is not a type: there is only one way to be absent"
+            ),
         }
     }
 }
@@ -76,6 +81,7 @@ impl ParseErrorKind {
             Self::ImportNotFirst => "DVK2007",
             Self::EmptyImportList => "DVK2008",
             Self::AbsoluteImportPath => "DVK2009",
+            Self::NestedOptional => "DVK2010",
         }
     }
 }

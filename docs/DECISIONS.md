@@ -313,3 +313,25 @@ Grapheme segmentation has no such shortcut. UAX #29 needs the `Grapheme_Cluster_
 Full case mapping also breaks a property `upper` and `lower` used to have. A program that assumed `len(upper(text)) == len(text)` is now wrong, and [SPEC.md](SPEC.md) 10.4 says plainly that no library function preserves scalar count.
 
 **Status:** Accepted. Specified in [SPEC.md](SPEC.md) 10.4 and [STDLIB.md](STDLIB.md) 7.
+
+## D025: Optional Types, With `some` and One-`if` Narrowing
+
+**Decision:** `T?` is a type. `none` is the only literal of an optional type and takes its type from context; `some(value)` is the only way to build a present one. Exactly three operations are permitted — compare to `none`, compare to another `T?`, and narrow — and narrowing happens through a condition that is exactly `x != none` on a variable, inside a single `if`. `T?` may not be a `List` element or a `Dict` key or value. An optional occupies one machine word, and no layout is promised.
+
+**Reason:** This resolves U8, which four library functions were working around: `file_exists` with `read_file`, `can_parse_int` with `parse_int`, `can_parse_float` with `parse_float`, and `contains` with `index_of`. Each pair is two calls doing one job, and each carries a race or a redundancy the type system could not remove.
+
+Three choices in it are worth recording, because [PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTIONAL-TYPES.md) did not settle them.
+
+**`some` had to be added.** The proposal said `none` is the only literal and that no implicit conversion exists, and then never said how a program builds a present optional. Without `some`, a function declared `-> Int?` could return `none` or something it was handed, and nothing else — the type would be unusable in a program's own code. `some` keeps the no-conversion rule and makes the type complete.
+
+**`T?` is excluded from containers.** Narrowing applies to a variable, so `if xs[0] != none:` narrows nothing and a `List<Int?>` would be a container you can fill and test but never read out of. Permitting that is worse than forbidding it, and the error says so.
+
+**An optional is one word.** For `String?`, `List?`, and `Dict?` the word is the reference itself and `none` is zero, so an optional reference costs nothing. For `Int?`, `Float?`, and `Bool?` the word points at a small reference-counted cell, pooled like strings and lists, because the alternative — a second machine word everywhere — would have meant aggregate values in an IR built on single words and would have touched every stage of the compiler. 23.5 publishes the cost model rather than the layout.
+
+**Trade-off:** `some(5)` may allocate, which `Int?` in a language with a second word would not. The allocation is pooled and the cell is immutable, so sharing is invisible, but a hot loop should narrow once rather than re-wrap. The specification says this in 23.5 instead of hiding it.
+
+The narrowing rule is also the first flow-sensitive rule in the type checker, and the door does not close again. It is deliberately the smallest one that works: a single `if`, a variable rather than an expression, no chaining through `and`, and an `else` narrowing only when there is one arm.
+
+One consequence worth noting: forbidding assignment to a narrowed variable, which looked like a type-system tidiness rule, turns out to be what makes the implementation sound. A narrowed read of a `String?` hands back the reference the optional holds without retaining it; if the variable could be reassigned inside the block, that reference could be released while still in use.
+
+**Status:** Accepted. Resolves U8. Specified in [SPEC.md](SPEC.md) 23, with amendments to 2.7 and 16.

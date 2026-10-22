@@ -207,6 +207,7 @@ impl Parser<'_> {
             TokenKind::Str(value) => ExprKind::Str(value.clone()),
             TokenKind::True => ExprKind::Bool(true),
             TokenKind::False => ExprKind::Bool(false),
+            TokenKind::NoneLiteral => ExprKind::None,
             TokenKind::Identifier => ExprKind::Name(self.source[span.start..span.end].to_string()),
             _ => {
                 self.error_here("an expression");

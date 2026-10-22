@@ -102,7 +102,7 @@ A `#` inside a string literal is ordinary text.
 The complete keyword list for the initial version:
 
 ```
-and  break  continue  else  false  for  function  if  import  in  not  or  return  true  while
+and  break  continue  else  false  for  function  if  import  in  none  not  or  return  true  while
 ```
 
 Keywords are lowercase and case-sensitive. `If` and `FUNCTION` are ordinary identifiers, not keywords. This differs deliberately from built-in type names, which are case-insensitive (3.2).
@@ -1007,7 +1007,7 @@ These are named here only to record that they are deliberately absent from the i
 - **Concurrency.** No threads, no async/await, no memory model. The runtime promises no thread safety for mutable collections.
 - **User-defined types**, generics, interfaces, and operator overloading.
 - **Exceptions**, `try`/`catch`, and error values.
-- **Method-call syntax and member access** (6.9), **optional/nullable types** (U8), **integer division** (6.2), **conditional expressions** (8.1), **ranges** (8.3), and **nested functions** (5.1).
+- **Method-call syntax and member access** (6.9), **integer division** (6.2), **conditional expressions** (8.1), **ranges** (8.3), and **nested functions** (5.1).
 
 Adding any of these is a language change governed by section 20.
 
@@ -1073,6 +1073,7 @@ Identifiers are stable. A resolved question keeps its number and is listed below
 | **U6** — mutual recursion | Supported; signatures are collected before bodies are checked, and only a genuinely circular return type needs an explicit annotation (5.5, 8.5) | [DECISIONS.md](DECISIONS.md) D019 |
 | **U7** — stack exhaustion and out-of-memory | Both are runtime errors with diagnostics and no source location; the thresholds are implementation-defined (5.5, 15.2) | [DECISIONS.md](DECISIONS.md) D022 |
 | **U4** — method-call syntax versus functions | Functions only. There is no member-access expression and no method syntax (6.9, 11.2, 16) | [DECISIONS.md](DECISIONS.md) D023 |
+| **U8** — representing absence | `T?`, with `none`, `some`, and narrowing through a single `if` (23) | [DECISIONS.md](DECISIONS.md) D025 |
 
 The shadowing question that D011 settled was never a numbered entry here; it is recorded in [DECISIONS.md](DECISIONS.md) D011 and specified in 9.3 and 9.6.
 
@@ -1093,16 +1094,6 @@ Alternatives: index by scalar and accept O(n), with `for` as the fast path; inde
 Alternatives: an explicit `global` declaration inside the function that assigns; mutable-reference parameters; keep the restriction and rely on reference-typed parameters; allow module-level assignment from functions and accept the readability cost.
 
 **Blocks:** realistic Phase 5 programs. Needed before the benchmark suite in Phase 8, which will want shared state.
-
-### U8 — Representing absence
-
-12.4 makes a missing dictionary key a runtime error, because the type system cannot express "a value or nothing". The same gap blocks safe parsing and safe lookup generally.
-
-Alternatives: an `Option`-like built-in parameterized type, which is a real type-system feature; multiple return values; a lookup function taking a default value, which needs no new types and covers most cases; keep errors only.
-
-**Blocks:** the standard-library error strategy, section 17.
-
----
 
 ## 22. Modules and Imports
 
@@ -1181,7 +1172,73 @@ The compiler discovers the whole program from the entry file by following import
 
 ---
 
-## 23. Document Status
+## 23. Optional Types
+
+A type may be suffixed with `?`. `Int?` is the type of a value that is either an `Int` or absent.
+
+### 23.1 `none` and `some`
+
+`none` is a keyword (2.7) and the only literal of an optional type. It has no type of its own and takes the type its context requires, exactly as an empty list literal does (11.4). `x = none` without an annotation is a compile-time error.
+
+`some(value)` is the only way to build a present optional. It is a built-in, not a conversion: `x: Int? = 5` is a compile-time error, because 4.1 admits no implicit conversion and `Int` and `Int?` are different types.
+
+```dovk
+missing: Int? = none
+found: Int? = some(42)
+```
+
+`some` rejects an argument that is already optional, so `T??` cannot be built, and `T??` is a syntax error as a type. Nesting adds no expressiveness — there is one way to be absent — and it would make narrowing ambiguous.
+
+### 23.2 Where `T?` may appear
+
+`T?` is a type, so it appears wherever a type appears (3.1): after `:` and after `->`. A parameter and a return type may both be optional.
+
+`T?` may **not** be a `List` element, a `Dict` key, or a `Dict` value. The reason is 23.4: narrowing applies to a variable, so an optional element could be tested but never read, and a container whose values cannot be got out of it is a trap rather than a feature. `T?` is excluded as a `Dict` key for the reason 12.2 excludes `Float`.
+
+### 23.3 What may be done with an optional
+
+Exactly three things:
+
+1. **Compare it to `none`** with `==` or `!=`, which yields a `Bool`.
+2. **Compare it to another `T?`** with `==` or `!=`, if `T` supports equality (13). Two `none`s are equal; `none` and a present value are not; two present values compare their contents.
+3. **Narrow it** to `T` (23.4).
+
+Everything else is a compile-time error. `Int?` is not a number, so `found + 1` does not compile; `print(found)` does not compile; ordering does not apply, because there is no defensible place to sort `none`.
+
+### 23.4 Narrowing
+
+An `if` whose condition is exactly `x != none`, where `x` names a variable of type `T?`, gives `x` the type `T` inside that block.
+
+```dovk
+found: Int? = find(line, "=")
+
+if found != none:
+    print(found)        # found is Int here
+else:
+    print(0)            # found is Int? here, and unusable
+```
+
+The rules that keep this honest:
+
+- Narrowing applies to a **variable**, not an expression. `if f(x) != none:` narrows nothing, because there is no binding to narrow.
+- Narrowing is not a declaration, so it does not interact with 9.3's shadowing ban. The variable's declared type is unchanged outside the block.
+- A narrowed variable **may not be assigned inside the narrowed block**. Assigning would have to widen the type mid-block or reject a legal `T?`, and both are worse than the restriction. This mirrors 8.3's rule for a loop variable.
+- `x == none` narrows the **else** branch, and only when the `if` has a single arm. With `else if` arms, which branch a narrowing would apply to is not obvious enough to be worth a rule.
+- `and` does not chain narrowings. `if a != none and b != none:` narrows neither. Making it work means tracking narrowing through short-circuit evaluation, which is a larger change than the rest of this section combined.
+
+This is the smallest narrowing rule that makes optionals usable, and it is deliberately not flow-sensitive beyond a single `if`.
+
+### 23.5 Representation
+
+An optional occupies one machine word. A program cannot observe how, and no part of this specification promises a layout.
+
+What is specified is the cost model: constructing a present optional of a reference type (3.4) allocates nothing, and constructing one of `Int`, `Float`, or `Bool` may allocate. A program in a hot loop should narrow once and work with `T`.
+
+> Settled as D025 in [DECISIONS.md](DECISIONS.md).
+
+---
+
+## 24. Document Status
 
 This is the language contract to implement against. Sections are implemented to differing degrees, and [ROADMAP.md](ROADMAP.md) records how far each phase has got; where the implementation and this document disagree, this document is right and the implementation is a bug.
 

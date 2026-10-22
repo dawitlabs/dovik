@@ -19,6 +19,8 @@ pub type DictRef = Rc<RefCell<HashMap<DictKey, Value>>>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Unit,
+    Absent,
+    Present(Rc<Value>),
     Int(i64),
     Float(f64),
     Bool(bool),
@@ -37,6 +39,21 @@ pub enum DictKey {
 impl Value {
     pub fn str(text: impl Into<Rc<str>>) -> Self {
         Self::Str(text.into())
+    }
+
+    pub fn some(value: Value) -> Self {
+        Self::Present(Rc::new(value))
+    }
+
+    pub fn unwrapped(&self) -> Self {
+        match self {
+            Self::Present(inner) => (**inner).clone(),
+            other => other.clone(),
+        }
+    }
+
+    pub fn is_absent(&self) -> bool {
+        matches!(self, Self::Absent)
     }
 
     pub fn list(items: Vec<Value>) -> Self {
@@ -98,6 +115,7 @@ impl Value {
             Type::Str => Self::str(""),
             Type::List(_) => Self::list(Vec::new()),
             Type::Dict(..) => Self::dict(HashMap::new()),
+            Type::Optional(_) => Self::Absent,
             _ => Self::Unit,
         }
     }
@@ -107,6 +125,8 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unit => Ok(()),
+            Self::Absent => write!(f, "none"),
+            Self::Present(inner) => write!(f, "{inner}"),
             Self::Int(value) => write!(f, "{value}"),
             Self::Bool(value) => write!(f, "{value}"),
             Self::Str(text) => write!(f, "{text}"),

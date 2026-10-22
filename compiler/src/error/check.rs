@@ -40,6 +40,9 @@ pub enum TypeErrorKind {
     MissingReturn { name: String, declared: Type },
     CannotInferReturnType(String),
     FoldedCheckFailed(crate::ir::RuntimeError),
+    CannotInferNone,
+    AssignToNarrowed(String),
+    OptionalInsideCollection(Type),
 }
 
 impl fmt::Display for TypeErrorKind {
@@ -145,6 +148,18 @@ impl fmt::Display for TypeErrorKind {
                 f,
                 "this expression always fails at runtime: {error}"
             ),
+            Self::CannotInferNone => write!(
+                f,
+                "`none` has no type of its own; annotate the variable, as in `x: Int? = none`"
+            ),
+            Self::AssignToNarrowed(name) => write!(
+                f,
+                "`{name}` is narrowed inside this block and cannot be assigned here"
+            ),
+            Self::OptionalInsideCollection(found) => write!(
+                f,
+                "`{found}` cannot be a `List` or `Dict` element: an optional element could be tested but never read"
+            ),
         }
     }
 }
@@ -181,6 +196,9 @@ impl TypeErrorKind {
             Self::MissingReturn { .. } => "DVK4027",
             Self::CannotInferReturnType(_) => "DVK4028",
             Self::FoldedCheckFailed(_) => "DVK4029",
+            Self::CannotInferNone => "DVK4030",
+            Self::AssignToNarrowed(_) => "DVK4031",
+            Self::OptionalInsideCollection(_) => "DVK4032",
         }
     }
 }

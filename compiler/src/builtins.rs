@@ -1,6 +1,6 @@
 use crate::types::Type;
 
-pub const NAMES: [&str; 41] = [
+pub const NAMES: [&str; 42] = [
     "print",
     "len",
     "to_int",
@@ -42,6 +42,7 @@ pub const NAMES: [&str; 41] = [
     "create_dir",
     "remove_dir",
     "remove_file",
+    "some",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,6 +88,7 @@ pub enum Builtin {
     CreateDir,
     RemoveDir,
     RemoveFile,
+    Some,
 }
 
 impl Builtin {
@@ -133,6 +135,7 @@ impl Builtin {
             "create_dir" => Self::CreateDir,
             "remove_dir" => Self::RemoveDir,
             "remove_file" => Self::RemoveFile,
+            "some" => Self::Some,
             _ => return None,
         })
     }
@@ -180,6 +183,7 @@ impl Builtin {
             Self::CreateDir => "create_dir",
             Self::RemoveDir => "remove_dir",
             Self::RemoveFile => "remove_file",
+            Self::Some => "some",
         }
     }
 
@@ -242,6 +246,10 @@ impl Builtin {
             Self::RemoveAt => match first {
                 Type::List(item) => (**item).clone(),
                 _ => Type::Unknown,
+            },
+            Self::Some => match first {
+                Type::Unknown => Type::Unknown,
+                other => Type::Optional(Box::new(other.clone())),
             },
         }
     }

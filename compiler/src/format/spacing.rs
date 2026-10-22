@@ -145,6 +145,7 @@ pub(super) fn keyword(kind: &TokenKind) -> &'static str {
         TokenKind::Star => "*",
         TokenKind::Slash => "/",
         TokenKind::Percent => "%",
+        TokenKind::Question => "?",
         TokenKind::Eq => "=",
         TokenKind::EqEq => "==",
         TokenKind::BangEq => "!=",

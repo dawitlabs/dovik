@@ -130,6 +130,14 @@ impl Interpreter<'_> {
                 let string = self.value(string, frame);
                 frame.registers[*dest] = Value::Int(runtime::byte_len(string.as_str()));
             }
+            InstKind::OptionalSome { dest, value, .. } => {
+                let value = self.value(value, frame);
+                frame.registers[*dest] = Value::some(value);
+            }
+            InstKind::OptionalGet { dest, value, .. } => {
+                let value = self.value(value, frame);
+                frame.registers[*dest] = value.unwrapped();
+            }
             InstKind::ListNew { dest, items, .. } => {
                 let items: Vec<Value> = items.iter().map(|item| self.value(item, frame)).collect();
                 frame.registers[*dest] = Value::list(items);

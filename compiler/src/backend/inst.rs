@@ -114,6 +114,32 @@ impl Emitter<'_> {
                     "  %r{dest} = call i64 @dovik_str_byte_len(i64 {target})"
                 ));
             }
+            InstKind::OptionalSome { dest, value, inner } => {
+                let word = self.as_word(value, inner);
+
+                match super::ownership::is_reference(inner) {
+                    true => {
+                        let tag = tag_of(inner);
+                        self.line(&format!("  call void @dovik_retain(i8 {tag}, i64 {word})"));
+                        self.line(&format!("  %r{dest} = add i64 {word}, 0"));
+                    }
+                    false => self.line(&format!(
+                        "  %r{dest} = call i64 @dovik_cell_new(i64 {word})"
+                    )),
+                }
+            }
+            InstKind::OptionalGet { dest, value, inner } => {
+                let word = literal(value);
+
+                match super::ownership::is_reference(inner) {
+                    true => self.line(&format!("  %r{dest} = add i64 {word}, 0")),
+                    false => {
+                        let raw = self.next_temp();
+                        self.line(&format!("  {raw} = call i64 @dovik_cell_get(i64 {word})"));
+                        self.from_word(*dest, &raw, inner);
+                    }
+                }
+            }
             InstKind::ListNew { .. }
             | InstKind::ListGet { .. }
             | InstKind::ListSet { .. }
@@ -222,16 +248,30 @@ impl Emitter<'_> {
         }
     }
     fn compare(&mut self, dest: usize, op: CompareOp, ty: &Type, lhs: &Value, rhs: &Value) {
-        let structural = matches!(ty, Type::Str | Type::List(_) | Type::Dict(..));
+        let structural = matches!(
+            ty,
+            Type::Str | Type::List(_) | Type::Dict(..) | Type::Optional(_)
+        );
 
         if structural && matches!(op, CompareOp::Eq | CompareOp::Ne) {
-            let tag = tag_of(ty);
             let left = self.as_word(lhs, ty);
             let right = self.as_word(rhs, ty);
             let byte = self.next_temp();
-            self.line(&format!(
-                "  {byte} = call i8 @dovik_eq(i8 {tag}, i64 {left}, i64 {right})"
-            ));
+
+            match ty {
+                Type::Optional(inner) => {
+                    let tag = tag_of(inner);
+                    self.line(&format!(
+                        "  {byte} = call i8 @dovik_optional_eq(i8 {tag}, i64 {left}, i64 {right})"
+                    ));
+                }
+                _ => {
+                    let tag = tag_of(ty);
+                    self.line(&format!(
+                        "  {byte} = call i8 @dovik_eq(i8 {tag}, i64 {left}, i64 {right})"
+                    ));
+                }
+            }
             let predicate = match op {
                 CompareOp::Eq => "ne",
                 _ => "eq",

@@ -288,7 +288,7 @@ fn float_overflow_is_rejected() {
 
 #[test]
 fn errors_do_not_stop_the_scan() {
-    let source = "a = ? b = 1\n";
+    let source = "a = @ b = 1\n";
     let (tokens, errs) = lex(source);
     assert_eq!(errs.len(), 1);
     assert_eq!(

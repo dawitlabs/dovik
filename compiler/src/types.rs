@@ -11,6 +11,7 @@ pub enum Type {
     Unit,
     List(Box<Type>),
     Dict(Box<Type>, Box<Type>),
+    Optional(Box<Type>),
     Unknown,
 }
 
@@ -27,6 +28,7 @@ impl Type {
                 Box::new(Self::from_node(key)),
                 Box::new(Self::from_node(value)),
             ),
+            TypeKind::Optional(inner) => Self::Optional(Box::new(Self::from_node(inner))),
         }
     }
 
@@ -50,9 +52,21 @@ impl Type {
         matches!(self, Self::Int | Self::Float | Self::Str | Self::Unknown)
     }
 
+    pub fn is_optional(&self) -> bool {
+        matches!(self, Self::Optional(_))
+    }
+
+    pub fn without_option(&self) -> Self {
+        match self {
+            Self::Optional(inner) => (**inner).clone(),
+            other => other.clone(),
+        }
+    }
+
     pub fn matches(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Unknown, _) | (_, Self::Unknown) => true,
+            (Self::Optional(a), Self::Optional(b)) => a.matches(b),
             (Self::List(a), Self::List(b)) => a.matches(b),
             (Self::Dict(ak, av), Self::Dict(bk, bv)) => ak.matches(bk) && av.matches(bv),
             _ => self == other,
@@ -62,7 +76,7 @@ impl Type {
     pub fn mentions_unit(&self) -> bool {
         match self {
             Self::Unit => true,
-            Self::List(item) => item.mentions_unit(),
+            Self::List(item) | Self::Optional(item) => item.mentions_unit(),
             Self::Dict(key, value) => key.mentions_unit() || value.mentions_unit(),
             _ => false,
         }
@@ -79,6 +93,7 @@ impl fmt::Display for Type {
             Self::Unit => write!(f, "Unit"),
             Self::List(item) => write!(f, "List<{item}>"),
             Self::Dict(key, value) => write!(f, "Dict<{key}, {value}>"),
+            Self::Optional(inner) => write!(f, "{inner}?"),
             Self::Unknown => write!(f, "<unknown>"),
         }
     }

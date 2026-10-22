@@ -10,7 +10,7 @@ pub(crate) struct Plan {
 }
 
 pub(crate) fn is_reference(ty: &Type) -> bool {
-    matches!(ty, Type::Str | Type::List(_) | Type::Dict(..))
+    matches!(ty, Type::Str | Type::List(_) | Type::Dict(..) | Type::Optional(_))
 }
 
 pub(crate) fn plan(function: &Function, block: &Block) -> Plan {
@@ -58,6 +58,7 @@ pub(crate) fn owned_result(kind: &InstKind) -> Option<RegId> {
         | InstKind::ListNew { dest, .. }
         | InstKind::DictNew { dest, .. } => Some(*dest),
         InstKind::StringNext { scalar, .. } => Some(*scalar),
+        InstKind::OptionalSome { dest, .. } => Some(*dest),
         InstKind::Call { dest, .. } => *dest,
         InstKind::Builtin { dest, which, .. } => match which {
             Builtin::ToString
@@ -114,6 +115,7 @@ pub(crate) fn reads(kind: &InstKind) -> HashSet<RegId> {
             note(offset);
         }
         InstKind::StringByteLen { string, .. } => note(string),
+        InstKind::OptionalSome { value, .. } | InstKind::OptionalGet { value, .. } => note(value),
         InstKind::ListNew { items, .. } => items.iter().for_each(&mut note),
         InstKind::ListGet { list, index, .. } => {
             note(list);

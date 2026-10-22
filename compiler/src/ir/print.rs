@@ -123,6 +123,12 @@ impl fmt::Display for InstKind {
             Self::StringByteLen { dest, string } => {
                 write!(f, "r{dest} = string.byte_len {string}")
             }
+            Self::OptionalSome { dest, value, inner } => {
+                write!(f, "r{dest} = optional.some [{inner}] {value}")
+            }
+            Self::OptionalGet { dest, value, inner } => {
+                write!(f, "r{dest} = optional.get [{inner}] {value}")
+            }
             Self::ListNew { dest, element, items } => {
                 write!(f, "r{dest} = list.new [{element}] {}", list(items))
             }

@@ -156,7 +156,11 @@ impl Resolver {
 
     pub(crate) fn resolve_expr(&mut self, expr: &Expr) {
         match &expr.kind {
-            ExprKind::Int(_) | ExprKind::Float(_) | ExprKind::Str(_) | ExprKind::Bool(_) => {}
+            ExprKind::None
+            | ExprKind::Int(_)
+            | ExprKind::Float(_)
+            | ExprKind::Str(_)
+            | ExprKind::Bool(_) => {}
             ExprKind::Name(name) => self.resolve_name(name, expr.span),
             ExprKind::Unary { operand, .. } => self.resolve_expr(operand),
             ExprKind::Binary { left, right, .. } => {

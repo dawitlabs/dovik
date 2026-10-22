@@ -163,7 +163,10 @@ pub(crate) fn read_registers(kind: &mut InstKind) -> Vec<RegId> {
 
 fn operands(kind: &mut InstKind) -> Vec<&mut Value> {
     match kind {
-        InstKind::StoreLocal { value, .. } | InstKind::StoreGlobal { value, .. } => vec![value],
+        InstKind::StoreLocal { value, .. }
+        | InstKind::StoreGlobal { value, .. }
+        | InstKind::OptionalSome { value, .. }
+        | InstKind::OptionalGet { value, .. } => vec![value],
         InstKind::IntArith { lhs, rhs, .. }
         | InstKind::FloatArith { lhs, rhs, .. }
         | InstKind::IntRem { lhs, rhs, .. }

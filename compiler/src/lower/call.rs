@@ -51,6 +51,14 @@ impl Lowerer<'_> {
 
         let argument_type = self.typed.type_of(args[0].span);
 
+        if name == "some" {
+            let inner = self.typed.type_of(args[0].span);
+            let value = self.lower_expr(&args[0]);
+            let dest = self.register(ty);
+            self.emit(ir::InstKind::OptionalSome { dest, value, inner }, span);
+            return Some(ir::Value::Reg(dest));
+        }
+
         match name {
             "print" => {
                 let value = self.lower_expr(&args[0]);

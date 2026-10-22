@@ -113,6 +113,8 @@ pub enum InstKind {
         lhs: Value,
         rhs: Value,
     },
+    OptionalSome { dest: RegId, value: Value, inner: Type },
+    OptionalGet { dest: RegId, value: Value, inner: Type },
     IntRem { dest: RegId, lhs: Value, rhs: Value },
     FloatDiv { dest: RegId, lhs: Value, rhs: Value },
     IntNeg {

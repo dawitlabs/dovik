@@ -7,6 +7,7 @@ pub(crate) const TAG_BOOL: u8 = 2;
 pub(crate) const TAG_STR: u8 = 3;
 pub(crate) const TAG_LIST: u8 = 4;
 pub(crate) const TAG_DICT: u8 = 5;
+pub(crate) const TAG_CELL: u8 = 6;
 
 pub(crate) fn llvm_type(ty: &Type) -> &'static str {
     match ty {
@@ -24,6 +25,12 @@ pub(crate) fn tag_of(ty: &Type) -> u8 {
         Type::Str => TAG_STR,
         Type::List(_) => TAG_LIST,
         Type::Dict(..) => TAG_DICT,
+        Type::Optional(inner) => match inner.as_ref() {
+            Type::Str => TAG_STR,
+            Type::List(_) => TAG_LIST,
+            Type::Dict(..) => TAG_DICT,
+            _ => TAG_CELL,
+        },
         _ => TAG_INT,
     }
 }

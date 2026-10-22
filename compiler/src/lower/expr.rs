@@ -9,6 +9,7 @@ impl Lowerer<'_> {
         let ty = self.typed.type_of(expr.span);
 
         match &expr.kind {
+            ExprKind::None => ir::Value::Int(0),
             ExprKind::Int(value) => ir::Value::Int(*value as i64),
             ExprKind::Float(value) => ir::Value::Float(*value),
             ExprKind::Bool(value) => ir::Value::Bool(*value),
@@ -29,19 +30,38 @@ impl Lowerer<'_> {
     }
 
     fn lower_name(&mut self, name: &str, span: Span, ty: Type) -> ir::Value {
-        let dest = self.register(ty);
+        let declared = self.type_of_binding(span);
+        let narrowed = declared.is_optional() && !ty.is_optional();
+
+        let loaded = match narrowed {
+            true => self.register(declared.clone()),
+            false => self.register(ty.clone()),
+        };
 
         match self.place_of(span, name) {
             Place::Local(local) => {
-                self.emit(ir::InstKind::LoadLocal { dest, local }, span);
-                ir::Value::Reg(dest)
+                self.emit(ir::InstKind::LoadLocal { dest: loaded, local }, span);
             }
             Place::Global(global) => {
-                self.emit(ir::InstKind::LoadGlobal { dest, global }, span);
-                ir::Value::Reg(dest)
+                self.emit(ir::InstKind::LoadGlobal { dest: loaded, global }, span);
             }
-            Place::Missing => ir::Value::Int(0),
+            Place::Missing => return ir::Value::Int(0),
         }
+
+        if !narrowed {
+            return ir::Value::Reg(loaded);
+        }
+
+        let dest = self.register(ty);
+        self.emit(
+            ir::InstKind::OptionalGet {
+                dest,
+                value: ir::Value::Reg(loaded),
+                inner: declared.without_option(),
+            },
+            span,
+        );
+        ir::Value::Reg(dest)
     }
 
     fn lower_unary(&mut self, op: UnaryOp, operand: &Expr, span: Span, ty: Type) -> ir::Value {

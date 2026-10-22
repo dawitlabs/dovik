@@ -134,6 +134,7 @@ fn accepts_first(builtin: Builtin, found: &Type) -> bool {
         Builtin::Assert => *found == Type::Bool,
         Builtin::Sort => sortable(found),
         Builtin::ReadInput | Builtin::Now | Builtin::Clock => true,
+        Builtin::Some => !matches!(found, Type::Unit | Type::Optional(_)),
         Builtin::Join => *found == Type::List(Box::new(Type::Str)),
         Builtin::Argument => *found == Type::Int,
         Builtin::ArgumentCount => true,

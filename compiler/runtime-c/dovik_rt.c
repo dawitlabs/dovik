@@ -19,6 +19,7 @@
 #define TAG_STR 3
 #define TAG_LIST 4
 #define TAG_DICT 5
+#define TAG_CELL 6
 
 typedef struct {
     uint8_t tag;
@@ -54,6 +55,12 @@ typedef struct {
     uint64_t val;
 } Entry;
 
+typedef struct Boxed {
+    Header h;
+    uint64_t word;
+    struct Boxed *next_free;
+} Boxed;
+
 typedef struct {
     Header h;
     size_t len;
@@ -73,6 +80,8 @@ static Str *string_pool = NULL;
 static size_t string_pool_len = 0;
 static List *list_pool = NULL;
 static size_t list_pool_len = 0;
+static Boxed *boxed_pool = NULL;
+static size_t boxed_pool_len = 0;
 
 static char out_buffer[1 << 16];
 static size_t out_len = 0;
@@ -210,7 +219,8 @@ static inline Header *header_of(uint8_t tag, uint64_t word) {
     switch (tag) {
         case TAG_STR:
         case TAG_LIST:
-        case TAG_DICT: return (Header *)(uintptr_t)word;
+        case TAG_DICT:
+        case TAG_CELL: return (Header *)(uintptr_t)word;
         default: return NULL;
     }
 }
@@ -237,6 +247,20 @@ __attribute__((noinline, cold)) static void reclaim(uint8_t tag, uint64_t word) 
         }
 
         free(owned->bytes);
+        free(owned);
+        return;
+    }
+
+    if (tag == TAG_CELL) {
+        Boxed *owned = (Boxed *)header;
+
+        if (boxed_pool_len < POOL_LIMIT) {
+            owned->next_free = boxed_pool;
+            boxed_pool = owned;
+            boxed_pool_len += 1;
+            return;
+        }
+
         free(owned);
         return;
     }
@@ -1433,4 +1457,32 @@ void dovik_remove_dir(uint64_t path, uint32_t line, uint32_t column) {
 void dovik_remove_file(uint64_t path, uint32_t line, uint32_t column) {
     Str *name = (Str *)(uintptr_t)path;
     if (unlink(name->bytes) != 0) dovik_trap(6, line, column);
+}
+
+uint64_t dovik_cell_new(uint64_t word) {
+    live_objects += 1;
+
+    if (boxed_pool != NULL) {
+        Boxed *value = boxed_pool;
+        boxed_pool = value->next_free;
+        boxed_pool_len -= 1;
+        value->h.count = 1;
+        value->word = word;
+        return (uint64_t)(uintptr_t)value;
+    }
+
+    Boxed *value = checked_alloc(sizeof(Boxed));
+    value->h.count = 1;
+    value->word = word;
+    return (uint64_t)(uintptr_t)value;
+}
+
+uint64_t dovik_cell_get(uint64_t cell) { return ((Boxed *)(uintptr_t)cell)->word; }
+
+uint8_t dovik_optional_eq(uint8_t inner, uint64_t left, uint64_t right) {
+    if (left == 0 || right == 0) return left == right ? 1 : 0;
+    if (inner >= TAG_STR) return dovik_eq(inner, left, right);
+
+    return dovik_eq(inner, ((Boxed *)(uintptr_t)left)->word,
+                    ((Boxed *)(uintptr_t)right)->word);
 }

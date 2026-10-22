@@ -46,6 +46,7 @@ pub fn check(graph: &Graph, resolution: &Resolution) -> (Typed, Vec<TypeError>) 
         returns: Vec::new(),
         expr_types: HashMap::new(),
         progress: false,
+        narrowed: Vec::new(),
     };
 
     checker.collect_signatures();
@@ -97,6 +98,7 @@ pub(crate) struct Checker<'a> {
     pub(crate) returns: Vec<(Type, Span)>,
     pub(crate) expr_types: HashMap<Span, Type>,
     pub(crate) progress: bool,
+    pub(crate) narrowed: Vec<BindingId>,
 }
 
 impl<'a> Checker<'a> {
@@ -279,7 +281,35 @@ impl<'a> Checker<'a> {
         }
 
         self.reject_invalid_dict_keys(&ty, node.span);
+        self.reject_nested_optionals(&ty, node.span);
         ty
+    }
+
+    fn reject_nested_optionals(&mut self, ty: &Type, span: Span) {
+        match ty {
+            Type::List(item) => match item.is_optional() {
+                true => self.report(
+                    TypeErrorKind::OptionalInsideCollection((**item).clone()),
+                    span,
+                ),
+                false => self.reject_nested_optionals(item, span),
+            },
+            Type::Dict(key, value) => match key.is_optional() || value.is_optional() {
+                true => {
+                    let found = match key.is_optional() {
+                        true => (**key).clone(),
+                        false => (**value).clone(),
+                    };
+                    self.report(TypeErrorKind::OptionalInsideCollection(found), span);
+                }
+                false => {
+                    self.reject_nested_optionals(key, span);
+                    self.reject_nested_optionals(value, span);
+                }
+            },
+            Type::Optional(inner) => self.reject_nested_optionals(inner, span),
+            _ => {}
+        }
     }
 
     pub(crate) fn reject_invalid_dict_keys(&mut self, ty: &Type, span: Span) {

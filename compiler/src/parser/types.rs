@@ -57,7 +57,24 @@ impl Parser<'_> {
             }
         };
 
-        Some(TypeNode { kind, span })
+        let mut node = TypeNode { kind, span };
+
+        while self.at(&TokenKind::Question) {
+            let close = self.span();
+            self.advance();
+
+            if matches!(node.kind, TypeKind::Optional(_)) {
+                self.error_at(ParseErrorKind::NestedOptional, close);
+                return None;
+            }
+
+            node = TypeNode {
+                kind: TypeKind::Optional(Box::new(node)),
+                span: Span::new(span.start, close.end),
+            };
+        }
+
+        Some(node)
     }
 
     fn parse_type_arguments(&mut self) -> Option<Vec<TypeNode>> {
