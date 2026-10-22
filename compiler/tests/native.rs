@@ -229,3 +229,86 @@ fn the_emitted_ir_is_valid() {
         );
     }
 }
+
+fn live_objects_at_exit(source: &str, name: &str) -> i64 {
+    let program = lowered(source, true);
+    let dir = std::env::temp_dir().join("dovik-native-tests");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let ll = dir.join(format!("leak-{name}.ll"));
+    let binary = dir.join(format!("leak-{name}"));
+    std::fs::write(&ll, backend::emit(&program, source)).expect("write ir");
+
+    let build = Command::new("clang")
+        .arg("-O2")
+        .arg("-o")
+        .arg(&binary)
+        .arg(&ll)
+        .arg(runtime_archive())
+        .args(["-lm", "-lpthread", "-ldl"])
+        .output()
+        .expect("clang");
+    assert!(
+        build.status.success(),
+        "clang rejected {name}:\n{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let run = Command::new(&binary)
+        .env("DOVIK_CHECK_LEAKS", "1")
+        .output()
+        .expect("run");
+    assert!(run.status.success(), "{name} exited {:?}", run.status.code());
+
+    let stderr = String::from_utf8_lossy(&run.stderr).to_string();
+    let reported = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix("dovik: "))
+        .and_then(|rest| rest.split_whitespace().next())
+        .unwrap_or("missing");
+
+    reported
+        .parse()
+        .unwrap_or_else(|_| panic!("{name}: no leak report in {stderr:?}"))
+}
+
+#[test]
+fn every_program_frees_everything_it_allocates() {
+    let programs: Vec<(&str, &str)> = CORPUS
+        .iter()
+        .copied()
+        .chain([
+            (
+                "leak_concat_loop",
+                "s = \"\"\nn = 0\nwhile n < 200:\n    s = s + \"x\"\n    n = n + 1\nprint(len(s))\n",
+            ),
+            (
+                "leak_list_churn",
+                "total = 0\nn = 0\nwhile n < 500:\n    xs = [n, n + 1]\n    total = total + xs[0]\n    n = n + 1\nprint(total)\n",
+            ),
+            (
+                "leak_string_param",
+                "function greet(who: String):\n    print(\"hi \" + who)\n\nfor name in [\"a\", \"b\"]:\n    greet(name)\n",
+            ),
+            (
+                "leak_returned_string",
+                "function label(n: Int) -> String:\n    return \"n=\" + to_string(n)\n\nk = 0\nwhile k < 50:\n    print(label(k))\n    k = k + 1\n",
+            ),
+            (
+                "leak_nested_collections",
+                "grid: List<List<Int>> = []\nn = 0\nwhile n < 50:\n    append(grid, [n, n + 1])\n    n = n + 1\nprint(len(grid))\n",
+            ),
+            (
+                "leak_dict_overwrite",
+                "d: Dict<String, String> = {}\nn = 0\nwhile n < 100:\n    d[\"k\"] = to_string(n)\n    n = n + 1\nprint(len(d))\nprint(remove_key(d, \"k\"))\n",
+            ),
+        ])
+        .collect();
+
+    for (name, source) in programs {
+        assert_eq!(
+            live_objects_at_exit(source, name),
+            0,
+            "{name} leaked at exit"
+        );
+    }
+}

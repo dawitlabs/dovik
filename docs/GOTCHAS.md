@@ -260,3 +260,41 @@ the message was widened instead of the list.
 
 If 15.2 later gains a parse error, the code must change in two places that have to
 agree: `RuntimeError::code` in `src/ir/mod.rs` and `code_name` in the runtime.
+
+## Retain and release placement is verified by a test, not by reasoning
+
+`src/backend/ownership.rs` decides which registers hold an owned reference. Producers
+that return a fresh object are owned; `LoadLocal`, `LoadGlobal`, `ListGet` and
+`DictGet` return borrowed. Every owned register is released exactly once, after its
+last use in its own block.
+
+The rule the emitter relies on: **an owned reference register never outlives its
+block.** `lower_for` is the reason that holds — it stores the sequence it iterates into
+a slot and reloads it, because otherwise the list would be produced in the pre-header
+and used in the loop body, and releasing it in the pre-header would free it before the
+first iteration. Any new lowering that lets an owned reference cross a block boundary
+reintroduces that bug.
+
+Two over-releases found this way, both of which crashed rather than leaked:
+
+- Function parameters are stored into their slot by a raw `store` in the entry block,
+  not through `StoreLocal`, so they skip its retain. `release_frame` releases every
+  reference slot at exit, so a `String` parameter was freed while the caller still
+  owned it. The entry block now retains reference parameters explicitly.
+- A dictionary's `String` key is stored as a hash, not a pointer. Releasing a dict
+  dereferenced that hash as an address. Hashed keys carry `TAG_HASHED`, which
+  `dovik_retain` and `dovik_release` ignore, and dict teardown releases only values.
+
+`DOVIK_CHECK_LEAKS=1` makes the runtime print its live-object count at exit;
+`tests/native.rs` asserts it is zero. Keep that test passing and both failure modes
+stay caught.
+
+## String literals are allocated once, not per use
+
+`@str.N` is a `.rodata` byte array. The runtime string for each literal is created once
+at the top of `main` and stored in `@slit.N`, and every use loads that. Creating one per
+use would allocate inside loops, and each would be an owned temporary needing its own
+release.
+
+Literals are therefore borrowed everywhere, and live for the whole program. `main`
+releases them before reporting leaks, so they do not show up as a leak.

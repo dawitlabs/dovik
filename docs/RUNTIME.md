@@ -50,7 +50,9 @@ The compiler should optimize values where doing so preserves language semantics.
 
 Because aliasing is observable, an object can be reachable from several bindings at once, which the memory-management strategy must account for — shared ownership is the normal case, not the exception.
 
-Their concrete representation, allocation strategy, and reclamation strategy remain undecided.
+Their concrete representation and allocation strategy are now implemented:
+a heap object carries a reference count, and the compiler emits retain and release
+around every binding that holds one. See section 11.
 
 The string representation is constrained by an unresolved language question: [SPEC.md](SPEC.md) 10.4 indexes strings by Unicode scalar value over UTF-8 storage, which is O(n) per index. See U3 in [SPEC.md](SPEC.md) section 21 — that question must be settled before the string representation is chosen, not after.
 
@@ -74,8 +76,8 @@ Measurements should use reproducible programs and documented environments.
 
 ## 8. Open Decisions
 
-- Garbage collection versus other automatic memory-management strategies. No algorithm has been chosen, so no document should assume one — including benchmark plans ([BENCHMARKS.md](BENCHMARKS.md)).
-- Cyclic reference handling. [SPEC.md](SPEC.md) section 14 requires that cycles be reclaimable, which rules out plain non-atomic reference counting on its own.
+- Whether reference counting remains the strategy, or is replaced once the language gains features that can build a cycle. See section 11.
+- Cyclic reference handling, once cycles become constructible. They are not today; section 11 explains why.
 - Object layout.
 - String representation — blocked on U3.
 - Collection representation.
@@ -86,3 +88,49 @@ Measurements should use reproducible programs and documented environments.
 ## 9. Status
 
 This document defines goals, not a finalized memory-management implementation. No runtime code exists.
+
+---
+
+## 11. Implemented Strategy: Reference Counting
+
+Every heap object — `String`, `List`, `Dict` — carries a non-atomic reference count.
+The compiler emits a retain where a binding takes ownership and a release where one
+gives it up: a slot store releases what it displaces, a function releases its frame on
+every exit, a container retains what is put into it and releases what it drops, and a
+returned value is retained for the caller.
+
+Counts are non-atomic because Dovik has no concurrency. Adding threads invalidates
+that and nothing else here.
+
+### Why this satisfies section 14 today
+
+[SPEC.md](SPEC.md) section 14 requires that unreachable values, *including those in
+reference cycles*, be eventually reclaimable. Plain reference counting cannot reclaim
+a cycle, so on its face it does not qualify.
+
+It qualifies because the initial language cannot build one. Types are `Int`, `Float`,
+`Bool`, `String`, `List<T>` and `Dict<K, V>`, with no user-defined and no recursive
+types. A cycle needs `T` to transitively contain `List<T>`, which needs an infinitely
+nested type annotation, and no program can write one.
+
+**This is a precondition, not a property of reference counting.** The first feature
+that lets a value reach itself — a named type, a recursive type, a closure capturing
+its own binding, or a reference cell — breaks it, and reclamation has to be revisited
+in the same change. Nothing in the compiler detects this; it is a standing obligation
+on whoever adds such a feature.
+
+### Cost
+
+Measured in [BENCHMARKS.md](BENCHMARKS.md) section 11. Reclaiming memory took the
+string workload from 197 MB to 3 MB and, because it stopped touching 200 MB, from
+173 ms to 19 ms. The allocation-churn workload got ~30% slower: it creates and drops
+200000 short-lived lists, pays retain and release on each, and was never memory-bound.
+That is the honest shape of the trade.
+
+### Verification
+
+`tests/native.rs` compiles programs with `DOVIK_CHECK_LEAKS=1` and asserts the runtime
+reports zero live objects at exit. The suite covers concatenation loops, list churn,
+string parameters, returned strings, nested collections and dictionary overwrites.
+A leak and an over-release both fail it — the second by crashing — which is what makes
+the retain and release placement checkable rather than merely argued.

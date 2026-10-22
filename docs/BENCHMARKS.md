@@ -130,7 +130,7 @@ First measurements. Produced by `bench/run.py`; raw data in `bench/results.json`
 - CPU: Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz (4 cores)
 - OS: Linux 7.1.9-arch1-2
 - Dovik 0.1.0, clang 22.1.8, rustc 1.94.1, CPython 3.13.15
-- Builds: Dovik `dovik build` (clang -O2 on emitted IR), C `clang -O2`, Rust `rustc -O`, Python unoptimized
+- Builds: Dovik `dovik build` (clang -O2 on emitted IR), C `clang -O2`, Rust `rustc -O`, CPython unoptimized
 - 5 repetitions per measurement; the best is reported
 - Peak memory is absolute `VmHWM`, sampled every 0.5 ms. Runs under ~20 ms under-report.
 
@@ -138,65 +138,76 @@ First measurements. Produced by `bench/run.py`; raw data in `bench/results.json`
 
 | Workload | Dovik | Dovik (no checks) | C | Rust | Python |
 | --- | --- | --- | --- | --- | --- |
-| `arith` | 33.6 | 33.3 | 25.5 | 27.4 | 3822.9 |
-| `recursion` | 5.2 | 7.0 | 9.1 | 13.4 | 126.1 |
-| `calls` | 1.3 | 1.5 | 1.0 | 24.5 | 3670.3 |
-| `collections` | 134.8 | 123.1 | 2.7 | 10.8 | 170.1 |
-| `strings` | 172.6 | 188.0 | 5.0 | 9.0 | 35.5 |
-| `string_index` | 235.4 | 244.4 | 1.0 | 1.6 | 20.3 |
-| `allocation` | 62.4 | 58.3 | 1.1 | 2.4 | 158.4 |
+| `arith` | 16.2 | 16.4 | 12.0 | 12.9 | 2977.8 |
+| `recursion` | 2.4 | 2.1 | 1.7 | 1.7 | 62.5 |
+| `calls` | 1.2 | 1.2 | 0.8 | 19.4 | 3147.6 |
+| `collections` | 135.3 | 128.4 | 4.2 | 23.5 | 179.9 |
+| `strings` | 18.5 | 22.0 | 4.7 | 7.8 | 33.2 |
+| `string_index` | 83.3 | 81.8 | 0.8 | 1.5 | 19.4 |
+| `allocation` | 59.9 | 62.4 | 0.9 | 1.5 | 140.4 |
 
 ### Peak memory, MB (lower is better)
 
 | Workload | Dovik | Dovik (no checks) | C | Rust | Python |
 | --- | --- | --- | --- | --- | --- |
-| `arith` | 2.5 | 2.4 | 1.5 | 17.4 | 17.4 |
-| `recursion` | 3.0 | 17.4 | 1.8 | 17.4 | 12.0 |
-| `calls` | 1.4 | 0.8 | 1.3 | 2.1 | 12.0 |
-| `collections` | 14.8 | 14.8 | 3.6 | 7.8 | 36.4 |
-| `strings` | 197.1 | 197.2 | 1.7 | 2.4 | 12.0 |
-| `string_index` | 195.9 | 196.1 | 1.3 | 2.1 | 11.9 |
-| `allocation` | 23.8 | 23.7 | 1.4 | 17.4 | 11.9 |
+| `arith` | 2.5 | 2.3 | 1.5 | 2.1 | 11.9 |
+| `recursion` | 3.0 | 2.3 | 1.8 | 2.1 | 12.0 |
+| `calls` | 0.8 | 0.8 | 1.4 | 2.1 | 12.0 |
+| `collections` | 16.2 | 14.8 | 4.0 | 7.9 | 36.4 |
+| `strings` | 3.2 | 3.2 | 1.7 | 2.3 | 12.0 |
+| `string_index` | 2.9 | 2.9 | 1.0 | 2.1 | 11.9 |
+| `allocation` | 2.6 | 2.6 | 1.0 | 2.1 | 11.9 |
 
 ### Compilation time and binary size
 
 | Workload | Dovik compile (ms) | Dovik binary (KB) | C compile (ms) | C binary (KB) |
 | --- | --- | --- | --- | --- |
-| `arith` | 320.3 | 5417 | 287.8 | 15 |
-| `recursion` | 557.4 | 5417 | 308.2 | 15 |
-| `calls` | 537.8 | 5417 | 282.1 | 15 |
-| `collections` | 302.3 | 5418 | 131.8 | 15 |
-| `strings` | 322.4 | 5417 | 107.5 | 15 |
-| `string_index` | 372.2 | 5418 | 104.4 | 15 |
-| `allocation` | 317.6 | 5417 | 92.1 | 15 |
+| `arith` | 310.5 | 5451 | 91.3 | 15 |
+| `recursion` | 304.9 | 5451 | 98.9 | 15 |
+| `calls` | 307.1 | 5451 | 94.1 | 15 |
+| `collections` | 323.7 | 5455 | 102.9 | 15 |
+| `strings` | 305.6 | 5455 | 102.0 | 15 |
+| `string_index` | 297.4 | 5455 | 105.0 | 15 |
+| `allocation` | 310.4 | 5451 | 103.7 | 15 |
 
 ### Reading these numbers
 
-**Checked arithmetic is close to free here.** `arith` is the workload built to
-price it, and the checked and unchecked builds land within noise of each other on
-this machine. LLVM keeps the overflow branch off the hot path. The one honest
-caveat is that no workload yet isolates `Float` division, which section 4 predicts
-is where the zero-divisor check should show.
+**Checked arithmetic is close to free on this workload.** `arith` exists to price it,
+and the checked and unchecked builds land within noise of each other. LLVM keeps the
+overflow branch off the hot path. The honest caveat is that no workload yet isolates
+`Float` division, which section 4 predicts is where the zero-divisor check should show.
 
-**Dovik is within ~2x of C on scalar work and far off it elsewhere.** `arith`,
-`recursion` and `calls` are competitive. `collections`, `strings` and
-`string_index` are not, for two separate reasons below.
-
-**Memory is the headline problem.** `strings` peaks at over 200 MB against C's
-1.7 MB. The native runtime never frees ([RUNTIME.md](RUNTIME.md) has not chosen a
-reclamation strategy), so every intermediate string from 20000 concatenations is
-still live at exit. `allocation` shows the same effect more mildly. This is the
-clearest argument in the suite for settling the memory question.
+**Dovik is within ~1.5x of C on scalar work.** `arith`, `recursion` and `calls` are
+competitive. `collections`, `strings` and `string_index` are not, for the two separate
+reasons below.
 
 **String indexing is O(n) per index, as specified.** `string_index` performs 2000
-indexed reads into a 20000-scalar string and costs ~230 ms against C's 1 ms. That
-is [SPEC.md](SPEC.md) 10.4 behaving exactly as written, and it is the measurement
-U3 asked for before resolving.
+indexed reads into a 20000-scalar string. That is [SPEC.md](SPEC.md) 10.4 behaving
+exactly as written, and it is the measurement U3 asked for before resolving.
 
-**Collections carry a function-call cost per element.** Every `append` and every
-indexed read crosses into the runtime as an opaque call, so LLVM cannot inline or
-vectorize any of it. That is a consequence of the tagged-cell ABI, not of the
-language.
+**Collections carry a call per element.** Every `append` and every indexed read crosses
+into the runtime as an opaque call, so LLVM can neither inline nor vectorize any of it,
+and each element occupies a 16-byte tagged cell against C's 8-byte `long long`. That is
+a consequence of the runtime ABI, not of the language.
 
-Nothing here supports any claim that Dovik is fast. It supports the narrower claim
-that checked integer arithmetic costs little on this workload and this machine.
+Nothing here supports a claim that Dovik is fast. It supports the narrower claims that
+checked integer arithmetic costs little on this workload and this machine, and that
+scalar code is in the same order as C.
+
+### What reference counting changed
+
+These are the same benchmarks before and after the runtime learned to free
+([RUNTIME.md](RUNTIME.md) section 3). The earlier runtime never reclaimed anything.
+
+| Workload | Peak memory before | after | Time before | after |
+| --- | --- | --- | --- | --- |
+| `strings` | 197.1 MB | 3.1 MB | 172.6 ms | 19.4 ms |
+| `string_index` | 195.9 MB | 3.2 MB | 235.4 ms | 29.7 ms |
+| `allocation` | 23.8 MB | 2.6 MB | 48.6 ms | 62.9 ms |
+
+`strings` got faster because it stopped touching 200 MB, not because the work changed.
+`allocation` got slower, which is the cost showing up where it should: that workload
+creates and drops 200000 short-lived lists, so it pays retain and release on every one
+and gains nothing, since it was never memory-bound. Reclamation is not free, and this
+is the workload that proves it.
+

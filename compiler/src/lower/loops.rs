@@ -31,7 +31,24 @@ impl Lowerer<'_> {
 
     pub(crate) fn lower_for(&mut self, variable: &crate::ast::Ident, iterable: &Expr, body: &[Stmt]) {
         let container = self.typed.type_of(iterable.span);
-        let sequence = self.lower_expr(iterable);
+        let produced = self.lower_expr(iterable);
+        let holder = self.temp_slot("sequence", container.clone());
+        self.emit(
+            ir::InstKind::StoreLocal {
+                local: holder,
+                value: produced,
+            },
+            variable.span,
+        );
+        let loaded = self.register(container.clone());
+        self.emit(
+            ir::InstKind::LoadLocal {
+                dest: loaded,
+                local: holder,
+            },
+            variable.span,
+        );
+        let sequence = ir::Value::Reg(loaded);
         let element = self.type_of_binding(variable.span);
         let item = self.declare_slot(variable.span, &variable.name, element);
 

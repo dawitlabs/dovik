@@ -14,18 +14,40 @@ impl Emitter<'_> {
                 self.line(&format!("  %r{dest} = load {ty}, ptr %s{local}"));
             }
             InstKind::StoreLocal { local, value } => {
-                let ty = llvm_type(&function.locals[*local].ty);
+                let declared = function.locals[*local].ty.clone();
+                let ty = llvm_type(&declared);
                 let operand = self.native(value);
+
+                if !super::ownership::is_reference(&declared) {
+                    return self.line(&format!("  store {ty} {operand}, ptr %s{local}"));
+                }
+
+                let tag = tag_of(&declared);
+                let previous = self.next_temp();
+                self.line(&format!("  {previous} = load i64, ptr %s{local}"));
+                self.line(&format!("  call void @dovik_retain(i8 {tag}, i64 {operand})"));
                 self.line(&format!("  store {ty} {operand}, ptr %s{local}"));
+                self.line(&format!("  call void @dovik_release(i8 {tag}, i64 {previous})"));
             }
             InstKind::LoadGlobal { dest, global } => {
                 let ty = llvm_type(&self.program.globals[*global].ty);
                 self.line(&format!("  %r{dest} = load {ty}, ptr @g{global}"));
             }
             InstKind::StoreGlobal { global, value } => {
-                let ty = llvm_type(&self.program.globals[*global].ty);
+                let declared = self.program.globals[*global].ty.clone();
+                let ty = llvm_type(&declared);
                 let operand = self.native(value);
+
+                if !super::ownership::is_reference(&declared) {
+                    return self.line(&format!("  store {ty} {operand}, ptr @g{global}"));
+                }
+
+                let tag = tag_of(&declared);
+                let previous = self.next_temp();
+                self.line(&format!("  {previous} = load i64, ptr @g{global}"));
+                self.line(&format!("  call void @dovik_retain(i8 {tag}, i64 {operand})"));
                 self.line(&format!("  store {ty} {operand}, ptr @g{global}"));
+                self.line(&format!("  call void @dovik_release(i8 {tag}, i64 {previous})"));
             }
             InstKind::IntArith { dest, op, lhs, rhs } => {
                 self.checked_arith(*dest, *op, lhs, rhs, span)
@@ -164,11 +186,8 @@ impl Emitter<'_> {
             return literal(value);
         };
 
-        let len = self.program.strings[*id].len();
         let temp = self.next_temp();
-        self.line(&format!(
-            "  {temp} = call i64 @dovik_str_new(ptr @str.{id}, i64 {len})"
-        ));
+        self.line(&format!("  {temp} = load i64, ptr @slit.{id}"));
         temp
     }
 

@@ -1,5 +1,9 @@
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::atomic::{AtomicI64, Ordering};
+
+static LIVE: AtomicI64 = AtomicI64::new(0);
 
 pub const TAG_INT: u8 = 0;
 pub const TAG_FLOAT: u8 = 1;
@@ -7,28 +11,118 @@ pub const TAG_BOOL: u8 = 2;
 pub const TAG_STR: u8 = 3;
 pub const TAG_LIST: u8 = 4;
 pub const TAG_DICT: u8 = 5;
+const TAG_HASHED: u8 = 6;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Cell {
+struct Slot {
     tag: u8,
     word: u64,
 }
 
+struct Header {
+    count: Cell<i64>,
+}
+
+impl Header {
+    fn new() -> Self {
+        LIVE.fetch_add(1, Ordering::Relaxed);
+        Self {
+            count: Cell::new(1),
+        }
+    }
+}
+
 struct Str {
+    header: Header,
     bytes: String,
 }
 
 struct List {
-    items: Vec<Cell>,
+    header: Header,
+    items: Vec<Slot>,
 }
 
 struct Dict {
-    entries: HashMap<Cell, Cell>,
-    order: Vec<Cell>,
+    header: Header,
+    entries: HashMap<Slot, Slot>,
+    order: Vec<Slot>,
 }
 
-fn leak<T>(value: T) -> u64 {
+fn allocate<T>(value: T) -> u64 {
     Box::into_raw(Box::new(value)) as u64
+}
+
+fn header(tag: u8, word: u64) -> Option<&'static Header> {
+    if word == 0 {
+        return None;
+    }
+
+    unsafe {
+        match tag {
+            TAG_STR => Some(&borrow::<Str>(word).header),
+            TAG_LIST => Some(&borrow::<List>(word).header),
+            TAG_DICT => Some(&borrow::<Dict>(word).header),
+            _ => None,
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_retain(tag: u8, word: u64) {
+    if let Some(header) = header(tag, word) {
+        header.count.set(header.count.get() + 1);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_release(tag: u8, word: u64) {
+    let Some(header) = header(tag, word) else {
+        return;
+    };
+
+    let remaining = header.count.get() - 1;
+    header.count.set(remaining);
+
+    if remaining > 0 {
+        return;
+    }
+
+    LIVE.fetch_sub(1, Ordering::Relaxed);
+
+    unsafe {
+        match tag {
+            TAG_STR => drop(Box::from_raw(word as *mut Str)),
+            TAG_LIST => {
+                let owned = Box::from_raw(word as *mut List);
+                for item in &owned.items {
+                    dovik_release(item.tag, item.word);
+                }
+            }
+            TAG_DICT => {
+                let owned = Box::from_raw(word as *mut Dict);
+                for value in owned.entries.values() {
+                    dovik_release(value.tag, value.word);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_live_objects() -> i64 {
+    LIVE.load(Ordering::Relaxed)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dovik_report_leaks() {
+    if std::env::var_os("DOVIK_CHECK_LEAKS").is_none() {
+        return;
+    }
+
+    let live = LIVE.load(Ordering::Relaxed);
+    let mut err = std::io::stderr();
+    let _ = writeln!(err, "dovik: {live} live object(s) at exit");
 }
 
 unsafe fn borrow<T>(word: u64) -> &'static mut T {
@@ -77,10 +171,10 @@ pub extern "C" fn dovik_trap(code: u32, line: u32, column: u32) -> ! {
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_print(tag: u8, word: u64) {
     let mut out = std::io::stdout();
-    let _ = writeln!(out, "{}", render(Cell { tag, word }));
+    let _ = writeln!(out, "{}", render(Slot { tag, word }));
 }
 
-fn render(cell: Cell) -> String {
+fn render(cell: Slot) -> String {
     match cell.tag {
         TAG_INT => (cell.word as i64).to_string(),
         TAG_FLOAT => float(f64::from_bits(cell.word)),
@@ -126,7 +220,8 @@ fn float(value: f64) -> String {
 pub extern "C" fn dovik_str_new(bytes: *const u8, len: u64) -> u64 {
     let slice = unsafe { std::slice::from_raw_parts(bytes, len as usize) };
     let owned = String::from_utf8_lossy(slice).into_owned();
-    leak(Str { bytes: owned })
+    allocate(Str {
+        header: Header::new(), bytes: owned })
 }
 
 #[unsafe(no_mangle)]
@@ -134,7 +229,8 @@ pub extern "C" fn dovik_str_concat(left: u64, right: u64) -> u64 {
     let mut joined = String::with_capacity(text(left).len() + text(right).len());
     joined.push_str(text(left));
     joined.push_str(text(right));
-    leak(Str { bytes: joined })
+    allocate(Str {
+        header: Header::new(), bytes: joined })
 }
 
 #[unsafe(no_mangle)]
@@ -154,7 +250,8 @@ pub extern "C" fn dovik_str_scalar_at(word: u64, index: i64, line: u32, column: 
     }
 
     match text(word).chars().nth(index as usize) {
-        Some(scalar) => leak(Str {
+        Some(scalar) => allocate(Str {
+        header: Header::new(),
             bytes: scalar.to_string(),
         }),
         None => dovik_trap(4, line, column),
@@ -168,7 +265,8 @@ pub extern "C" fn dovik_str_next(word: u64, offset: i64, next: *mut i64) -> u64 
 
     if start >= source.len() {
         unsafe { *next = source.len() as i64 };
-        return leak(Str {
+        return allocate(Str {
+        header: Header::new(),
             bytes: String::new(),
         });
     }
@@ -176,13 +274,15 @@ pub extern "C" fn dovik_str_next(word: u64, offset: i64, next: *mut i64) -> u64 
     match source[start..].chars().next() {
         Some(scalar) => {
             unsafe { *next = (start + scalar.len_utf8()) as i64 };
-            leak(Str {
+            allocate(Str {
+        header: Header::new(),
                 bytes: scalar.to_string(),
             })
         }
         None => {
             unsafe { *next = source.len() as i64 };
-            leak(Str {
+            allocate(Str {
+        header: Header::new(),
                 bytes: String::new(),
             })
         }
@@ -200,12 +300,13 @@ pub extern "C" fn dovik_str_cmp(left: u64, right: u64) -> i32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_list_new() -> u64 {
-    leak(List { items: Vec::new() })
+    allocate(List { header: Header::new(), items: Vec::new() })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_list_push(list: u64, tag: u8, word: u64) {
-    unsafe { borrow::<List>(list).items.push(Cell { tag, word }) };
+    dovik_retain(tag, word);
+    unsafe { borrow::<List>(list).items.push(Slot { tag, word }) };
 }
 
 #[unsafe(no_mangle)]
@@ -239,12 +340,16 @@ pub extern "C" fn dovik_list_set(
         dovik_trap(4, line, column);
     }
 
-    items[index as usize] = Cell { tag, word };
+    dovik_retain(tag, word);
+    let previous = items[index as usize];
+    items[index as usize] = Slot { tag, word };
+    dovik_release(previous.tag, previous.word);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_dict_new() -> u64 {
-    leak(Dict {
+    allocate(Dict {
+        header: Header::new(),
         entries: HashMap::new(),
         order: Vec::new(),
     })
@@ -253,13 +358,17 @@ pub extern "C" fn dovik_dict_new() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_dict_set(dict: u64, ktag: u8, kword: u64, vtag: u8, vword: u64) {
     let target = unsafe { borrow::<Dict>(dict) };
-    let key = normalized(Cell {
+    let key = normalized(Slot {
         tag: ktag,
         word: kword,
     });
 
-    if target.entries.insert(key, Cell { tag: vtag, word: vword }).is_none() {
-        target.order.push(key);
+    dovik_retain(vtag, vword);
+    let previous = target.entries.insert(key, Slot { tag: vtag, word: vword });
+
+    match previous {
+        Some(old) => dovik_release(old.tag, old.word),
+        None => target.order.push(key),
     }
 }
 
@@ -272,7 +381,7 @@ pub extern "C" fn dovik_dict_get(
     column: u32,
 ) -> u64 {
     let target = unsafe { borrow::<Dict>(dict) };
-    let key = normalized(Cell {
+    let key = normalized(Slot {
         tag: ktag,
         word: kword,
     });
@@ -288,7 +397,7 @@ pub extern "C" fn dovik_dict_len(dict: u64) -> i64 {
     unsafe { borrow::<Dict>(dict).entries.len() as i64 }
 }
 
-fn normalized(cell: Cell) -> Cell {
+fn normalized(cell: Slot) -> Slot {
     if cell.tag != TAG_STR {
         return cell;
     }
@@ -300,18 +409,18 @@ fn normalized(cell: Cell) -> Cell {
         hashed = hashed.wrapping_mul(1099511628211);
     }
 
-    Cell {
-        tag: TAG_STR,
+    Slot {
+        tag: TAG_HASHED,
         word: hashed,
     }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_eq(tag: u8, left: u64, right: u64) -> u8 {
-    u8::from(equal(Cell { tag, word: left }, Cell { tag, word: right }))
+    u8::from(equal(Slot { tag, word: left }, Slot { tag, word: right }))
 }
 
-fn equal(left: Cell, right: Cell) -> bool {
+fn equal(left: Slot, right: Slot) -> bool {
     match left.tag {
         TAG_STR => text(left.word) == text(right.word),
         TAG_LIST => {
@@ -347,7 +456,8 @@ pub extern "C" fn dovik_list_insert(
         dovik_trap(4, line, column);
     }
 
-    items.insert(index as usize, Cell { tag, word });
+    dovik_retain(tag, word);
+    items.insert(index as usize, Slot { tag, word });
 }
 
 #[unsafe(no_mangle)]
@@ -364,27 +474,29 @@ pub extern "C" fn dovik_list_remove_at(list: u64, index: i64, line: u32, column:
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_dict_has_key(dict: u64, ktag: u8, kword: u64) -> u8 {
     let target = unsafe { borrow::<Dict>(dict) };
-    let key = normalized(Cell { tag: ktag, word: kword });
+    let key = normalized(Slot { tag: ktag, word: kword });
     u8::from(target.entries.contains_key(&key))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_dict_remove_key(dict: u64, ktag: u8, kword: u64) -> u8 {
     let target = unsafe { borrow::<Dict>(dict) };
-    let key = normalized(Cell { tag: ktag, word: kword });
+    let key = normalized(Slot { tag: ktag, word: kword });
 
-    if target.entries.remove(&key).is_none() {
+    let Some(removed) = target.entries.remove(&key) else {
         return 0;
-    }
+    };
 
+    dovik_release(removed.tag, removed.word);
     target.order.retain(|existing| *existing != key);
     1
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dovik_to_string(tag: u8, word: u64) -> u64 {
-    leak(Str {
-        bytes: render(Cell { tag, word }),
+    allocate(Str {
+        header: Header::new(),
+        bytes: render(Slot { tag, word }),
     })
 }
 

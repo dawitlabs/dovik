@@ -1,4 +1,5 @@
 mod builtin;
+pub(crate) mod ownership;
 mod checks;
 mod collection;
 mod inst;
@@ -9,7 +10,8 @@ use std::fmt::Write;
 
 use crate::ir::{BlockId, Function, Program, Terminator};
 use crate::types::Type;
-use value::{escape, llvm_type};
+use ownership::is_reference;
+use value::{escape, llvm_type, tag_of};
 
 const PREAMBLE: &str = r#"declare void @dovik_trap(i32, i32, i32)
 declare void @dovik_print(i8, i64)
@@ -30,6 +32,9 @@ declare void @dovik_dict_set(i64, i8, i64, i8, i64)
 declare i64 @dovik_dict_get(i64, i8, i64, i32, i32)
 declare i64 @dovik_dict_len(i64)
 declare i8 @dovik_eq(i8, i64, i64)
+declare void @dovik_retain(i8, i64)
+declare void @dovik_release(i8, i64)
+declare void @dovik_report_leaks()
 declare void @dovik_list_insert(i64, i64, i8, i64, i32, i32)
 declare i64 @dovik_list_remove_at(i64, i64, i32, i32)
 declare i8 @dovik_dict_has_key(i64, i8, i64)
@@ -84,6 +89,7 @@ impl Emitter<'_> {
             self.line(&format!(
                 "@str.{index} = private unnamed_addr constant [{len} x i8] c\"{encoded}\""
             ));
+            self.line(&format!("@slit.{index} = internal global i64 0"));
         }
 
         for (index, global) in self.program.globals.iter().enumerate() {
@@ -99,7 +105,39 @@ impl Emitter<'_> {
         }
 
         self.line("define i32 @main() {");
+        self.line("entry:");
+
+        for (index, text) in self.program.strings.iter().enumerate() {
+            let len = text.len();
+            let temp = self.next_temp();
+            self.line(&format!(
+                "  {temp} = call i64 @dovik_str_new(ptr @str.{index}, i64 {len})"
+            ));
+            self.line(&format!("  store i64 {temp}, ptr @slit.{index}"));
+        }
+
         self.line(&format!("  call void @dvk{}()", self.program.main));
+
+        for (index, global) in self.program.globals.iter().enumerate() {
+            if !is_reference(&global.ty) {
+                continue;
+            }
+
+            let temp = self.next_temp();
+            self.line(&format!("  {temp} = load i64, ptr @g{index}"));
+            self.line(&format!(
+                "  call void @dovik_release(i8 {}, i64 {temp})",
+                tag_of(&global.ty)
+            ));
+        }
+
+        for index in 0..self.program.strings.len() {
+            let temp = self.next_temp();
+            self.line(&format!("  {temp} = load i64, ptr @slit.{index}"));
+            self.line(&format!("  call void @dovik_release(i8 3, i64 {temp})"));
+        }
+
+        self.line("  call void @dovik_report_leaks()");
         self.line("  ret i32 0");
         self.line("}");
     }
@@ -127,6 +165,13 @@ impl Emitter<'_> {
         for (slot, local) in function.locals[..function.param_count].iter().enumerate() {
             let ty = llvm_type(&local.ty);
             self.line(&format!("  store {ty} %arg{slot}, ptr %s{slot}"));
+
+            if is_reference(&local.ty) {
+                self.line(&format!(
+                    "  call void @dovik_retain(i8 {}, i64 %arg{slot})",
+                    tag_of(&local.ty)
+                ));
+            }
         }
 
         for (slot, local) in function.locals.iter().enumerate().skip(function.param_count) {
@@ -141,26 +186,58 @@ impl Emitter<'_> {
             self.label = format!("b{block}");
             self.line(&format!("{}:", self.label.clone()));
 
-            for item in &body.instructions {
+            let plan = ownership::plan(function, body);
+
+            for (index, item) in body.instructions.iter().enumerate() {
                 self.instruction(function, item);
+                self.release_registers(function, &plan.after[index]);
             }
 
-            self.terminator(function, &body.terminator);
+            self.terminator(function, &body.terminator, &plan.at_end);
         }
 
         self.line("}");
         self.line("");
     }
 
-    fn terminator(&mut self, function: &Function, terminator: &Terminator) {
+    fn release_registers(&mut self, function: &Function, registers: &[usize]) {
+        for register in registers {
+            let ty = function.registers[*register].clone();
+            self.line(&format!(
+                "  call void @dovik_release(i8 {}, i64 %r{register})",
+                tag_of(&ty)
+            ));
+        }
+    }
+
+    fn release_frame(&mut self, function: &Function) {
+        for (slot, local) in function.locals.iter().enumerate() {
+            if !is_reference(&local.ty) {
+                continue;
+            }
+
+            let temp = self.next_temp();
+            self.line(&format!("  {temp} = load i64, ptr %s{slot}"));
+            self.line(&format!(
+                "  call void @dovik_release(i8 {}, i64 {temp})",
+                tag_of(&local.ty)
+            ));
+        }
+    }
+
+    fn terminator(&mut self, function: &Function, terminator: &Terminator, held: &[usize]) {
         match terminator {
-            Terminator::Jump(target) => self.line(&format!("  br label %{}", block_label(*target))),
+            Terminator::Jump(target) => {
+                self.release_registers(function, held);
+                self.line(&format!("  br label %{}", block_label(*target)))
+            }
             Terminator::Branch {
                 condition,
                 then_block,
                 else_block,
             } => {
                 let condition = self.native(condition);
+                self.release_registers(function, held);
                 self.line(&format!(
                     "  br i1 {condition}, label %{}, label %{}",
                     block_label(*then_block),
@@ -171,20 +248,33 @@ impl Emitter<'_> {
                 let ty = llvm_type(&function.return_type);
 
                 if ty == "void" {
+                    self.release_registers(function, held);
+                    self.release_frame(function);
                     return self.line("  ret void");
                 }
 
                 let operand = self.native(value);
+
+                if is_reference(&function.return_type) {
+                    self.line(&format!(
+                        "  call void @dovik_retain(i8 {}, i64 {operand})",
+                        tag_of(&function.return_type)
+                    ));
+                }
+
+                self.release_registers(function, held);
+                self.release_frame(function);
                 self.line(&format!("  ret {ty} {operand}"));
             }
-            Terminator::Return(None) => match llvm_type(&function.return_type) {
-                "void" => self.line("  ret void"),
-                ty => self.line(&format!("  ret {ty} {}", zero_of(&function.return_type))),
-            },
-            Terminator::Unreachable => match llvm_type(&function.return_type) {
-                "void" => self.line("  ret void"),
-                ty => self.line(&format!("  ret {ty} {}", zero_of(&function.return_type))),
-            },
+            Terminator::Return(None) | Terminator::Unreachable => {
+                self.release_registers(function, held);
+                self.release_frame(function);
+
+                match llvm_type(&function.return_type) {
+                    "void" => self.line("  ret void"),
+                    ty => self.line(&format!("  ret {ty} {}", zero_of(&function.return_type))),
+                }
+            }
         }
     }
 
