@@ -23,6 +23,8 @@ impl fmt::Display for RuntimeError {
             Self::MissingKey => write!(f, "dictionary key not found"),
             Self::InputOutput => write!(f, "could not read or write that file"),
             Self::AssertionFailed => write!(f, "assertion failed"),
+            Self::StackExhausted => write!(f, "recursion too deep: the call stack is exhausted"),
+            Self::OutOfMemory => write!(f, "out of memory"),
         }
     }
 }

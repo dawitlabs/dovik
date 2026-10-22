@@ -61,7 +61,13 @@ The string representation is constrained by an unresolved language question: [SP
 
 Runtime failures must identify what failed and where, and must terminate predictably.
 
-Two failure modes have no specified behavior at all: call-stack exhaustion from deep recursion, and out-of-memory. Both are tracked as U7 in [SPEC.md](SPEC.md) section 21. Until they are decided, a deeply recursive Dovik program's failure mode is undefined, which undercuts any claim that Dovik's runtime errors are predictable.
+Both of the failure modes that once had no specified behaviour now have one ([SPEC.md](SPEC.md) 15.2, [DECISIONS.md](DECISIONS.md) D022). Call-stack exhaustion reports `DVK5009` and out-of-memory reports `DVK5010`; both terminate with a diagnostic and exit 1 rather than on a signal, and neither reports a source location.
+
+Stack exhaustion is caught rather than counted. `dovik_start`, called first from `main`, installs a `SIGSEGV` and `SIGBUS` handler on an alternate signal stack — an alternate stack is required, because the faulting thread has no stack left to run a handler on — and records the low end of the main thread's stack from `pthread_getattr_np`. A fault within 256 KiB below that address is a stack overflow. The handler writes its diagnostic with `write(2)` rather than `fprintf`, because only the former is safe to call from a signal handler, and exits with `_exit(2)`.
+
+A fault anywhere else reports `DVK9001`, which says a compiler defect rather than a program error. That is the honest reading: a Dovik program cannot form a bad pointer, so any other fault is the runtime's fault. `DVK9001` is an implementation diagnostic and deliberately not in [SPEC.md](SPEC.md) 15.2, which enumerates errors a *program* can cause.
+
+Out-of-memory is reported from `checked_alloc`, the single allocation point, which is why one check covers every allocation the runtime makes.
 
 ## 7. Performance Measurements
 
@@ -82,7 +88,7 @@ Measurements should use reproducible programs and documented environments.
 - Object layout.
 - String representation — blocked on U3.
 - Collection representation.
-- Stack exhaustion and out-of-memory behavior — blocked on U7.
+- The recursion depth a native build reaches, which follows `RLIMIT_STACK` rather than anything Dovik chooses.
 - Runtime linking and distribution.
 - Thread safety and concurrency. The runtime promises no thread safety for mutable collections, and Dovik has no concurrency model ([SPEC.md](SPEC.md) section 16).
 

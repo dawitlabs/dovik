@@ -261,3 +261,19 @@ Everything being importable means a module author cannot mark a helper private, 
 The cost in the compiler is not the parsing or the scope rules. It is that a diagnostic must name its file, which the single-source-string pipeline could not do.
 
 **Status:** Accepted. Resolves the first bullet of [SPEC.md](SPEC.md) 16. Specified in [SPEC.md](SPEC.md) 22, with amendments to 2.7, 8.5, 9.1, 15.1, and 16. Design record and rejected alternatives in [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md).
+
+## D022: Stack Exhaustion and Out of Memory Are Runtime Errors
+
+**Decision:** Both are runtime errors in the sense of [SPEC.md](SPEC.md) 15.2. Exhausting the call stack reports `DVK5009`, running out of memory reports `DVK5010`, and both terminate the process with a diagnostic and a non-zero exit rather than a signal. Neither reports a source location. The depth and the allocation size at which each occurs are implementation-defined.
+
+Stack exhaustion is detected by catching the fault on the stack's guard page rather than by counting frames: the runtime installs a handler on an alternate signal stack at startup, and reports `DVK5009` when the faulting address lies within a page of the stack's low end. A fault anywhere else is a defect in the runtime and says so, because a Dovik program cannot form a bad pointer.
+
+**Reason:** This was the last failure mode with no specified behaviour, and the implementation had already answered it three different ways: the native build dumped core, the interpreter stopped at a 2000-frame limit, and out-of-memory printed a message with no error code. The test oracle and the shipped compiler disagreed about the same program.
+
+The guard-page approach was chosen over a depth counter because a counter costs a compare and a store at every call, on the hot path that [BENCHMARKS.md](BENCHMARKS.md) measures, to answer a question the memory-management unit answers for free. A frame count is also the wrong unit: a function with large locals exhausts the stack in fewer frames than one without.
+
+**Trade-off:** No source location. A handler running on a faulting thread cannot know which call overflowed, and threading that information to it would mean maintaining a current-span variable at every call — the hot-path cost the decision exists to avoid. 15.2 now admits the exception explicitly rather than pretending every error can point at a line.
+
+The threshold also stops being portable. A native build fails at whatever the operating system's stack limit allows, the interpreter at its own frame limit, and the same program can therefore survive in one and fail in the other. Specifying a fixed depth would have made them agree at the cost of making the native build slower and the limit arbitrary.
+
+**Status:** Accepted. Resolves U7. Specified in [SPEC.md](SPEC.md) 5.5 and 15.2.

@@ -35,6 +35,7 @@ fn runtime_archive() -> &'static PathBuf {
     })
 }
 
+#[derive(Debug)]
 struct Native {
     stdout: Vec<String>,
     stderr: String,
@@ -336,4 +337,49 @@ fn every_program_frees_everything_it_allocates() {
             "{name} leaked at exit"
         );
     }
+}
+
+#[test]
+fn deep_recursion_reports_a_diagnostic_rather_than_faulting() {
+    let source = "\
+function down(n: Int) -> Int:
+    if n <= 0:
+        return 0
+    return 1 + down(n - 1)
+
+print(down(100000000))
+";
+
+    let native = compile_and_run(source, "trap_stack");
+
+    assert_eq!(
+        native.code, 1,
+        "a stack overflow must exit 1, not die on a signal: {native:?}"
+    );
+    assert!(
+        native.stderr.contains("DVK5009"),
+        "expected DVK5009, got {:?}",
+        native.stderr
+    );
+    assert!(
+        native.stderr.contains("recursion too deep"),
+        "{:?}",
+        native.stderr
+    );
+}
+
+#[test]
+fn recursion_that_fits_still_runs() {
+    let source = "\
+function down(n: Int) -> Int:
+    if n <= 0:
+        return 0
+    return 1 + down(n - 1)
+
+print(down(20000))
+";
+
+    let native = compile_and_run(source, "deep_but_fine");
+    assert_eq!(native.code, 0, "{native:?}");
+    assert_eq!(native.stdout, ["20000"]);
 }

@@ -41,6 +41,7 @@ declare void @dovik_retain(i8, i64)
 declare void @dovik_release(i8, i64)
 declare void @dovik_report_leaks()
 declare i64 @dovik_test_index()
+declare void @dovik_start()
 declare void @dovik_set_arguments(i32, ptr)
 declare i64 @dovik_argument_count()
 declare i64 @dovik_argument(i64, i32, i32)
@@ -160,6 +161,7 @@ impl Emitter<'_> {
 
         self.line("define i32 @main(i32 %argc, ptr %argv) {");
         self.line("entry:");
+        self.line("  call void @dovik_start()");
         self.line("  call void @dovik_set_arguments(i32 %argc, ptr %argv)");
 
         for (index, text) in self.program.strings.iter().enumerate() {

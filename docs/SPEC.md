@@ -374,7 +374,7 @@ function classify(n: Int):
 
 A function outside any cycle never needs an annotation on account of recursion, because every function it calls already has a known return type by the time its own body is checked.
 
-Deep recursion can exhaust the call stack. That behavior is unspecified; see U7 in section 21.
+Deep recursion can exhaust the call stack. That is a runtime error (15.2), not undefined behaviour: the program terminates with a diagnostic rather than faulting.
 
 ### 5.6 Function Names
 
@@ -959,12 +959,14 @@ The initial runtime terminates the program with a diagnostic on:
 - A missing dictionary key (12.4).
 - A file or directory that cannot be read, written, created, or removed ([STDLIB.md](STDLIB.md) 5 and 11).
 - A failed assertion ([STDLIB.md](STDLIB.md) 8).
+- Call-stack exhaustion from deep recursion.
+- Out of memory.
 
-Each must report what failed and where, and must terminate predictably — never continue with a corrupted value.
+Each must report what failed and, where the implementation can know it, where. The last two are the exception: stack exhaustion and out-of-memory are detected without a source location and report only what failed. Every one of them must terminate predictably — never continue with a corrupted value, and never fault.
+
+The depth at which recursion exhausts the stack, and the allocation at which memory runs out, are both implementation-defined and may differ between a native build and any other execution of the same program. What is specified is the failure: a diagnostic and a non-zero exit, not a signal.
 
 There is no way to catch or recover from a runtime error. Dovik has no exceptions, and the initial version has no error-value type.
-
-Stack exhaustion and out-of-memory are **not** specified; see U7 in section 21.
 
 ### 15.3 Diagnostics
 
@@ -1045,6 +1047,7 @@ Identifiers are stable. A resolved question keeps its number and is listed below
 | **U1** — reference semantics for collections | Reference semantics for `String`, `List`, and `Dict`; rebinding is not mutation (3.4, 9.6) | [DECISIONS.md](DECISIONS.md) D013 |
 | **U2** — division by zero | A zero divisor is a runtime error for all operand types, including `0 / 0` (6.2, 7.4) | [DECISIONS.md](DECISIONS.md) D020 |
 | **U6** — mutual recursion | Supported; signatures are collected before bodies are checked, and only a genuinely circular return type needs an explicit annotation (5.5, 8.5) | [DECISIONS.md](DECISIONS.md) D019 |
+| **U7** — stack exhaustion and out-of-memory | Both are runtime errors with diagnostics and no source location; the thresholds are implementation-defined (5.5, 15.2) | [DECISIONS.md](DECISIONS.md) D022 |
 
 The shadowing question that D011 settled was never a numbered entry here; it is recorded in [DECISIONS.md](DECISIONS.md) D011 and specified in 9.3 and 9.6.
 
@@ -1073,14 +1076,6 @@ Alternatives: functions only; add `value.function(args)` as sugar that resolves 
 Alternatives: an explicit `global` declaration inside the function that assigns; mutable-reference parameters; keep the restriction and rely on reference-typed parameters; allow module-level assignment from functions and accept the readability cost.
 
 **Blocks:** realistic Phase 5 programs. Needed before the benchmark suite in Phase 8, which will want shared state.
-
-### U7 — Stack exhaustion and out-of-memory
-
-Neither has specified behavior (15.2). A deeply recursive program's failure mode is currently undefined.
-
-Alternatives: let the OS terminate the process; a guard page plus a diagnostic; a configurable recursion-depth limit. Out-of-memory could abort with a diagnostic or be unspecified.
-
-**Blocks:** Roadmap Phase 6, and any claim that runtime errors are predictable.
 
 ### U8 — Representing absence
 

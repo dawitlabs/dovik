@@ -89,6 +89,8 @@ pub enum RuntimeError {
     MissingKey,
     InputOutput,
     AssertionFailed,
+    StackExhausted,
+    OutOfMemory,
 }
 
 #[derive(Debug, Clone)]
@@ -198,6 +200,8 @@ impl RuntimeError {
             Self::MissingKey => "DVK5006",
             Self::InputOutput => "DVK5007",
             Self::AssertionFailed => "DVK5008",
+            Self::StackExhausted => "DVK5009",
+            Self::OutOfMemory => "DVK5010",
         }
     }
 }

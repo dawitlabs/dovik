@@ -311,3 +311,17 @@ for word in [\"ab\", \"cd\"]:
 ";
     assert_eq!(output(source), ["a", "b", "c", "d"]);
 }
+
+#[test]
+fn deep_recursion_traps_in_the_interpreter_too() {
+    let source = "\
+function down(n: Int) -> Int:
+    if n <= 0:
+        return 0
+    return 1 + down(n - 1)
+
+print(down(100000000))
+";
+
+    assert_eq!(trap(source), RuntimeError::StackExhausted);
+}

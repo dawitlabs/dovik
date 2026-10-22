@@ -4,11 +4,13 @@ mod exec;
 use std::collections::HashMap;
 
 use crate::error::Trap;
-use crate::ir::{self, FuncId};
+use crate::ir::{self, FuncId, RuntimeError};
+use crate::token::Span;
 use crate::runtime::Value;
 
 const MAX_STEPS: u64 = 50_000_000;
 const MAX_DEPTH: usize = 2_000;
+const ORACLE_STACK: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, PartialEq)]
 pub enum Outcome {
@@ -41,6 +43,17 @@ pub fn run(program: &ir::Program) -> Run {
 }
 
 pub fn run_with_arguments(program: &ir::Program, arguments: Vec<String>) -> Run {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(ORACLE_STACK)
+            .spawn_scoped(scope, || interpret(program, arguments))
+            .expect("the oracle needs a thread")
+            .join()
+            .expect("the oracle panicked")
+    })
+}
+
+fn interpret(program: &ir::Program, arguments: Vec<String>) -> Run {
     let mut interpreter = Interpreter {
         program,
         globals: program
@@ -58,7 +71,11 @@ pub fn run_with_arguments(program: &ir::Program, arguments: Vec<String>) -> Run 
     let outcome = match interpreter.call(program.main, Vec::new()) {
         Ok(_) => Outcome::Finished,
         Err(Fault::Trap(trap)) => Outcome::Trapped(trap),
-        Err(Fault::Limit) => Outcome::LimitReached,
+        Err(Fault::Depth) => Outcome::Trapped(Trap {
+            error: RuntimeError::StackExhausted,
+            span: Span::new(0, 0),
+        }),
+        Err(Fault::Steps) => Outcome::LimitReached,
     };
 
     Run {
@@ -69,7 +86,8 @@ pub fn run_with_arguments(program: &ir::Program, arguments: Vec<String>) -> Run 
 
 pub(crate) enum Fault {
     Trap(Trap),
-    Limit,
+    Depth,
+    Steps,
 }
 
 pub(crate) struct Interpreter<'a> {
@@ -90,7 +108,7 @@ pub(crate) struct Frame {
 impl Interpreter<'_> {
     pub(crate) fn call(&mut self, id: FuncId, args: Vec<Value>) -> Result<Value, Fault> {
         if self.depth >= MAX_DEPTH {
-            return Err(Fault::Limit);
+            return Err(Fault::Depth);
         }
 
         let function = &self.program.functions[id];
@@ -120,7 +138,7 @@ impl Interpreter<'_> {
         self.steps += 1;
 
         match self.steps > MAX_STEPS {
-            true => Err(Fault::Limit),
+            true => Err(Fault::Steps),
             false => Ok(()),
         }
     }

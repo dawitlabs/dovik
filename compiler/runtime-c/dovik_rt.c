@@ -1,4 +1,8 @@
+#define _GNU_SOURCE
+
 #include <dirent.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,6 +105,68 @@ static const char *trap_message(uint32_t code) {
     }
 }
 
+
+static void write_all(int fd, const char *bytes, size_t len) {
+    while (len > 0) {
+        ssize_t written = write(fd, bytes, len);
+        if (written <= 0) return;
+        bytes += (size_t)written;
+        len -= (size_t)written;
+    }
+}
+
+static void report_without_location(const char *code, const char *message) {
+    write_all(2, "runtime error[", 14);
+    write_all(2, code, strlen(code));
+    write_all(2, "]: ", 3);
+    write_all(2, message, strlen(message));
+    write_all(2, "\n", 1);
+}
+
+static char *stack_low = NULL;
+
+static void on_fault(int signal_number, siginfo_t *info, void *context) {
+    (void)signal_number;
+    (void)context;
+
+    const char *address = (const char *)info->si_addr;
+    size_t page = 4096;
+
+    if (stack_low != NULL && address < stack_low && address + 64 * page >= stack_low) {
+        report_without_location("DVK5009", "recursion too deep: the call stack is exhausted");
+        _exit(1);
+    }
+
+    report_without_location("DVK9001", "the Dovik runtime faulted; this is a compiler defect");
+    _exit(1);
+}
+
+static void install_fault_handler(void) {
+    static char alternate[65536];
+
+    pthread_attr_t attributes;
+    if (pthread_getattr_np(pthread_self(), &attributes) == 0) {
+        void *base = NULL;
+        size_t size = 0;
+        if (pthread_attr_getstack(&attributes, &base, &size) == 0) stack_low = (char *)base;
+        pthread_attr_destroy(&attributes);
+    }
+
+    stack_t alternate_stack;
+    alternate_stack.ss_sp = alternate;
+    alternate_stack.ss_size = sizeof(alternate);
+    alternate_stack.ss_flags = 0;
+    if (sigaltstack(&alternate_stack, NULL) != 0) return;
+
+    struct sigaction action;
+    memset(&action, 0, sizeof(action));
+    action.sa_sigaction = on_fault;
+    action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGSEGV, &action, NULL);
+    sigaction(SIGBUS, &action, NULL);
+}
+
 static const char *trap_code(uint32_t code) {
     switch (code) {
         case 0: return "DVK5001";
@@ -126,8 +192,9 @@ static void *checked_alloc(size_t bytes) {
     void *block = malloc(bytes);
     if (block == NULL) {
         flush_output();
-        fprintf(stderr, "runtime error: out of memory\n");
-        exit(1);
+        fflush(stdout);
+        report_without_location("DVK5010", "out of memory");
+        _exit(1);
     }
     return block;
 }
@@ -842,6 +909,8 @@ uint8_t dovik_eq(uint8_t tag, uint64_t left, uint64_t right) {
 
 static int saved_argc = 0;
 static char **saved_argv = NULL;
+
+void dovik_start(void) { install_fault_handler(); }
 
 void dovik_set_arguments(int argc, char **argv) {
     saved_argc = argc > 0 ? argc - 1 : 0;
