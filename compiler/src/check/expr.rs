@@ -23,6 +23,12 @@ impl Checker<'_> {
     }
 
     pub(crate) fn check_expr(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
+        let found = self.check_expr_kind(expr, expected);
+        self.expr_types.insert(expr.span, found.clone());
+        found
+    }
+
+    fn check_expr_kind(&mut self, expr: &Expr, expected: Option<&Type>) -> Type {
         match &expr.kind {
             ExprKind::Int(value) => self.check_int_literal(*value, expr.span),
             ExprKind::Float(_) => Type::Float,

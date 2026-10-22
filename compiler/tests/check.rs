@@ -10,6 +10,7 @@ fn errors(source: &str) -> Vec<TypeErrorKind> {
     let (resolution, resolve_errors) = resolve::resolve(&program);
     assert!(resolve_errors.is_empty(), "resolve errors: {resolve_errors:?}");
     check::check(&program, &resolution)
+        .1
         .into_iter()
         .map(|e| e.kind)
         .collect()

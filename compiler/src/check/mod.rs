@@ -10,7 +10,28 @@ use crate::resolve::{BindingId, Resolution};
 use crate::token::Span;
 use crate::types::Type;
 
-pub fn check(program: &Program, resolution: &Resolution) -> Vec<TypeError> {
+/// What lowering needs from this pass: the type of every expression, of every binding,
+/// and of every function signature once inference has settled.
+#[derive(Debug, Default)]
+pub struct Typed {
+    pub expr_types: HashMap<Span, Type>,
+    pub var_types: HashMap<BindingId, Type>,
+    pub functions: HashMap<String, FunctionType>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionType {
+    pub params: Vec<Type>,
+    pub result: Type,
+}
+
+impl Typed {
+    pub fn type_of(&self, span: Span) -> Type {
+        self.expr_types.get(&span).cloned().unwrap_or(Type::Unknown)
+    }
+}
+
+pub fn check(program: &Program, resolution: &Resolution) -> (Typed, Vec<TypeError>) {
     let mut checker = Checker {
         program,
         resolution,
@@ -21,6 +42,7 @@ pub fn check(program: &Program, resolution: &Resolution) -> Vec<TypeError> {
         silent: true,
         expected_return: None,
         returns: Vec::new(),
+        expr_types: HashMap::new(),
         progress: false,
     };
 
@@ -31,7 +53,28 @@ pub fn check(program: &Program, resolution: &Resolution) -> Vec<TypeError> {
     // Return-type errors are found after the walk, so sort to keep the report in source
     // order.
     checker.errors.sort_by_key(|error| error.span.start);
-    checker.errors
+
+    let functions = checker
+        .signatures
+        .iter()
+        .map(|signature| {
+            (
+                signature.name.clone(),
+                FunctionType {
+                    params: signature.params.clone(),
+                    result: signature.return_type.clone().unwrap_or(Type::Unknown),
+                },
+            )
+        })
+        .collect();
+
+    let typed = Typed {
+        expr_types: checker.expr_types,
+        var_types: checker.var_types,
+        functions,
+    };
+
+    (typed, checker.errors)
 }
 
 pub(crate) struct Signature {
@@ -53,6 +96,7 @@ pub(crate) struct Checker<'a> {
     pub(crate) silent: bool,
     pub(crate) expected_return: Option<Type>,
     pub(crate) returns: Vec<(Type, Span)>,
+    pub(crate) expr_types: HashMap<Span, Type>,
     pub(crate) progress: bool,
 }
 
@@ -131,6 +175,7 @@ impl<'a> Checker<'a> {
     fn walk_module(&mut self) {
         let program = self.program;
         self.var_types.clear();
+        self.expr_types.clear();
 
         for statement in &program.statements {
             match &statement.kind {
