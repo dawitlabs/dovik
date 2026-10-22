@@ -1,3 +1,4 @@
+mod demote;
 pub(crate) mod escape;
 mod hoist;
 mod range;
@@ -9,6 +10,8 @@ use crate::token::Span;
 
 pub fn optimize(program: &mut Program) -> Vec<TypeError> {
     let mut errors = Vec::new();
+
+    demote::demote_globals(program);
 
     let signatures: Vec<Vec<crate::types::Type>> = program
         .functions

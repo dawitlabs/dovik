@@ -590,3 +590,40 @@ list has no bound. Only `arith` is closable, because its increment is `i % 7`, w
 So reduction loops in Dovik will keep their check, and C will keep winning them, until
 either list element ranges are tracked or D009 is traded away. This is the structural cost
 of the guarantee, not an implementation deficiency.
+
+## Module-scope variables are globals, which LLVM cannot keep in registers
+
+Every top-level variable lowers to an LLVM global. A loop that accumulates into one
+reloads and restores it every iteration, and LLVM will not promote a global across a call
+it cannot see through. C's equivalent is a stack local it promotes to a register
+immediately.
+
+`src/opt/demote.rs` turns a global into a local of the entry function when no other
+function references it. That is sound because [SPEC.md](SPEC.md) 9.4 lets a function *read*
+a global but never write one, so a global nothing else mentions is only ever touched by the
+entry function and has no observers.
+
+Worth 21% on the call-heavy workload, taking it from 2.77x C to 2.02x — the largest single
+improvement to that gap.
+
+The pass rewrites the instructions and leaves the now-unused global in the table rather than
+renumbering. LLVM removes it, and the entry function's end-of-program release of a global
+that was never written releases zero, which is a no-op.
+
+## Removing the overflow checks makes Dovik slower, and was measured before trusting
+
+The obvious way to close the remaining gap to C is to stop checking. Measured across three
+interleaved trials, the unchecked build of the integer workload is 6-28% **slower** than
+the checked one, and produces identical output.
+
+The reason is visible in the generated code. Checked: 119 instructions in `main`, no SIMD,
+two overflow branches. Unchecked: 212 instructions, still no SIMD, no branches. Without the
+overflow intrinsics LLVM unrolls roughly twice as hard and schedules worse, and it still
+does not vectorize, because the accumulator is a reduction it cannot identify.
+
+C's advantage on that loop is 50 SIMD instructions out of 61. **Dovik does not get that by
+dropping checks** — it would need the reduction recognised, which needs the accumulator
+bounded, which needs scalar evolution.
+
+So trading away [DECISIONS.md](DECISIONS.md) D009 buys nothing measurable on this suite.
+Anyone proposing it should reproduce the three trials first.
