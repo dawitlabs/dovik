@@ -45,6 +45,22 @@ impl Interpreter<'_> {
                 std::path::Path::new(values[0].as_str()).is_file(),
             )),
             Builtin::Argument => self.argument(&values[0]),
+            Builtin::Split => Ok(split(values[0].as_str(), values[1].as_str())),
+            Builtin::Join => Ok(join(&values[0], values[1].as_str())),
+            Builtin::Substring => substring(values[0].as_str(), &values[1], &values[2]),
+            Builtin::Contains => Ok(Value::Bool(
+                values[0].as_str().contains(values[1].as_str()),
+            )),
+            Builtin::IndexOf => index_of(values[0].as_str(), values[1].as_str()),
+            Builtin::Trim => Ok(Value::str(values[0].as_str().trim())),
+            Builtin::StartsWith => Ok(Value::Bool(
+                values[0].as_str().starts_with(values[1].as_str()),
+            )),
+            Builtin::EndsWith => Ok(Value::Bool(
+                values[0].as_str().ends_with(values[1].as_str()),
+            )),
+            Builtin::Upper => Ok(Value::str(ascii_case(values[0].as_str(), true))),
+            Builtin::Lower => Ok(Value::str(ascii_case(values[0].as_str(), false))),
             _ => Ok(Value::Unit),
         };
 
@@ -87,6 +103,66 @@ fn write_file(path: &Value, contents: &Value, append: bool) -> Result<Value, Run
     file.write_all(contents.as_str().as_bytes())
         .map(|()| Value::Unit)
         .map_err(|_| RuntimeError::InputOutput)
+}
+
+fn split(text: &str, separator: &str) -> Value {
+    if separator.is_empty() {
+        let pieces = text.chars().map(|c| Value::str(c.to_string())).collect();
+        return Value::list(pieces);
+    }
+
+    let pieces = text.split(separator).map(Value::str).collect();
+    Value::list(pieces)
+}
+
+fn join(parts: &Value, separator: &str) -> Value {
+    let Value::List(items) = parts else {
+        return Value::str("");
+    };
+
+    let rendered: Vec<String> = items
+        .borrow()
+        .iter()
+        .map(|item| item.as_str().to_string())
+        .collect();
+
+    Value::str(rendered.join(separator))
+}
+
+fn substring(text: &str, start: &Value, count: &Value) -> Result<Value, RuntimeError> {
+    let from = start.as_int();
+    let take = count.as_int();
+
+    if from < 0 || take < 0 {
+        return Err(RuntimeError::IndexOutOfBounds);
+    }
+
+    let scalars: Vec<char> = text.chars().collect();
+    let end = from.checked_add(take).ok_or(RuntimeError::IndexOutOfBounds)?;
+
+    if from as usize > scalars.len() || end as usize > scalars.len() {
+        return Err(RuntimeError::IndexOutOfBounds);
+    }
+
+    let piece: String = scalars[from as usize..end as usize].iter().collect();
+    Ok(Value::str(piece))
+}
+
+fn index_of(text: &str, needle: &str) -> Result<Value, RuntimeError> {
+    let Some(byte) = text.find(needle) else {
+        return Err(RuntimeError::IndexOutOfBounds);
+    };
+
+    Ok(Value::Int(text[..byte].chars().count() as i64))
+}
+
+fn ascii_case(text: &str, upper: bool) -> String {
+    text.chars()
+        .map(|scalar| match upper {
+            true => scalar.to_ascii_uppercase(),
+            false => scalar.to_ascii_lowercase(),
+        })
+        .collect()
 }
 
 fn rendered(value: &Value, ty: &Type) -> String {

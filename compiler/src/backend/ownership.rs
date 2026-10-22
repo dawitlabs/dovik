@@ -60,7 +60,16 @@ pub(crate) fn owned_result(kind: &InstKind) -> Option<RegId> {
         InstKind::StringNext { scalar, .. } => Some(*scalar),
         InstKind::Call { dest, .. } => *dest,
         InstKind::Builtin { dest, which, .. } => match which {
-            Builtin::ToString | Builtin::RemoveAt | Builtin::ReadFile | Builtin::Argument => *dest,
+            Builtin::ToString
+            | Builtin::RemoveAt
+            | Builtin::ReadFile
+            | Builtin::Argument
+            | Builtin::Split
+            | Builtin::Join
+            | Builtin::Substring
+            | Builtin::Trim
+            | Builtin::Upper
+            | Builtin::Lower => *dest,
             _ => None,
         },
         _ => None,

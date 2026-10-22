@@ -1,29 +1,12 @@
 function usage():
     print("usage: wordcount <file.txt>")
 
-function is_separator(scalar: String) -> Bool:
-    return scalar == " " or scalar == "\n" or scalar == "\t" or scalar == "\r"
-
 function count_words(text: String) -> Int:
     words = 0
-    in_word = false
-
-    for scalar in text:
-        if is_separator(scalar):
-            in_word = false
-        else:
-            if not in_word:
-                words = words + 1
-            in_word = true
-
+    for piece in split(text, " "):
+        if len(trim(piece)) > 0:
+            words = words + 1
     return words
-
-function count_lines(text: String) -> Int:
-    lines = 0
-    for scalar in text:
-        if scalar == "\n":
-            lines = lines + 1
-    return lines
 
 if argument_count() != 1:
     usage()
@@ -34,6 +17,9 @@ else:
         print("wordcount: cannot open " + path)
     else:
         text = read_file(path)
-        print("lines      " + to_string(count_lines(text)))
-        print("words      " + to_string(count_words(text)))
+        flat = join(split(text, "\n"), " ")
+        flat = join(split(flat, "\t"), " ")
+
+        print("lines      " + to_string(len(split(text, "\n")) - 1))
+        print("words      " + to_string(count_words(flat)))
         print("scalars    " + to_string(len(text)))

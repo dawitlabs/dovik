@@ -234,7 +234,9 @@ fn builtin_error(which: crate::builtins::Builtin) -> Option<RuntimeError> {
         Builtin::ReadFile | Builtin::WriteFile | Builtin::AppendFile => {
             Some(RuntimeError::InputOutput)
         }
-        Builtin::Argument => Some(RuntimeError::IndexOutOfBounds),
+        Builtin::Argument | Builtin::Substring | Builtin::IndexOf => {
+            Some(RuntimeError::IndexOutOfBounds)
+        }
         _ => None,
     }
 }

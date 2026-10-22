@@ -137,17 +137,54 @@ a seventh, `DVK5007`. That list is normative, so the addition is recorded there 
 The program's own name is deliberately not argument zero, because a program that wants its
 arguments almost never wants its name, and the alternative makes every loop start at one.
 
-## 7. Not Yet Provided
+## 7. Text Operations
+
+Scalar-based throughout, per [SPEC.md](SPEC.md) 10.4: every index and length counts Unicode
+scalar values, never bytes.
+
+| Signature | Behaviour |
+| --- | --- |
+| `split(text: String, separator: String) -> List<String>` | Splits on every occurrence. Empty fields are kept |
+| `join(parts: List<String>, separator: String) -> String` | The inverse of `split` |
+| `substring(text: String, start: Int, count: Int) -> String` | `count` scalars from scalar `start`. Out of range is a runtime error |
+| `contains(text: String, needle: String) -> Bool` | Whether `needle` occurs |
+| `index_of(text: String, needle: String) -> Int` | Scalar position of the first occurrence. Absent is a runtime error |
+| `trim(text: String) -> String` | Removes leading and trailing whitespace |
+| `starts_with(text: String, prefix: String) -> Bool` | |
+| `ends_with(text: String, suffix: String) -> Bool` | |
+| `upper(text: String) -> String` | ASCII only |
+| `lower(text: String) -> String` | ASCII only |
+
+`contains` pairs with `index_of` the way `file_exists` pairs with `read_file`: the predicate
+exists so a program can avoid the trap, because the error model has no way to return
+"not found".
+
+```dovk
+if contains(line, "="):
+    key = substring(line, 0, index_of(line, "="))
+```
+
+Three decisions worth knowing:
+
+- **`split` on an empty separator yields the individual scalars.** It is the natural
+  reading, it is useful, and the alternative is a runtime error for something a program
+  can perfectly well mean.
+- **`split` keeps empty fields.** `split("a,,b", ",")` has three elements and
+  `split(",a", ",")` has two. Dropping them would lose information a caller may want, and
+  `trim` plus a length test recovers the other behaviour.
+- **`upper` and `lower` are ASCII only.** `upper("héllo")` is `"HéLLO"`. Full Unicode case
+  conversion is locale-dependent and can change a string's scalar count, which would make
+  these the only text functions whose output length is unpredictable.
+  [SPEC.md](SPEC.md) 10.4 already assigns case conversion to the library without specifying
+  its extent, so this is a starting point rather than an answer.
+
+## 8. Not Yet Provided
 
 Named by [SPEC.md](SPEC.md) 17 as library surface, with no implementation and no
-chosen names: time, substring and search operations, splitting and joining, case
-conversion, grapheme segmentation and normalization (10.4), sorting, standard input,
-and directory operations.
+chosen names: time, grapheme segmentation and normalization (10.4), full Unicode case
+conversion, sorting, standard input, directory operations, and `replace`.
 
-Splitting is the most missed. `wordcount` in `examples/` has to walk scalars by hand
-because there is no `split`, which works but is the kind of thing a library should carry.
-
-## 8. Open Decisions
+## 9. Open Decisions
 
 - Every name above. They are chosen, not ratified.
 - Whether a failed parse keeps `DVK5004` or gets its own runtime error.
@@ -160,3 +197,9 @@ because there is no `split`, which works but is the kind of thing a library shou
 - Whether `argument` should include the program name at index zero.
 - Whether file errors deserve distinct codes — not found, permission denied, is a
   directory — rather than one `DVK5007`.
+- Whether `upper` and `lower` should grow to full Unicode, and what that does to the
+  guarantee that they preserve scalar count.
+- Whether `split` should gain a variant that drops empty fields.
+- Whether `index_of` should return a scalar position or a value usable directly with
+  `substring` — they are the same today and would diverge if byte offsets were ever
+  exposed.

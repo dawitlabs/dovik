@@ -677,3 +677,23 @@ asserting on the old zero-argument signature will fail, which is how this was ca
 
 `argument(0)` is the first argument the user typed, not the program name. The runtime drops
 `argv[0]` when recording the count.
+
+## Text operations are scalar-based, and the runtime walks UTF-8 to prove it
+
+Every index and length in the text functions counts Unicode scalar values, per
+[SPEC.md](SPEC.md) 10.4. `substring("héllo wörld", 6, 5)` is `"wörld"`, and
+`index_of("héllo wörld", "wörld")` is `6`, not the byte offset `7`.
+
+The runtime searches in bytes, because `memcmp` over UTF-8 cannot produce a false match on
+a scalar boundary, and then converts the byte position back to a scalar count. Returning
+the byte position would be faster and wrong.
+
+`contains` exists so `index_of` can trap. The error model has no way to return "not found",
+so the predicate is the escape, exactly as `file_exists` is for `read_file` and
+`can_parse_int` is for `parse_int`. That pattern now appears three times and should be the
+default shape for any library function that can fail to find something.
+
+`upper` and `lower` are ASCII only. Full Unicode case conversion can change a string's
+scalar count — `ß` uppercases to two scalars — which would make them the only text
+functions whose output length is unpredictable. Recorded as an open decision rather than
+silently half-done.

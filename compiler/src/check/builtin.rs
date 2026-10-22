@@ -75,7 +75,17 @@ fn hint(builtin: Builtin) -> Option<Type> {
         | Builtin::ReadFile
         | Builtin::WriteFile
         | Builtin::AppendFile
-        | Builtin::FileExists => Some(Type::Str),
+        | Builtin::FileExists
+        | Builtin::Split
+        | Builtin::Substring
+        | Builtin::Contains
+        | Builtin::IndexOf
+        | Builtin::Trim
+        | Builtin::StartsWith
+        | Builtin::EndsWith
+        | Builtin::Upper
+        | Builtin::Lower => Some(Type::Str),
+        Builtin::Join => Some(Type::List(Box::new(Type::Str))),
         Builtin::Argument => Some(Type::Int),
         _ => None,
     }
@@ -98,7 +108,17 @@ fn accepts_first(builtin: Builtin, found: &Type) -> bool {
         | Builtin::ReadFile
         | Builtin::WriteFile
         | Builtin::AppendFile
-        | Builtin::FileExists => *found == Type::Str,
+        | Builtin::FileExists
+        | Builtin::Split
+        | Builtin::Substring
+        | Builtin::Contains
+        | Builtin::IndexOf
+        | Builtin::Trim
+        | Builtin::StartsWith
+        | Builtin::EndsWith
+        | Builtin::Upper
+        | Builtin::Lower => *found == Type::Str,
+        Builtin::Join => *found == Type::List(Box::new(Type::Str)),
         Builtin::Argument => *found == Type::Int,
         Builtin::ArgumentCount => true,
     }
@@ -119,7 +139,15 @@ fn remaining_types(builtin: Builtin, first: &Type) -> Vec<Type> {
         Builtin::Insert => vec![Type::Int, element],
         Builtin::RemoveAt => vec![Type::Int],
         Builtin::HasKey | Builtin::RemoveKey => vec![key],
-        Builtin::WriteFile | Builtin::AppendFile => vec![Type::Str],
+        Builtin::WriteFile
+        | Builtin::AppendFile
+        | Builtin::Split
+        | Builtin::Join
+        | Builtin::Contains
+        | Builtin::IndexOf
+        | Builtin::StartsWith
+        | Builtin::EndsWith => vec![Type::Str],
+        Builtin::Substring => vec![Type::Int, Type::Int],
         _ => Vec::new(),
     }
 }

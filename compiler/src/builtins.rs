@@ -1,6 +1,6 @@
 use crate::types::Type;
 
-pub const NAMES: [&str; 20] = [
+pub const NAMES: [&str; 30] = [
     "print",
     "len",
     "to_int",
@@ -21,6 +21,16 @@ pub const NAMES: [&str; 20] = [
     "file_exists",
     "argument_count",
     "argument",
+    "split",
+    "join",
+    "substring",
+    "contains",
+    "index_of",
+    "trim",
+    "starts_with",
+    "ends_with",
+    "upper",
+    "lower",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +55,16 @@ pub enum Builtin {
     FileExists,
     ArgumentCount,
     Argument,
+    Split,
+    Join,
+    Substring,
+    Contains,
+    IndexOf,
+    Trim,
+    StartsWith,
+    EndsWith,
+    Upper,
+    Lower,
 }
 
 impl Builtin {
@@ -70,6 +90,16 @@ impl Builtin {
             "file_exists" => Self::FileExists,
             "argument_count" => Self::ArgumentCount,
             "argument" => Self::Argument,
+            "split" => Self::Split,
+            "join" => Self::Join,
+            "substring" => Self::Substring,
+            "contains" => Self::Contains,
+            "index_of" => Self::IndexOf,
+            "trim" => Self::Trim,
+            "starts_with" => Self::StartsWith,
+            "ends_with" => Self::EndsWith,
+            "upper" => Self::Upper,
+            "lower" => Self::Lower,
             _ => return None,
         })
     }
@@ -96,18 +126,34 @@ impl Builtin {
             Self::FileExists => "file_exists",
             Self::ArgumentCount => "argument_count",
             Self::Argument => "argument",
+            Self::Split => "split",
+            Self::Join => "join",
+            Self::Substring => "substring",
+            Self::Contains => "contains",
+            Self::IndexOf => "index_of",
+            Self::Trim => "trim",
+            Self::StartsWith => "starts_with",
+            Self::EndsWith => "ends_with",
+            Self::Upper => "upper",
+            Self::Lower => "lower",
         }
     }
 
     pub fn arity(self) -> usize {
         match self {
-            Self::Insert => 3,
+            Self::Insert | Self::Substring => 3,
             Self::Append
             | Self::RemoveAt
             | Self::HasKey
             | Self::RemoveKey
             | Self::WriteFile
-            | Self::AppendFile => 2,
+            | Self::AppendFile
+            | Self::Split
+            | Self::Join
+            | Self::Contains
+            | Self::IndexOf
+            | Self::StartsWith
+            | Self::EndsWith => 2,
             Self::ArgumentCount => 0,
             _ => 1,
         }
@@ -124,14 +170,27 @@ impl Builtin {
             | Self::Insert
             | Self::WriteFile
             | Self::AppendFile => Type::Unit,
-            Self::Len | Self::ToInt | Self::ParseInt | Self::ArgumentCount => Type::Int,
+            Self::Len | Self::ToInt | Self::ParseInt | Self::ArgumentCount | Self::IndexOf => {
+                Type::Int
+            }
             Self::ToFloat | Self::ParseFloat => Type::Float,
-            Self::ToString | Self::ReadFile | Self::Argument => Type::Str,
+            Self::ToString
+            | Self::ReadFile
+            | Self::Argument
+            | Self::Join
+            | Self::Substring
+            | Self::Trim
+            | Self::Upper
+            | Self::Lower => Type::Str,
+            Self::Split => Type::List(Box::new(Type::Str)),
             Self::HasKey
             | Self::RemoveKey
             | Self::CanParseInt
             | Self::CanParseFloat
-            | Self::FileExists => Type::Bool,
+            | Self::FileExists
+            | Self::Contains
+            | Self::StartsWith
+            | Self::EndsWith => Type::Bool,
             Self::RemoveAt => match first {
                 Type::List(item) => (**item).clone(),
                 _ => Type::Unknown,

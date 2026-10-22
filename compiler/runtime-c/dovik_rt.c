@@ -913,3 +913,179 @@ void dovik_write_file(uint64_t path, uint64_t contents, uint32_t line, uint32_t 
 void dovik_append_file(uint64_t path, uint64_t contents, uint32_t line, uint32_t column) {
     write_bytes(path, contents, "ab", line, column);
 }
+
+static size_t scalar_to_byte(const Str *text, int64_t index) {
+    size_t offset = 0;
+    int64_t seen = 0;
+
+    while (offset < text->len && seen < index) {
+        offset += scalar_width((unsigned char)text->bytes[offset]);
+        seen++;
+    }
+
+    return seen < index ? text->len + 1 : offset;
+}
+
+static uint64_t make_string(const char *bytes, size_t len) {
+    Str *value = new_string(len);
+    if (len > 0) memcpy(value->bytes, bytes, len);
+    return (uint64_t)(uintptr_t)value;
+}
+
+static const char *find_bytes(const Str *haystack, const Str *needle, size_t from) {
+    if (needle->len == 0) return haystack->bytes + from;
+    if (needle->len > haystack->len) return NULL;
+
+    for (size_t i = from; i + needle->len <= haystack->len; i++)
+        if (memcmp(haystack->bytes + i, needle->bytes, needle->len) == 0)
+            return haystack->bytes + i;
+
+    return NULL;
+}
+
+uint64_t dovik_str_split(uint64_t text, uint64_t separator) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *sep = (Str *)(uintptr_t)separator;
+    uint64_t list = dovik_list_new(TAG_STR);
+
+    if (sep->len == 0) {
+        size_t offset = 0;
+        while (offset < source->len) {
+            size_t width = scalar_width((unsigned char)source->bytes[offset]);
+            if (offset + width > source->len) width = source->len - offset;
+            uint64_t piece = make_string(source->bytes + offset, width);
+            dovik_list_push(list, piece);
+            dovik_release(TAG_STR, piece);
+            offset += width;
+        }
+        return list;
+    }
+
+    size_t start = 0;
+    for (;;) {
+        const char *hit = find_bytes(source, sep, start);
+
+        if (hit == NULL) {
+            uint64_t piece = make_string(source->bytes + start, source->len - start);
+            dovik_list_push(list, piece);
+            dovik_release(TAG_STR, piece);
+            return list;
+        }
+
+        size_t at = (size_t)(hit - source->bytes);
+        uint64_t piece = make_string(source->bytes + start, at - start);
+        dovik_list_push(list, piece);
+        dovik_release(TAG_STR, piece);
+        start = at + sep->len;
+    }
+}
+
+uint64_t dovik_str_join(uint64_t list, uint64_t separator) {
+    List *parts = (List *)(uintptr_t)list;
+    Str *sep = (Str *)(uintptr_t)separator;
+
+    size_t total = 0;
+    for (size_t i = 0; i < parts->len; i++)
+        total += ((Str *)(uintptr_t)parts->items[i])->len;
+    if (parts->len > 1) total += sep->len * (parts->len - 1);
+
+    Str *value = new_string(total);
+    size_t at = 0;
+
+    for (size_t i = 0; i < parts->len; i++) {
+        if (i > 0 && sep->len > 0) {
+            memcpy(value->bytes + at, sep->bytes, sep->len);
+            at += sep->len;
+        }
+        Str *piece = (Str *)(uintptr_t)parts->items[i];
+        memcpy(value->bytes + at, piece->bytes, piece->len);
+        at += piece->len;
+    }
+
+    return (uint64_t)(uintptr_t)value;
+}
+
+uint64_t dovik_str_substring(uint64_t text, int64_t start, int64_t count, uint32_t line,
+                             uint32_t column) {
+    Str *source = (Str *)(uintptr_t)text;
+
+    if (start < 0 || count < 0) dovik_trap(4, line, column);
+
+    size_t from = scalar_to_byte(source, start);
+    if (from > source->len) dovik_trap(4, line, column);
+
+    size_t to = scalar_to_byte(source, start + count);
+    if (to > source->len) dovik_trap(4, line, column);
+
+    return make_string(source->bytes + from, to - from);
+}
+
+uint8_t dovik_str_contains(uint64_t text, uint64_t needle) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *target = (Str *)(uintptr_t)needle;
+    return find_bytes(source, target, 0) != NULL ? 1 : 0;
+}
+
+int64_t dovik_str_index_of(uint64_t text, uint64_t needle, uint32_t line, uint32_t column) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *target = (Str *)(uintptr_t)needle;
+    const char *hit = find_bytes(source, target, 0);
+
+    if (hit == NULL) dovik_trap(4, line, column);
+
+    size_t at = (size_t)(hit - source->bytes);
+    int64_t scalars = 0;
+    for (size_t i = 0; i < at; i++)
+        if (!is_continuation((unsigned char)source->bytes[i])) scalars++;
+
+    return scalars;
+}
+
+static int is_space(unsigned char byte) {
+    return byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' || byte == '\f' ||
+           byte == '\v';
+}
+
+uint64_t dovik_str_trim(uint64_t text) {
+    Str *source = (Str *)(uintptr_t)text;
+    size_t start = 0;
+    size_t end = source->len;
+
+    while (start < end && is_space((unsigned char)source->bytes[start])) start++;
+    while (end > start && is_space((unsigned char)source->bytes[end - 1])) end--;
+
+    return make_string(source->bytes + start, end - start);
+}
+
+uint8_t dovik_str_starts_with(uint64_t text, uint64_t prefix) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *target = (Str *)(uintptr_t)prefix;
+    if (target->len > source->len) return 0;
+    return memcmp(source->bytes, target->bytes, target->len) == 0 ? 1 : 0;
+}
+
+uint8_t dovik_str_ends_with(uint64_t text, uint64_t suffix) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *target = (Str *)(uintptr_t)suffix;
+    if (target->len > source->len) return 0;
+    return memcmp(source->bytes + source->len - target->len, target->bytes, target->len) == 0
+               ? 1
+               : 0;
+}
+
+static uint64_t recase(uint64_t text, int to_upper) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *value = new_string(source->len);
+
+    for (size_t i = 0; i < source->len; i++) {
+        unsigned char byte = (unsigned char)source->bytes[i];
+        if (to_upper && byte >= 'a' && byte <= 'z') byte -= 32;
+        if (!to_upper && byte >= 'A' && byte <= 'Z') byte += 32;
+        value->bytes[i] = (char)byte;
+    }
+
+    return (uint64_t)(uintptr_t)value;
+}
+
+uint64_t dovik_str_upper(uint64_t text) { return recase(text, 1); }
+uint64_t dovik_str_lower(uint64_t text) { return recase(text, 0); }

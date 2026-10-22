@@ -91,6 +91,41 @@ impl Emitter<'_> {
             Builtin::FileExists => {
                 self.boolean_call(dest, &format!("@dovik_file_exists(i64 {})", words[0]))
             }
+            Builtin::Contains => self.boolean_call(
+                dest,
+                &format!("@dovik_str_contains(i64 {}, i64 {})", words[0], words[1]),
+            ),
+            Builtin::StartsWith => self.boolean_call(
+                dest,
+                &format!("@dovik_str_starts_with(i64 {}, i64 {})", words[0], words[1]),
+            ),
+            Builtin::EndsWith => self.boolean_call(
+                dest,
+                &format!("@dovik_str_ends_with(i64 {}, i64 {})", words[0], words[1]),
+            ),
+            Builtin::Split => self.plain_call(dest, &format!(
+                "i64 @dovik_str_split(i64 {}, i64 {})", words[0], words[1]
+            )),
+            Builtin::Join => self.plain_call(dest, &format!(
+                "i64 @dovik_str_join(i64 {}, i64 {})", words[0], words[1]
+            )),
+            Builtin::Trim => {
+                self.plain_call(dest, &format!("i64 @dovik_str_trim(i64 {})", words[0]))
+            }
+            Builtin::Upper => {
+                self.plain_call(dest, &format!("i64 @dovik_str_upper(i64 {})", words[0]))
+            }
+            Builtin::Lower => {
+                self.plain_call(dest, &format!("i64 @dovik_str_lower(i64 {})", words[0]))
+            }
+            Builtin::Substring => self.plain_call(dest, &format!(
+                "i64 @dovik_str_substring(i64 {}, i64 {}, i64 {}, i32 {line}, i32 {column})",
+                words[0], words[1], words[2]
+            )),
+            Builtin::IndexOf => self.plain_call(dest, &format!(
+                "i64 @dovik_str_index_of(i64 {}, i64 {}, i32 {line}, i32 {column})",
+                words[0], words[1]
+            )),
             Builtin::ReadFile => {
                 if let Some(dest) = dest {
                     self.line(&format!(
@@ -121,6 +156,16 @@ impl Emitter<'_> {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn plain_call(&mut self, dest: Option<usize>, call: &str) {
+        match dest {
+            Some(dest) => self.line(&format!("  %r{dest} = call {call}")),
+            None => {
+                let temp = self.next_temp();
+                self.line(&format!("  {temp} = call {call}"));
+            }
         }
     }
 
