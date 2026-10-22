@@ -2,11 +2,13 @@ mod check;
 mod lex;
 mod parse;
 mod resolve;
+mod runtime;
 
 pub use check::{TypeError, TypeErrorKind};
 pub use lex::{LexError, LexErrorKind};
 pub use parse::{ParseError, ParseErrorKind};
 pub use resolve::{ResolveError, ResolveErrorKind};
+pub use runtime::Trap;
 
 pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
     let before = &source[..offset.min(source.len())];

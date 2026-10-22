@@ -39,6 +39,7 @@ pub enum TypeErrorKind {
     ReturnOutsideFunction,
     MissingReturn { name: String, declared: Type },
     CannotInferReturnType(String),
+    FoldedCheckFailed(crate::ir::RuntimeError),
 }
 
 impl fmt::Display for TypeErrorKind {
@@ -139,6 +140,10 @@ impl fmt::Display for TypeErrorKind {
             Self::CannotInferReturnType(name) => write!(
                 f,
                 "cannot infer the return type of `{name}`; annotate it with `->`"
+            ),
+            Self::FoldedCheckFailed(error) => write!(
+                f,
+                "this expression always fails at runtime: {error}"
             ),
         }
     }

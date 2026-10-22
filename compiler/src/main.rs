@@ -2,24 +2,29 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use compiler::error::line_col;
-use compiler::{check, lexer, lower, parser, resolve};
+use compiler::error::line_col as position;
+use compiler::{check, interp, lexer, lower, opt, parser, resolve};
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let mut dump_tokens = false;
     let mut dump_ir = false;
+    let mut execute = false;
+    let mut optimize = true;
     let mut path = None;
 
     for arg in args.by_ref() {
         match arg.as_str() {
             "--tokens" => dump_tokens = true,
             "--ir" => dump_ir = true,
+            "--run" => execute = true,
+            "--no-opt" => optimize = false,
             _ => path = Some(arg),
         }
     }
 
     let Some(path) = path else {
-        eprintln!("usage: compiler [--tokens] <file.dovk>");
+        eprintln!("usage: compiler [--tokens] [--ir] [--run] [--no-opt] <file.dovk>");
         return ExitCode::FAILURE;
     };
 
@@ -78,7 +83,37 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let ir = lower::lower(&program, &resolution, &typed);
+    let mut ir = lower::lower(&program, &resolution, &typed);
+
+    if optimize {
+        let fold_errors = opt::optimize(&mut ir);
+
+        for error in &fold_errors {
+            report(&path, &source, error.span.start, &error.kind);
+        }
+
+        if !fold_errors.is_empty() {
+            return ExitCode::FAILURE;
+        }
+    }
+
+    if execute {
+        let run = interp::run(&ir);
+        write_lines(run.output.into_iter());
+
+        return match run.outcome {
+            interp::Outcome::Finished => ExitCode::SUCCESS,
+            interp::Outcome::Trapped(trap) => {
+                let (line, column) = position(&source, trap.span.start);
+                eprintln!("{path}:{line}:{column}: runtime error: {}", trap.error);
+                ExitCode::FAILURE
+            }
+            interp::Outcome::LimitReached => {
+                eprintln!("{path}: execution limit reached");
+                ExitCode::FAILURE
+            }
+        };
+    }
 
     if dump_ir {
         write_lines(ir.to_string().lines().map(str::to_string));

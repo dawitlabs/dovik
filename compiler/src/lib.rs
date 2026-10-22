@@ -1,10 +1,13 @@
 pub mod ast;
 pub mod check;
 pub mod error;
+pub mod interp;
 pub mod ir;
 pub mod lexer;
 pub mod lower;
+pub mod opt;
 pub mod parser;
 pub mod resolve;
+pub mod runtime;
 pub mod types;
 pub mod token;
