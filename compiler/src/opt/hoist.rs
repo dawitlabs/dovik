@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::builtins::Builtin;
-use crate::ir::{BlockId, Function, InstKind, Terminator, Value};
+use crate::ir::{BlockId, Function, InstKind, RegId, Terminator, Value};
 use crate::types::Type;
 
 pub(crate) fn hoist_lengths(function: &mut Function, signatures: &[Vec<Type>]) -> usize {
@@ -113,12 +113,13 @@ fn move_lengths(
     preheader: BlockId,
     body: &HashSet<BlockId>,
 ) -> usize {
+    let defined = defined_in(function, body);
     let mut moved = Vec::new();
     let mut kept = Vec::new();
 
     for inst in std::mem::take(&mut function.blocks[header].instructions) {
         let movable = match &inst.kind {
-            InstKind::Len { value, .. } => invariant(function, value, body),
+            InstKind::Len { value, .. } => invariant(value, &defined),
             _ => false,
         };
 
@@ -138,15 +139,16 @@ fn move_lengths(
     count
 }
 
-fn invariant(function: &Function, value: &Value, body: &HashSet<BlockId>) -> bool {
-    let Value::Reg(register) = value else {
-        return true;
-    };
+fn defined_in(function: &Function, body: &HashSet<BlockId>) -> HashSet<RegId> {
+    body.iter()
+        .flat_map(|block| &function.blocks[*block].instructions)
+        .flat_map(|inst| super::escape::destinations(&inst.kind))
+        .collect()
+}
 
-    !body.iter().any(|block| {
-        function.blocks[*block]
-            .instructions
-            .iter()
-            .any(|inst| super::escape::destinations(&inst.kind).contains(register))
-    })
+fn invariant(value: &Value, defined: &HashSet<RegId>) -> bool {
+    match value {
+        Value::Reg(register) => !defined.contains(register),
+        _ => true,
+    }
 }

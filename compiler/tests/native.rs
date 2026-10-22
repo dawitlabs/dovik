@@ -112,6 +112,10 @@ const CORPUS: &[(&str, &str)] = &[
     ("list_loop", "total = 0\nfor n in [1, 2, 3, 4]:\n    total = total + n\nprint(total)\n"),
     ("list_strings", "for name in [\"Dawit\", \"Abel\"]:\n    print(\"Hi \" + name)\n"),
     (
+        "length_in_a_loop_condition",
+        "s = \"abc\"\nj = 0\nwhile j < len(s):\n    j = j + 1\nprint(j)\nxs = [1, 2, 3]\ni = 0\ntotal = 0\nwhile i < len(xs):\n    total = total + xs[i]\n    i = i + 1\nprint(total)\n",
+    ),
+    (
         "float_and_bool_list_loop",
         "fs = [2.5, -1.5]\nfor f in fs:\n    print(f)\nbs = [true, false]\nfor b in bs:\n    print(b)\n",
     ),

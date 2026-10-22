@@ -938,3 +938,24 @@ no dictionary key — was already true the moment `Type::Optional` existed.
 
 This is worth remembering when adding the next type: a whitelist costs more to write once and
 nothing to be correct afterwards.
+
+## Hoisting tested invariance against a block it had already emptied
+
+`while j < len(s)` produced invalid LLVM IR — `Instruction does not dominate all uses` — for
+any `String` or `List` whose load sits in the loop header. `clang` caught it, so no wrong
+program ever ran, but the compiler could not build a loop written that way at all.
+
+`move_lengths` started with `std::mem::take(&mut function.blocks[header].instructions)`, then
+asked `invariant` whether the `Len`'s operand was defined inside the loop. By then the header's
+instructions were in a local vector and the header was empty, so the operand's defining
+`LoadLocal` was invisible and every `Len` looked invariant. The pass hoisted the `Len` to the
+preheader and left the load behind in the header, below its own use.
+
+The fix is to collect the registers defined in the loop body **before** taking the
+instructions. The shape to watch for: a pass that mutates the function and then queries the
+function it is mutating.
+
+Why no test caught it: `opt`'s corpus compares optimized against unoptimized output through
+the interpreter, which does not care whether the IR would satisfy LLVM's dominance rule, and
+`native`'s corpus had no loop with `len` in its condition. Both corpora now have one. An
+optimizer bug that produces invalid IR is only visible to a test that runs `clang`.

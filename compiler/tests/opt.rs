@@ -51,6 +51,8 @@ const CORPUS: &[&str] = &[
     "function loud() -> Bool:\n    print(\"ran\")\n    return true\n\nprint(false and loud())\n",
     "limit = 4\n\nfunction under(n: Int) -> Bool:\n    return n < limit\n\nprint(under(2))\n",
     "s = \"ab\"\nprint(s[0])\nprint(len(s))\n",
+    "s = \"abc\"\nj = 0\nwhile j < len(s):\n    j = j + 1\nprint(j)\n",
+    "xs = [1, 2, 3]\ni = 0\ntotal = 0\nwhile i < len(xs):\n    total = total + xs[i]\n    i = i + 1\nprint(total)\n",
 ];
 
 #[test]
