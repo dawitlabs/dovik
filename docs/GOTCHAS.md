@@ -298,3 +298,34 @@ release.
 
 Literals are therefore borrowed everywhere, and live for the whole program. `main`
 releases them before reporting leaks, so they do not show up as a leak.
+
+## The overflow check blocks SIMD, which is the real cost of D009
+
+`llvm.sadd.with.overflow` is a call the loop vectorizer refuses, and the trap branch
+leaves the accumulator live outside the loop. Asked with
+`clang -Rpass-analysis=loop-vectorize`, LLVM says exactly that:
+
+```
+loop not vectorized: call instruction cannot be vectorized
+loop not vectorized: value that could not be identified as reduction
+                     is used outside the loop
+```
+
+The same loop in C vectorizes at width 2 interleaved 2. That gap, not the cost of a
+branch, is most of why Dovik's integer loops are slower.
+
+**Do not price the checks by comparing the checked and unchecked builds.** Neither
+vectorizes, so the comparison reports no difference and looks like the checks are free.
+Measure vectorization, not just wall time. `--omit-runtime-checks-for-benchmarking`
+removes the intrinsic but something else still prevents vectorization in that build,
+and what that is has not been diagnosed.
+
+## Most of a small program's memory is the runtime, not the program
+
+A Dovik program printing one number: 5.58 MB binary, 2.98 MB peak RSS. The same in C:
+16 KB and 1.34 MB. `libdovik_rt.a` statically links Rust's std.
+
+Every memory measurement carries that ~3 MB floor, so a workload reporting 3.1 MB is
+using about 0.1 MB of its own. Before concluding anything about allocation behaviour
+from a memory number, subtract the floor — and know that shrinking the runtime is worth
+more than tuning the allocator.

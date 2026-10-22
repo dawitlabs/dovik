@@ -172,10 +172,31 @@ First measurements. Produced by `bench/run.py`; raw data in `bench/results.json`
 
 ### Reading these numbers
 
-**Checked arithmetic is close to free on this workload.** `arith` exists to price it,
-and the checked and unchecked builds land within noise of each other. LLVM keeps the
-overflow branch off the hot path. The honest caveat is that no workload yet isolates
-`Float` division, which section 4 predicts is where the zero-divisor check should show.
+**Checked arithmetic is not free, and comparing against the unchecked build hides
+why.** The two Dovik builds land within noise of each other, which invites the
+conclusion that the checks cost nothing. That conclusion is wrong.
+
+Asked directly, LLVM declines to vectorize the checked loop and says why:
+
+```
+loop not vectorized: call instruction cannot be vectorized
+loop not vectorized: value that could not be identified as reduction
+                     is used outside the loop
+```
+
+`llvm.sadd.with.overflow` is a call the loop vectorizer will not handle, and the trap
+branch leaves the accumulator live outside the loop. The same loop in C vectorizes at
+width 2, interleaved 2 — four lanes at once — and its inner loop is `paddd` and
+`pmuludq` on `xmm` registers against Dovik's scalar `mul`. That gap, not an extra
+branch, is most of the ~1.3x.
+
+The unchecked build does not recover it either: it emits no vectorization remarks at
+all, so both Dovik builds are scalar and the comparison between them is blind to the
+loss. **To price the checks honestly, the unchecked build has to be measured for
+vectorization, not just for time.** That is a gap in this suite's method, not a result.
+
+No workload yet isolates `Float` division, which section 4 predicts is where the
+zero-divisor check should show.
 
 **Dovik is within ~1.5x of C on scalar work.** `arith`, `recursion` and `calls` are
 competitive. `collections`, `strings` and `string_index` are not, for the two separate
@@ -189,6 +210,14 @@ exactly as written, and it is the measurement U3 asked for before resolving.
 into the runtime as an opaque call, so LLVM can neither inline nor vectorize any of it,
 and each element occupies a 16-byte tagged cell against C's 8-byte `long long`. That is
 a consequence of the runtime ABI, not of the language.
+
+**A large part of the memory figures is fixed cost, not workload.** A Dovik program
+that prints one number is a 5.58 MB binary with a 2.98 MB peak, against C's 16 KB and
+1.34 MB. `libdovik_rt.a` statically links Rust's standard library. Every memory number
+above therefore carries roughly 3 MB of floor: after reference counting, `strings`
+peaks at 3.1 MB, of which about 2.98 MB is the runtime existing at all and ~0.1 MB is
+the program's data. The next real memory win is shrinking the runtime, not changing
+how it allocates.
 
 Nothing here supports a claim that Dovik is fast. It supports the narrower claims that
 checked integer arithmetic costs little on this workload and this machine, and that
