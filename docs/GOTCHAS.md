@@ -627,3 +627,30 @@ bounded, which needs scalar evolution.
 
 So trading away [DECISIONS.md](DECISIONS.md) D009 buys nothing measurable on this suite.
 Anyone proposing it should reproduce the three trials first.
+
+## Scalar evolution is not worth building, and the endpoint was measured
+
+The plan was to bound a loop accumulator so its overflow check could be elided and LLVM
+could vectorize the reduction. That plan has a measurable endpoint already available: the
+`--omit-runtime-checks-for-benchmarking` build, which removes every check and is therefore
+the best any elision analysis could achieve.
+
+Measured interleaved on the integer workload: all checks kept is 1.26x C, all checks
+removed is 1.62x C. **Removing them is 29% slower**, because without the overflow
+intrinsics LLVM unrolls roughly twice as hard, schedules worse, and still does not
+vectorize.
+
+So the highest-risk analysis in the compiler — where a bug is a missing overflow trap —
+would have made the benchmark it targeted slower. Do not build it without first re-running
+that comparison and finding a different answer.
+
+## Inlining small item storage into a List was tried and reverted
+
+Giving `List` a four-element inline buffer so a small list is one allocation instead of two
+measured as noise: +1.7% on allocation churn, -8.7% on string building, nothing outside
+±3% elsewhere. The object pool was already avoiding the second allocation in steady state,
+so the change bought only locality while growing the object from 48 to 80 bytes.
+
+Reverted. The remaining 5.3x on allocation churn is the object model: a Dovik list carries
+a reference count, a length, a capacity and an element tag that C's `malloc(24)` does not.
+Closing it means a smaller representation, not a smarter allocator.
