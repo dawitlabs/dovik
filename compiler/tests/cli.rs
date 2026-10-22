@@ -253,14 +253,6 @@ fn emit_flags_write_to_stdout() {
 }
 
 #[test]
-fn test_explains_why_it_cannot_run() {
-    let sandbox = Sandbox::new("test_explains_why_it_cannot_run");
-    let test = sandbox.dovik(&["test"]);
-    assert_eq!(test.code, 1);
-    assert!(test.stderr.contains("no way to declare a test"));
-}
-
-#[test]
 fn format_writes_to_stdout_by_default() {
     let sandbox = Sandbox::new("format_writes_to_stdout_by_default");
     let path = sandbox.write("messy.dovk", "x=1+2\n");
@@ -316,4 +308,109 @@ fn format_refuses_a_file_that_does_not_parse() {
     assert_eq!(result.code, 1);
     assert!(result.stderr.contains("does not parse"), "{:?}", result.stderr);
     assert_eq!(result.stdout, "");
+}
+
+#[test]
+fn test_runs_each_test_and_reports_failures() {
+    let sandbox = Sandbox::new("test_runs_each_test_and_reports_failures");
+    let path = sandbox.write(
+        "suite.dovk",
+        "\
+function test_passes():
+    assert(1 == 1)
+
+function test_also_passes():
+    assert(join(split(\"a,b\", \",\"), \"-\") == \"a-b\")
+
+function test_fails():
+    assert(1 == 2)
+",
+    );
+
+    let result = sandbox.dovik(&["test", path.to_str().expect("path")]);
+
+    assert_eq!(result.code, 1, "a failing test must fail the run");
+    assert!(result.stdout.contains("ok   test_passes"), "{:?}", result.stdout);
+    assert!(result.stdout.contains("ok   test_also_passes"), "{:?}", result.stdout);
+    assert!(result.stdout.contains("FAIL test_fails"), "{:?}", result.stdout);
+    assert!(result.stdout.contains("2 passed, 1 failed, 3 total"), "{:?}", result.stdout);
+    assert!(result.stderr.contains("DVK5008"), "{:?}", result.stderr);
+}
+
+#[test]
+fn test_succeeds_when_every_test_passes() {
+    let sandbox = Sandbox::new("test_succeeds_when_every_test_passes");
+    let path = sandbox.write(
+        "green.dovk",
+        "function test_one():\n    assert(trim(\"  x \") == \"x\")\n",
+    );
+
+    let result = sandbox.dovik(&["test", path.to_str().expect("path")]);
+    assert_eq!(result.code, 0, "{:?}", result.stderr);
+    assert!(result.stdout.contains("1 passed, 0 failed, 1 total"));
+}
+
+#[test]
+fn test_reports_when_there_is_nothing_to_run() {
+    let sandbox = Sandbox::new("test_reports_when_there_is_nothing_to_run");
+    let path = sandbox.write("empty.dovk", "print(1)\n");
+    let result = sandbox.dovik(&["test", path.to_str().expect("path")]);
+
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("no tests found"), "{:?}", result.stderr);
+}
+
+#[test]
+fn test_ignores_functions_that_take_parameters() {
+    let sandbox = Sandbox::new("test_ignores_functions_that_take_parameters");
+    let path = sandbox.write(
+        "mixed.dovk",
+        "\
+function test_helper(n: Int) -> Int:
+    return n
+
+function test_real():
+    assert(test_helper(1) == 1)
+",
+    );
+
+    let result = sandbox.dovik(&["test", path.to_str().expect("path")]);
+    assert_eq!(result.code, 0, "{:?}", result.stderr);
+    assert!(result.stdout.contains("1 passed, 0 failed, 1 total"), "{:?}", result.stdout);
+}
+
+#[test]
+fn read_input_consumes_standard_input() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let sandbox = Sandbox::new("read_input_consumes_standard_input");
+    let source = sandbox.write(
+        "filter.dovk",
+        "for line in split(read_input(), \"\\n\"):\n    if len(line) > 0:\n        print(upper(line))\n",
+    );
+    let binary = sandbox.dir.join("filter");
+
+    assert_eq!(
+        sandbox
+            .dovik(&["build", "-o", binary.to_str().expect("path"), source.to_str().expect("path")])
+            .code,
+        0
+    );
+
+    let mut child = Command::new(&binary)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn");
+
+    child
+        .stdin
+        .as_mut()
+        .expect("stdin")
+        .write_all(b"one\ntwo\n")
+        .expect("write");
+
+    let finished = child.wait_with_output().expect("wait");
+    assert_eq!(String::from_utf8_lossy(&finished.stdout), "ONE\nTWO\n");
 }

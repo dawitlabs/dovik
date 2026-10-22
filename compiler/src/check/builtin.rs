@@ -84,7 +84,9 @@ fn hint(builtin: Builtin) -> Option<Type> {
         | Builtin::StartsWith
         | Builtin::EndsWith
         | Builtin::Upper
-        | Builtin::Lower => Some(Type::Str),
+        | Builtin::Lower
+        | Builtin::Replace => Some(Type::Str),
+        Builtin::Assert => Some(Type::Bool),
         Builtin::Join => Some(Type::List(Box::new(Type::Str))),
         Builtin::Argument => Some(Type::Int),
         _ => None,
@@ -117,7 +119,10 @@ fn accepts_first(builtin: Builtin, found: &Type) -> bool {
         | Builtin::StartsWith
         | Builtin::EndsWith
         | Builtin::Upper
-        | Builtin::Lower => *found == Type::Str,
+        | Builtin::Lower
+        | Builtin::Replace => *found == Type::Str,
+        Builtin::Assert => *found == Type::Bool,
+        Builtin::ReadInput => true,
         Builtin::Join => *found == Type::List(Box::new(Type::Str)),
         Builtin::Argument => *found == Type::Int,
         Builtin::ArgumentCount => true,
@@ -148,6 +153,7 @@ fn remaining_types(builtin: Builtin, first: &Type) -> Vec<Type> {
         | Builtin::StartsWith
         | Builtin::EndsWith => vec![Type::Str],
         Builtin::Substring => vec![Type::Int, Type::Int],
+        Builtin::Replace => vec![Type::Str, Type::Str],
         _ => Vec::new(),
     }
 }

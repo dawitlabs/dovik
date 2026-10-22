@@ -23,6 +23,10 @@ impl Interpreter<'_> {
             return Ok(Value::Int(self.arguments.len() as i64));
         }
 
+        if which == Builtin::ReadInput {
+            return Ok(Value::str(read_input()));
+        }
+
         let result = match which {
             Builtin::Append => append(&values),
             Builtin::Insert => insert(&values),
@@ -61,6 +65,15 @@ impl Interpreter<'_> {
             )),
             Builtin::Upper => Ok(Value::str(ascii_case(values[0].as_str(), true))),
             Builtin::Lower => Ok(Value::str(ascii_case(values[0].as_str(), false))),
+            Builtin::Replace => Ok(Value::str(replace(
+                values[0].as_str(),
+                values[1].as_str(),
+                values[2].as_str(),
+            ))),
+            Builtin::Assert => match values[0].as_bool() {
+                true => Ok(Value::Unit),
+                false => Err(RuntimeError::AssertionFailed),
+            },
             _ => Ok(Value::Unit),
         };
 
@@ -154,6 +167,20 @@ fn index_of(text: &str, needle: &str) -> Result<Value, RuntimeError> {
     };
 
     Ok(Value::Int(text[..byte].chars().count() as i64))
+}
+
+fn replace(text: &str, from: &str, to: &str) -> String {
+    match from.is_empty() {
+        true => text.to_string(),
+        false => text.replace(from, to),
+    }
+}
+
+fn read_input() -> String {
+    use std::io::Read;
+    let mut text = String::new();
+    let _ = std::io::stdin().read_to_string(&mut text);
+    text
 }
 
 fn ascii_case(text: &str, upper: bool) -> String {

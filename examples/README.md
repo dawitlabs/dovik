@@ -29,3 +29,30 @@ before `read_file`, since a failed read traps.
 
 It also shows what the library still lacks. Splitting on whitespace has to be written by
 hand, because there is no `split`.
+
+## upper.dovk
+
+A Unix filter. Reads standard input, trims and upper-cases each non-empty line:
+
+```
+$ printf 'hello world\n  dovik rules  \n' | ./upper
+HELLO WORLD
+DOVIK RULES
+```
+
+It composes with other tools, which is what `read_input` was added for.
+
+## Running tests
+
+Any function named `test_*` taking no parameters is a test. `assert` fails one.
+
+```
+$ dovik test suite.dovk
+ok   test_split_and_join
+ok   test_replace
+FAIL test_this_one_fails
+
+2 passed, 1 failed, 3 total
+```
+
+Each test runs in its own process, so one failure does not hide the rest.

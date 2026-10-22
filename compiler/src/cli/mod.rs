@@ -16,7 +16,7 @@ usage:
   dovik run <file.dovk> [options]
   dovik check <file.dovk> [options]
   dovik format <file.dovk> [--check] [--write]
-  dovik test
+  dovik test <file.dovk>
   dovik --version
   dovik --help
 
@@ -74,12 +74,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
         "run" => with_file(rest, pipeline::run),
         "check" => with_file(rest, pipeline::check),
         "format" => with_file(rest, pipeline::format),
-        "test" => {
-            eprintln!(
-                "dovik test is not implemented: Dovik has no way to declare a test yet, so there is nothing for it to run"
-            );
-            ExitCode::FAILURE
-        }
+        "test" => with_file(rest, pipeline::test),
         other => {
             eprintln!("unknown command `{other}`\n");
             eprint!("{USAGE}");

@@ -1,6 +1,6 @@
 use crate::types::Type;
 
-pub const NAMES: [&str; 30] = [
+pub const NAMES: [&str; 33] = [
     "print",
     "len",
     "to_int",
@@ -31,6 +31,9 @@ pub const NAMES: [&str; 30] = [
     "ends_with",
     "upper",
     "lower",
+    "replace",
+    "read_input",
+    "assert",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +68,9 @@ pub enum Builtin {
     EndsWith,
     Upper,
     Lower,
+    Replace,
+    ReadInput,
+    Assert,
 }
 
 impl Builtin {
@@ -100,6 +106,9 @@ impl Builtin {
             "ends_with" => Self::EndsWith,
             "upper" => Self::Upper,
             "lower" => Self::Lower,
+            "replace" => Self::Replace,
+            "read_input" => Self::ReadInput,
+            "assert" => Self::Assert,
             _ => return None,
         })
     }
@@ -136,12 +145,15 @@ impl Builtin {
             Self::EndsWith => "ends_with",
             Self::Upper => "upper",
             Self::Lower => "lower",
+            Self::Replace => "replace",
+            Self::ReadInput => "read_input",
+            Self::Assert => "assert",
         }
     }
 
     pub fn arity(self) -> usize {
         match self {
-            Self::Insert | Self::Substring => 3,
+            Self::Insert | Self::Substring | Self::Replace => 3,
             Self::Append
             | Self::RemoveAt
             | Self::HasKey
@@ -154,7 +166,7 @@ impl Builtin {
             | Self::IndexOf
             | Self::StartsWith
             | Self::EndsWith => 2,
-            Self::ArgumentCount => 0,
+            Self::ArgumentCount | Self::ReadInput => 0,
             _ => 1,
         }
     }
@@ -169,7 +181,8 @@ impl Builtin {
             | Self::Append
             | Self::Insert
             | Self::WriteFile
-            | Self::AppendFile => Type::Unit,
+            | Self::AppendFile
+            | Self::Assert => Type::Unit,
             Self::Len | Self::ToInt | Self::ParseInt | Self::ArgumentCount | Self::IndexOf => {
                 Type::Int
             }
@@ -181,7 +194,9 @@ impl Builtin {
             | Self::Substring
             | Self::Trim
             | Self::Upper
-            | Self::Lower => Type::Str,
+            | Self::Lower
+            | Self::Replace
+            | Self::ReadInput => Type::Str,
             Self::Split => Type::List(Box::new(Type::Str)),
             Self::HasKey
             | Self::RemoveKey

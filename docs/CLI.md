@@ -70,7 +70,8 @@ A project manifest and dependency management belong with the module system, in R
 - Project manifest format.
 - Dependency management.
 - Incremental compilation and caching.
-- Whether `dovik test` needs a language-level way to declare a test, or an external harness.
+- Whether the `test_` prefix is the right convention, or whether tests belong in a separate
+  file that the module system (section 16) would make possible.
 
 Settled provisionally by the current implementation, and open to change:
 
@@ -80,11 +81,18 @@ Settled provisionally by the current implementation, and open to change:
 
 ## 7. Status
 
-`format` and `test` are unimplemented. `format` needs a formatter; `test` cannot
-be written at all until the language can express a test, since there would be
-nothing for it to collect.
+Every command in section 2 is implemented.
 
 ## 8. Implemented Behaviour
+
+`dovik test <file>` collects every module-level function whose name begins with `test_`
+and which takes no parameters, then runs each one in a separate process so that a failure
+does not stop the run. A test fails by raising a runtime error, which `assert` does. The
+runner prints one line per test and a summary, and exits 1 if any failed.
+
+This needed no language change. A naming convention plus `assert` was enough, which is why
+there is no `test` keyword and no attribute syntax.
+
 
 `dovik build <file> [-o <path>]` writes an executable, defaulting to the file's
 stem. `--emit-llvm`, `--emit-ir` and `--emit-tokens` write that stage to stdout

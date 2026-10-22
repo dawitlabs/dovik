@@ -28,6 +28,75 @@ pub fn check(path: &str, source: &str, options: &Options) -> ExitCode {
     }
 }
 
+pub fn test(path: &str, source: &str, options: &Options) -> ExitCode {
+    let report = Report {
+        path,
+        source,
+        json: options.json,
+    };
+
+    let compiled = match compile(source, options) {
+        Ok(compiled) => compiled,
+        Err(diagnostics) => {
+            report.emit(&diagnostics);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let found: Vec<(usize, String)> = compiled
+        .program
+        .functions
+        .iter()
+        .enumerate()
+        .filter(|(index, function)| {
+            *index != compiled.program.main
+                && function.name.starts_with("test_")
+                && function.param_count == 0
+        })
+        .map(|(index, function)| (index, function.name.clone()))
+        .collect();
+
+    if found.is_empty() {
+        report.note("no tests found: name a function `test_something` with no parameters");
+        return ExitCode::FAILURE;
+    }
+
+    let indices: Vec<usize> = found.iter().map(|(index, _)| *index).collect();
+    let llvm = backend::emit_tests(&compiled.program, source, &indices);
+    let binary = std::env::temp_dir().join(format!("dovik-test-{}", std::process::id()));
+    let target = binary.display().to_string();
+
+    if let Err(message) = link(&llvm, &target) {
+        report.note(&message);
+        return ExitCode::FAILURE;
+    }
+
+    let mut failed = 0;
+
+    for (slot, (_, name)) in found.iter().enumerate() {
+        let status = Command::new(&target).arg(slot.to_string()).status();
+
+        let passed = matches!(status, Ok(code) if code.success());
+        let mark = match passed {
+            true => "ok  ",
+            false => "FAIL",
+        };
+
+        println!("{mark} {name}");
+        failed += usize::from(!passed);
+    }
+
+    let _ = std::fs::remove_file(&target);
+    let total = found.len();
+    println!();
+    println!("{} passed, {failed} failed, {total} total", total - failed);
+
+    match failed {
+        0 => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
+    }
+}
+
 pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
     let report = Report {
         path,

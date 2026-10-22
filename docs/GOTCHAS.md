@@ -697,3 +697,39 @@ default shape for any library function that can fail to find something.
 scalar count — `ß` uppercases to two scalars — which would make them the only text
 functions whose output length is unpredictable. Recorded as an open decision rather than
 silently half-done.
+
+## `dovik test` needed no language change, and each test runs in its own process
+
+A test is a module-level function named `test_*` with no parameters, and it fails by raising
+a runtime error — which is what `assert` does. That is the whole mechanism. There is no
+`test` keyword, no attribute syntax, and nothing in SPEC.md changed for it.
+
+The compiled test binary takes an index and runs the one test it names, and
+`cli::pipeline::test` invokes it once per test. That is what lets a failure be reported
+without stopping the run: a trap exits the process, and the process only ever held one test.
+Running all tests in a single process would report the first failure and nothing after it.
+
+`backend::emit_tests` emits the dispatching entry point. It reuses the normal module
+emission and only replaces the body of `main`, so string literal setup, global release and
+the leak report all still happen.
+
+## `read_input` reads to end of input, deliberately
+
+A line-at-a-time reader needs an end-of-input predicate beside it, which would have made a
+fifth guard-and-accessor pair. Reading everything and handing it to `split` needs no
+predicate and composes with the text operations that already exist.
+
+The cost is that a Dovik filter cannot stream: it holds the whole input in memory. That is
+the wrong trade for a large file and the right one for the programs Dovik can currently
+write.
+
+## A language change goes in the spec before the compiler
+
+[SPEC.md](SPEC.md) 20 requires that a change to syntax or type rules is recorded in the
+specification first, and that the implementation must not diverge silently.
+[PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTIONAL-TYPES.md) is therefore a proposal and not a
+branch: resolving U8 touches the lexer, the type checker's first flow-sensitive rule, the
+IR representation, the runtime, five library signatures and six documents.
+
+Nothing in the compiler depends on that file. If it is rejected, deleting it costs nothing,
+which is the point of writing it before writing code.

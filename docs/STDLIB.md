@@ -154,6 +154,7 @@ scalar values, never bytes.
 | `ends_with(text: String, suffix: String) -> Bool` | |
 | `upper(text: String) -> String` | ASCII only |
 | `lower(text: String) -> String` | ASCII only |
+| `replace(text: String, from: String, to: String) -> String` | Every occurrence. An empty `from` changes nothing |
 
 `contains` pairs with `index_of` the way `file_exists` pairs with `read_file`: the predicate
 exists so a program can avoid the trap, because the error model has no way to return
@@ -178,13 +179,35 @@ Three decisions worth knowing:
   [SPEC.md](SPEC.md) 10.4 already assigns case conversion to the library without specifying
   its extent, so this is a starting point rather than an answer.
 
-## 8. Not Yet Provided
+## 8. Standard Input and Assertions
+
+| Signature | Behaviour |
+| --- | --- |
+| `read_input() -> String` | All of standard input as text. A failure is a runtime error |
+| `assert(condition: Bool) -> Unit` | Does nothing when true; a runtime error when false |
+
+`read_input` reads to end of input rather than a line at a time, which needs no end-of-input
+predicate and composes with `split`:
+
+```dovk
+for line in split(read_input(), "\n"):
+    print(upper(line))
+```
+
+A line-at-a-time reader would need `has_input` beside it, adding a fifth guard-and-accessor
+pair, and [PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTIONAL-TYPES.md) argues the opposite
+direction.
+
+`assert` exists so `dovik test` can work without a language change. It raises `DVK5008`,
+which extends [SPEC.md](SPEC.md) 15.2 again.
+
+## 9. Not Yet Provided
 
 Named by [SPEC.md](SPEC.md) 17 as library surface, with no implementation and no
 chosen names: time, grapheme segmentation and normalization (10.4), full Unicode case
-conversion, sorting, standard input, directory operations, and `replace`.
+conversion, sorting, directory operations, and reading standard input a line at a time.
 
-## 9. Open Decisions
+## 10. Open Decisions
 
 - Every name above. They are chosen, not ratified.
 - Whether a failed parse keeps `DVK5004` or gets its own runtime error.

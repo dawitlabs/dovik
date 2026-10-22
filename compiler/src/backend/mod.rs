@@ -39,6 +39,7 @@ declare i8 @dovik_eq(i8, i64, i64)
 declare void @dovik_retain(i8, i64)
 declare void @dovik_release(i8, i64)
 declare void @dovik_report_leaks()
+declare i64 @dovik_test_index()
 declare void @dovik_set_arguments(i32, ptr)
 declare i64 @dovik_argument_count()
 declare i64 @dovik_argument(i64, i32, i32)
@@ -56,6 +57,9 @@ declare i8 @dovik_str_starts_with(i64, i64)
 declare i8 @dovik_str_ends_with(i64, i64)
 declare i64 @dovik_str_upper(i64)
 declare i64 @dovik_str_lower(i64)
+declare i64 @dovik_str_replace(i64, i64, i64)
+declare i64 @dovik_read_input(i32, i32)
+declare void @dovik_assert(i8, i32, i32)
 declare void @dovik_list_insert(i64, i64, i64, i32, i32)
 declare i64 @dovik_list_remove_at(i64, i64, i32, i32)
 declare i8 @dovik_dict_has_key(i64, i8, i64)
@@ -75,6 +79,22 @@ pub fn emit(program: &Program, source: &str) -> String {
     emit_with(program, source, true)
 }
 
+pub fn emit_tests(program: &Program, source: &str, tests: &[usize]) -> String {
+    let mut emitter = Emitter {
+        program,
+        source,
+        out: String::new(),
+        temp: 0,
+        label: String::new(),
+        checks: true,
+        pure: purity::classify(program),
+        tests: tests.to_vec(),
+    };
+
+    emitter.module();
+    emitter.out
+}
+
 pub fn emit_with(program: &Program, source: &str, checks: bool) -> String {
     let mut emitter = Emitter {
         program,
@@ -84,6 +104,7 @@ pub fn emit_with(program: &Program, source: &str, checks: bool) -> String {
         label: String::new(),
         checks,
         pure: purity::classify(program),
+        tests: Vec::new(),
     };
 
     emitter.module();
@@ -98,6 +119,7 @@ pub(crate) struct Emitter<'a> {
     pub(crate) label: String,
     pub(crate) checks: bool,
     pub(crate) pure: Vec<bool>,
+    pub(crate) tests: Vec<usize>,
 }
 
 impl Emitter<'_> {
@@ -140,7 +162,10 @@ impl Emitter<'_> {
             self.line(&format!("  store i64 {temp}, ptr @slit.{index}"));
         }
 
-        self.line(&format!("  call void @dvk{}()", self.program.main));
+        match self.tests.is_empty() {
+            true => self.line(&format!("  call void @dvk{}()", self.program.main)),
+            false => self.dispatch_tests(),
+        }
 
         for (index, global) in self.program.globals.iter().enumerate() {
             if !is_reference(&global.ty) {
@@ -227,6 +252,29 @@ impl Emitter<'_> {
 
         self.line("}");
         self.line("");
+    }
+
+    fn dispatch_tests(&mut self) {
+        let tests = self.tests.clone();
+        let chosen = self.next_temp();
+        self.line(&format!("  {chosen} = call i64 @dovik_test_index()"));
+
+        let arms: Vec<String> = (0..tests.len())
+            .map(|slot| format!("i64 {slot}, label %test{slot}"))
+            .collect();
+
+        self.line(&format!(
+            "  switch i64 {chosen}, label %tests.done [ {} ]",
+            arms.join(" ")
+        ));
+
+        for (slot, function) in tests.iter().enumerate() {
+            self.line(&format!("test{slot}:"));
+            self.line(&format!("  call void @dvk{function}()"));
+            self.line("  br label %tests.done");
+        }
+
+        self.line("tests.done:");
     }
 
     fn release_registers(&mut self, function: &Function, registers: &[usize]) {

@@ -122,6 +122,21 @@ impl Emitter<'_> {
                 "i64 @dovik_str_substring(i64 {}, i64 {}, i64 {}, i32 {line}, i32 {column})",
                 words[0], words[1], words[2]
             )),
+            Builtin::Replace => self.plain_call(dest, &format!(
+                "i64 @dovik_str_replace(i64 {}, i64 {}, i64 {})",
+                words[0], words[1], words[2]
+            )),
+            Builtin::ReadInput => self.plain_call(
+                dest,
+                &format!("i64 @dovik_read_input(i32 {line}, i32 {column})"),
+            ),
+            Builtin::Assert => {
+                let flag = self.next_temp();
+                self.line(&format!("  {flag} = zext i1 {} to i8", super::value::literal(&args[0].0)));
+                self.line(&format!(
+                    "  call void @dovik_assert(i8 {flag}, i32 {line}, i32 {column})"
+                ));
+            }
             Builtin::IndexOf => self.plain_call(dest, &format!(
                 "i64 @dovik_str_index_of(i64 {}, i64 {}, i32 {line}, i32 {column})",
                 words[0], words[1]

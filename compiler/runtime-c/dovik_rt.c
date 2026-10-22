@@ -92,7 +92,8 @@ static const char *trap_message(uint32_t code) {
         case 3: return "invalid conversion";
         case 4: return "index out of bounds";
         case 5: return "dictionary key not found";
-        default: return "could not read or write that file";
+        case 6: return "could not read or write that file";
+        default: return "assertion failed";
     }
 }
 
@@ -104,7 +105,8 @@ static const char *trap_code(uint32_t code) {
         case 3: return "DVK5004";
         case 4: return "DVK5005";
         case 5: return "DVK5006";
-        default: return "DVK5007";
+        case 6: return "DVK5007";
+        default: return "DVK5008";
     }
 }
 
@@ -1089,3 +1091,89 @@ static uint64_t recase(uint64_t text, int to_upper) {
 
 uint64_t dovik_str_upper(uint64_t text) { return recase(text, 1); }
 uint64_t dovik_str_lower(uint64_t text) { return recase(text, 0); }
+
+uint64_t dovik_str_replace(uint64_t text, uint64_t from, uint64_t to) {
+    Str *source = (Str *)(uintptr_t)text;
+    Str *needle = (Str *)(uintptr_t)from;
+    Str *patch = (Str *)(uintptr_t)to;
+
+    if (needle->len == 0) {
+        dovik_retain(TAG_STR, text);
+        return text;
+    }
+
+    size_t cap = source->len + 16;
+    size_t len = 0;
+    char *bytes = checked_alloc(cap + 1);
+    size_t at = 0;
+
+    while (at < source->len) {
+        const char *hit = find_bytes(source, needle, at);
+        size_t stop = hit == NULL ? source->len : (size_t)(hit - source->bytes);
+        size_t chunk = stop - at;
+        size_t extra = chunk + (hit == NULL ? 0 : patch->len);
+
+        if (len + extra > cap) {
+            while (len + extra > cap) cap *= 2;
+            char *grown = checked_alloc(cap + 1);
+            memcpy(grown, bytes, len);
+            free(bytes);
+            bytes = grown;
+        }
+
+        memcpy(bytes + len, source->bytes + at, chunk);
+        len += chunk;
+
+        if (hit == NULL) break;
+
+        memcpy(bytes + len, patch->bytes, patch->len);
+        len += patch->len;
+        at = stop + needle->len;
+    }
+
+    uint64_t result = make_string(bytes, len);
+    free(bytes);
+    return result;
+}
+
+uint64_t dovik_read_input(uint32_t line, uint32_t column) {
+    size_t cap = 4096;
+    size_t len = 0;
+    char *bytes = checked_alloc(cap + 1);
+
+    for (;;) {
+        if (len == cap) {
+            cap *= 2;
+            char *grown = checked_alloc(cap + 1);
+            memcpy(grown, bytes, len);
+            free(bytes);
+            bytes = grown;
+        }
+
+        size_t read = fread(bytes + len, 1, cap - len, stdin);
+        len += read;
+
+        if (read == 0) break;
+    }
+
+    if (ferror(stdin)) {
+        free(bytes);
+        dovik_trap(6, line, column);
+    }
+
+    uint64_t result = make_string(bytes, len);
+    free(bytes);
+    return result;
+}
+
+void dovik_assert(uint8_t condition, uint32_t line, uint32_t column) {
+    if (!condition) dovik_trap(7, line, column);
+}
+
+int64_t dovik_test_index(void) {
+    if (saved_argc < 1) return -1;
+    char *end = NULL;
+    long long parsed = strtoll(saved_argv[1], &end, 10);
+    if (end == saved_argv[1] || *end != 0) return -1;
+    return parsed;
+}

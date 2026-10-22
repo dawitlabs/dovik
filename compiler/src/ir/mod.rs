@@ -87,6 +87,7 @@ pub enum RuntimeError {
     IndexOutOfBounds,
     MissingKey,
     InputOutput,
+    AssertionFailed,
 }
 
 #[derive(Debug, Clone)]
@@ -195,6 +196,7 @@ impl RuntimeError {
             Self::IndexOutOfBounds => "DVK5005",
             Self::MissingKey => "DVK5006",
             Self::InputOutput => "DVK5007",
+            Self::AssertionFailed => "DVK5008",
         }
     }
 }
@@ -231,9 +233,10 @@ fn builtin_error(which: crate::builtins::Builtin) -> Option<RuntimeError> {
         Builtin::ToInt | Builtin::ParseInt | Builtin::ParseFloat => {
             Some(RuntimeError::InvalidConversion)
         }
-        Builtin::ReadFile | Builtin::WriteFile | Builtin::AppendFile => {
+        Builtin::ReadFile | Builtin::WriteFile | Builtin::AppendFile | Builtin::ReadInput => {
             Some(RuntimeError::InputOutput)
         }
+        Builtin::Assert => Some(RuntimeError::AssertionFailed),
         Builtin::Argument | Builtin::Substring | Builtin::IndexOf => {
             Some(RuntimeError::IndexOutOfBounds)
         }

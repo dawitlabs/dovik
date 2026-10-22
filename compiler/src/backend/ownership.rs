@@ -69,7 +69,9 @@ pub(crate) fn owned_result(kind: &InstKind) -> Option<RegId> {
             | Builtin::Substring
             | Builtin::Trim
             | Builtin::Upper
-            | Builtin::Lower => *dest,
+            | Builtin::Lower
+            | Builtin::Replace
+            | Builtin::ReadInput => *dest,
             _ => None,
         },
         _ => None,

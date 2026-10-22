@@ -270,3 +270,35 @@ print(total)
         String::from_utf8_lossy(&run.stderr)
     );
 }
+
+#[test]
+fn replace_substitutes_every_occurrence() {
+    assert_eq!(output("print(replace(\"a-b-c\", \"-\", \"+\"))\n"), ["a+b+c"]);
+    assert_eq!(output("print(replace(\"aaa\", \"aa\", \"b\"))\n"), ["ba"]);
+    assert_eq!(output("print(replace(\"abc\", \"z\", \"y\"))\n"), ["abc"]);
+    assert_eq!(output("print(\"[\" + replace(\"aaa\", \"a\", \"\") + \"]\")\n"), ["[]"]);
+    assert_eq!(output("print(replace(\"héllo\", \"é\", \"e\"))\n"), ["hello"]);
+}
+
+#[test]
+fn replace_with_an_empty_needle_changes_nothing() {
+    assert_eq!(output("print(replace(\"abc\", \"\", \"x\"))\n"), ["abc"]);
+}
+
+#[test]
+fn assert_passes_quietly_and_fails_loudly() {
+    assert_eq!(output("assert(1 == 1)\nprint(\"after\")\n"), ["after"]);
+    assert_eq!(
+        trap("a = 1\nb = 2\nassert(a == b)\n"),
+        RuntimeError::AssertionFailed
+    );
+}
+
+#[test]
+fn assert_requires_a_bool_and_returns_unit() {
+    assert_eq!(
+        errors("assert(1)\n"),
+        [BuiltinArgument { name: "assert", found: Type::Int }]
+    );
+    assert_eq!(errors("x = assert(true)\n"), [UnitAsValue]);
+}
