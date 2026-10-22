@@ -480,3 +480,23 @@ The development laptop throttles. A single run reported collection work as 30.6 
 fifteen runs put the minimum at 24.5 ms, and reported Dovik beating C on `calls` when it
 does not. Take the minimum of many runs, and re-measure anything that looks like a new
 result before believing it.
+
+## Keep `dovik_release` non-recursive or it stops inlining
+
+Releasing a container releases its elements, so the obvious implementation is recursive —
+and LLVM will not inline a recursive function. Every release became a real call, six per
+iteration in allocation-heavy code.
+
+The hot path is now a decrement and an early return, with the recursive teardown in a
+separate `reclaim` marked `noinline` and `cold`. Both `dovik_retain` and `dovik_release`
+carry `always_inline`. That took allocation churn from 7.2x C to 6.0x.
+
+Reintroducing recursion into `dovik_release` silently undoes this. Check with
+`objdump -d <binary> | grep -c 'call.*<dovik_release>'`, which should be zero in an
+optimized build.
+
+## Measure with at least twenty repetitions
+
+Three repetitions reported `recursion` at 2.75x C when twenty-one put it at 1.53x, and a
+single run reported `collections` regressing by 75% when it had not moved. This machine
+throttles hard enough that small samples invent results in both directions.

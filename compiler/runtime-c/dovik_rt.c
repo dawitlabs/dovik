@@ -126,6 +126,7 @@ static void *checked_alloc(size_t bytes) {
 
 void dovik_retain(uint8_t tag, uint64_t word);
 void dovik_release(uint8_t tag, uint64_t word);
+static void reclaim(uint8_t tag, uint64_t word);
 
 static inline Header *header_of(uint8_t tag, uint64_t word) {
     if (word == 0) return NULL;
@@ -137,16 +138,13 @@ static inline Header *header_of(uint8_t tag, uint64_t word) {
     }
 }
 
-void dovik_retain(uint8_t tag, uint64_t word) {
+__attribute__((always_inline)) void dovik_retain(uint8_t tag, uint64_t word) {
     Header *header = header_of(tag, word);
     if (header != NULL) header->count += 1;
 }
 
-void dovik_release(uint8_t tag, uint64_t word) {
-    Header *header = header_of(tag, word);
-    if (header == NULL) return;
-    if (--header->count > 0) return;
-
+__attribute__((noinline, cold)) static void reclaim(uint8_t tag, uint64_t word) {
+    Header *header = (Header *)(uintptr_t)word;
     live_objects -= 1;
 
     if (tag == TAG_STR) {
@@ -201,6 +199,13 @@ void dovik_release(uint8_t tag, uint64_t word) {
 
     free(owned->entries);
     free(owned);
+}
+
+__attribute__((always_inline)) void dovik_release(uint8_t tag, uint64_t word) {
+    Header *header = header_of(tag, word);
+    if (header == NULL) return;
+    if (--header->count > 0) return;
+    reclaim(tag, word);
 }
 
 int64_t dovik_live_objects(void) { return live_objects; }
@@ -385,6 +390,26 @@ static void reserve(List *value, size_t needed) {
     }
     value->items = items;
     value->cap = cap;
+}
+
+uint64_t dovik_list_new_sized(uint8_t elem, int64_t wanted) {
+    uint64_t handle = dovik_list_new(elem);
+    List *value = (List *)(uintptr_t)handle;
+
+    if (wanted > 0 && (size_t)wanted > value->cap) {
+        free(value->items);
+        value->items = checked_alloc((size_t)wanted * sizeof(uint64_t));
+        value->cap = (size_t)wanted;
+    }
+
+    return handle;
+}
+
+void dovik_list_push_fast(uint64_t list, uint64_t word) {
+    List *value = (List *)(uintptr_t)list;
+    if (value->elem >= TAG_STR) dovik_retain(value->elem, word);
+    value->items[value->len] = word;
+    value->len += 1;
 }
 
 void dovik_list_push(uint64_t list, uint64_t word) {

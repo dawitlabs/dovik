@@ -8,11 +8,21 @@ impl Emitter<'_> {
         match kind {
             InstKind::ListNew { dest, element, items } => {
                 let tag = tag_of(element);
-                self.line(&format!("  %r{dest} = call i64 @dovik_list_new(i8 {tag})"));
+
+                if items.is_empty() {
+                    self.line(&format!("  %r{dest} = call i64 @dovik_list_new(i8 {tag})"));
+                    return;
+                }
+
+                let count = items.len();
+                self.line(&format!(
+                    "  %r{dest} = call i64 @dovik_list_new_sized(i8 {tag}, i64 {count})"
+                ));
+
                 for item in items {
                     let word = self.as_word(item, element);
                     self.line(&format!(
-                        "  call void @dovik_list_push(i64 %r{dest}, i64 {word})"
+                        "  call void @dovik_list_push_fast(i64 %r{dest}, i64 {word})"
                     ));
                 }
             }

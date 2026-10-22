@@ -138,17 +138,20 @@ Produced by `bench/run.py`; raw data in `bench/results.json`.
 - This machine throttles. Medians run 1.3-1.5x the minimum, so a single run can invent a
   result. Re-measure anything that looks new.
 
-### Execution time, milliseconds (lower is better)
+### Execution time, milliseconds — 21 repetitions, minimum reported
 
-| Workload | Dovik | Dovik (no checks) | C | Rust | Python |
-| --- | --- | --- | --- | --- | --- |
-| `arith` | 20.0 | 26.0 | 15.1 | 15.9 | 4915.1 |
-| `recursion` | 2.9 | 2.2 | 1.9 | 2.3 | 71.3 |
-| `calls` | 12.1 | 9.1 | 4.4 | 6.9 | 2730.8 |
-| `collections` | 34.1 | 24.5 | 19.5 | 31.1 | 303.3 |
-| `strings` | 2.7 | 3.1 | 11.2 | 21.1 | 39.1 |
-| `string_index` | 3.1 | 4.1 | 0.9 | 1.7 | 24.3 |
-| `allocation` | 6.3 | 6.2 | 0.9 | 1.7 | 141.1 |
+| Workload | Dovik | C | Ratio |
+| --- | --- | --- | --- |
+| `strings` | **1.63** | 5.80 | **0.28x** |
+| `arith` | 19.55 | 15.90 | 1.23x |
+| `collections` | 22.60 | 15.83 | 1.43x |
+| `recursion` | 2.83 | 1.85 | 1.53x |
+| `string_index` | 3.43 | 1.48 | 2.31x |
+| `calls` | 12.90 | 4.78 | 2.70x |
+| `allocation` | 5.36 | 0.90 | 5.99x |
+
+Taken in one sitting with 21 repetitions each, because fewer runs on this machine invent
+results: a three-repetition pass put `recursion` at 2.75x when it is 1.53x.
 
 ### Peak memory, MB (lower is better)
 
@@ -242,9 +245,15 @@ loop not vectorized: call instruction cannot be vectorized
 against C vectorizing the same loop at width 2 interleaved 2. Closing `arith` means bounding
 that accumulator.
 
-**`allocation` at 7.2x is the largest honest gap.** The workload creates and drops 200000
-three-element lists. Each Dovik list carries a reference count, a length and a capacity that
-C's `malloc(24)` does not, and pays retain and release it cannot skip.
+**`allocation` at 6.0x is the largest honest gap**, down from 7.2x. The workload creates and
+drops 200000 three-element lists. Each Dovik list carries a reference count, a length and a
+capacity that C's `malloc(24)` does not.
+
+Most of the improvement came from one observation: `dovik_release` was recursive, because
+releasing a container releases its elements, and LLVM will not inline a recursive function.
+Every release was therefore a real call — six per iteration. Splitting the hot path (decrement,
+return if still referenced) from a cold `reclaim` that does the recursive teardown made it
+inlinable, and `always_inline` on retain and release removed the calls entirely.
 
 **`string_index` at 3.4x is specified, not slow.** [SPEC.md](SPEC.md) 10.4 indexes strings by
 Unicode scalar over UTF-8 storage, which is O(n) per index; C indexes bytes in O(1) and so
