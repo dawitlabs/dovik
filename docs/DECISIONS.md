@@ -355,3 +355,35 @@ Closing it needs a scalar-offset index stored beside the bytes, which costs memo
 The flag is also an invalidation obligation: anything that mutates a string's bytes must clear it, in the same place it clears the hash. Both are listed in [GOTCHAS.md](GOTCHAS.md).
 
 **Status:** Accepted. Resolves U3. Specified in [SPEC.md](SPEC.md) 10.4.
+
+## D027: A Function May Mutate a Reference-Typed Global, and May Never Rebind One
+
+**Decision:** [SPEC.md](SPEC.md) 9.4 keeps its assignment ban: a function cannot rebind a module-scope variable. It loses the separate ban on *mutating* one. `counter[0] = counter[0] + 1` inside a function is now legal where `counter` is a module-scope `List<Int>`, and that is Dovik's shared mutable module state.
+
+**Reason:** The mutation ban did not work. It matched the syntactic shape `global[i] = v` and nothing else, so this already compiled and already printed `2`:
+
+```dovk
+counter: List<Int> = [0]
+
+function bump():
+    mine = counter          # reading a global is allowed by 9.4
+    mine[0] = mine[0] + 1   # mutating through a reference is allowed by 3.4
+
+bump()
+bump()
+print(counter[0])
+```
+
+One extra line defeated it, which makes it a lint against a spelling rather than a rule about effects. Worse, 9.4 claimed the property that line disproves — that a function's observable effects are limited to its arguments, its return value, and mutation through reference-typed parameters. That claim was false for every reference-typed global the moment D013 made collections references.
+
+Given a self-inconsistent specification, the choice was to make the ban real or to make the claim honest. Making it real means forbidding a function from *reading* a `List` or `Dict` global at all, because reading one hands back a mutable reference. That would break module-level lookup tables, which are among the most useful things a global can be, and would need an immutable-borrow notion the language does not have and does not want.
+
+So the claim is now honest, and U5 is resolved by what reference semantics already implied: no new keyword, no `global` declaration, no mutable-reference parameter mode, and nothing threaded through every call.
+
+The rebinding ban stays, and is now the whole rule rather than half of one. Rebinding a name is local to the scope that declares it (9.6); a function rebinding a global would be writing to a binding it does not own, and that is a different and worse thing than mutating a shared object.
+
+**Trade-off:** A call site no longer shows that module state changes. `bump()` reads like a call with no effects and is not one. The mitigation is weak but real: a function must name the global to touch it, so the functions that can affect `counter` are the functions that mention `counter`, which a search finds.
+
+The alternative that preserved call-site visibility was a mutable-reference parameter mode, and it was rejected for adding a parameter mode to solve a problem reference types already solve — every program that wants the visibility can still pass the collection as a parameter, and 9.6's example shows that form.
+
+**Status:** Accepted. Resolves U5, the last entry in [SPEC.md](SPEC.md) section 21. Specified in [SPEC.md](SPEC.md) 3.4, 9.4, and 9.6.

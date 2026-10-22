@@ -387,3 +387,35 @@ print(down(20000))
     assert_eq!(native.code, 0, "{native:?}");
     assert_eq!(native.stdout, ["20000"]);
 }
+
+#[test]
+fn a_function_mutates_shared_module_state() {
+    let source = "\
+counter: List<Int> = [0]
+seen: Dict<String, Int> = {}
+
+function bump():
+    counter[0] = counter[0] + 1
+
+function record(name: String):
+    bump()
+
+    if has_key(seen, name):
+        seen[name] = seen[name] + 1
+    else:
+        seen[name] = 1
+
+record(\"a\")
+record(\"b\")
+record(\"a\")
+
+print(counter[0])
+print(seen[\"a\"])
+print(seen[\"b\"])
+print(len(seen))
+";
+
+    let native = compile_and_run(source, "shared_state");
+    assert_eq!(native.code, 0, "{native:?}");
+    assert_eq!(native.stdout, ["3", "2", "1", "2"]);
+}

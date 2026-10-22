@@ -83,7 +83,6 @@ impl Resolver {
             AssignTarget::Index { object, index, .. } => {
                 self.resolve_expr(object);
                 self.resolve_expr(index);
-                self.check_mutation_target(object);
             }
         }
     }
@@ -126,31 +125,6 @@ impl Resolver {
 
         if let Some(error) = error {
             self.error(error, ident.span);
-        }
-    }
-
-    fn check_mutation_target(&mut self, object: &Expr) {
-        if !self.in_function() {
-            return;
-        }
-
-        let Some(id) = self.root_binding(object) else {
-            return;
-        };
-
-        if self.symbols[id].kind != SymbolKind::Global {
-            return;
-        }
-
-        let name = self.symbols[id].name.clone();
-        self.error(ResolveErrorKind::MutateGlobalInFunction(name), object.span);
-    }
-
-    fn root_binding(&self, expr: &Expr) -> Option<BindingId> {
-        match &expr.kind {
-            ExprKind::Name(_) => self.bindings.get(&expr.span).copied(),
-            ExprKind::Index { object, .. } => self.root_binding(object),
-            _ => None,
         }
     }
 

@@ -2,7 +2,7 @@
 
 **Status:** Draft — Phase 1's blocking decisions are settled; no later phase has started.
 
-Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21. Each phase below names the ones that block it. A phase should not begin while a question it depends on is still open, because resolving one afterwards means redoing work.
+Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 21. **All of them are now resolved** ([DECISIONS.md](DECISIONS.md) D013, D019, D020, D022, D023, D025, D026, D027), so no phase is blocked on a language question any more. What remains is implementation.
 
 ## Phase 1: Define the Language
 
@@ -16,7 +16,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Blocked by:** nothing.
 
-**Still open, and gating later phases only:** U3 gates Phase 6, and U5 will surface in Phase 5. U2, U4, U6, U7 and U8 are resolved ([DECISIONS.md](DECISIONS.md) D020, D023, D019, D022, D025).
+**Nothing is open.** Section 21 is empty.
 
 ## Phase 2: Compiler Foundation
 
@@ -65,7 +65,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Completion criterion:** Dovik supports its documented core language features, with tests for the runtime errors in [SPEC.md](SPEC.md) 15.2 — including division by zero for both `Int` and `Float` operands.
 
-**Blocked by:** **U5** (shared mutable module state) will likely surface here, since programs this size start to need it, and [SPEC.md](SPEC.md) 22.1 deliberately closed the module-as-shared-state door rather than opening it. U2 and U4 are resolved ([DECISIONS.md](DECISIONS.md) D020 and D023).
+**Blocked by:** nothing. U5 is resolved ([DECISIONS.md](DECISIONS.md) D027): a function may mutate a reference-typed global, which is shared mutable state without new syntax.
 
 ## Phase 6: Runtime and Standard Library
 
@@ -77,7 +77,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Completion criterion:** Ordinary programs can use core features without manual memory management, and cyclic garbage is reclaimable ([SPEC.md](SPEC.md) section 14).
 
-**Blocked by:** **U3** (string indexing unit and cost), which decides the string representation and is not something to retrofit. U7 and U8 are resolved ([DECISIONS.md](DECISIONS.md) D022 and D025). The memory-management algorithm is also still unchosen ([RUNTIME.md](RUNTIME.md) section 8) and belongs before this phase, not inside it — and it must handle objects reachable from several bindings at once, since collections alias by default ([DECISIONS.md](DECISIONS.md) D013).
+**Blocked by:** nothing in section 21; U3, U7 and U8 are all resolved ([DECISIONS.md](DECISIONS.md) D026, D022, D025). The memory-management algorithm is also still unchosen ([RUNTIME.md](RUNTIME.md) section 8) and belongs before this phase, not inside it — and it must handle objects reachable from several bindings at once, since collections alias by default ([DECISIONS.md](DECISIONS.md) D013).
 
 ## Phase 7: Developer Experience
 

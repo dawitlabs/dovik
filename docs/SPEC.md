@@ -692,7 +692,7 @@ What a shadowing declaration does **not** do is described in 9.6.
 
 Top-level variables live in module scope. Functions may **read** any module-scope variable visible at the point the function is declared.
 
-A function cannot assign to a module-scope variable. Such an assignment is a compile-time error; it is specifically *not* reinterpreted as declaring a new local.
+A function cannot **assign** to a module-scope variable. Such an assignment is a compile-time error; it is specifically *not* reinterpreted as declaring a new local.
 
 ```dovk
 counter = 0
@@ -701,9 +701,22 @@ function bump():
     counter = counter + 1   # Compile-time error: cannot assign to a global
 ```
 
-This keeps a function's observable effects limited to its arguments, its return value, and mutation through reference-typed parameters (3.4).
+A function **may mutate** a module-scope variable of a reference type, because that is what a reference means (3.4):
 
-No mechanism for shared mutable module state is specified. This is a real limitation; see U5 in section 21.
+```dovk
+counter: List<Int> = [0]
+
+function bump():
+    counter[0] = counter[0] + 1   # fine: mutation, not assignment
+```
+
+That is Dovik's shared mutable module state. It needs no new syntax, because mutating an object reached through a global is the same operation as mutating one reached through a parameter.
+
+The distinction is between **rebinding a name** and **mutating an object**, exactly as in 9.6. Rebinding is local to the scope that declares the name, so a function rebinding a global would be writing to a binding it does not own. Mutating is visible through every reference to the object, by design.
+
+The honest cost: a call to `bump()` does not show at the call site that module state changes. What a reader does get is that the function must name the global to touch it, so the set of functions that can affect `counter` is the set of functions that mention `counter`.
+
+> Settled as D027 in [DECISIONS.md](DECISIONS.md).
 
 ### 9.5 Duplicate Declarations
 
@@ -717,7 +730,7 @@ Three consequences, which together are the whole rule:
 
 1. **Assigning to a parameter does not affect the caller.** The caller's variable keeps whatever it referred to.
 2. **Assigning to a local or parameter that shadows a global does not touch the global** (9.3). The global keeps its value, and the function could not have assigned to it anyway (9.4).
-3. **Mutation is a separate matter.** When a parameter holds a reference type, mutating the object it refers to *is* visible to the caller and through every other reference to that object (3.4). Rebinding the parameter is not.
+3. **Mutation is a separate matter.** When a name holds a reference type, mutating the object it refers to *is* visible to the caller and through every other reference to that object (3.4). Rebinding the name is not. This holds for a parameter, a local, and a module-scope variable alike (9.4) — the reference does not remember which kind of name it arrived through.
 
 ```dovk
 items = [1, 2, 3]
@@ -1062,7 +1075,7 @@ This document defines the initial language contract.
 
 ## 21. Unresolved Questions
 
-Each of these is open on purpose. Inventing an answer would be worse than naming the trade-off. Every entry says what it blocks, because several roadmap phases depend on them — see [ROADMAP.md](ROADMAP.md).
+This section exists so that an unanswered question is written down rather than guessed at. Inventing an answer would be worse than naming the trade-off.
 
 Identifiers are stable. A resolved question keeps its number and is listed below rather than renumbering the rest, so references from other documents stay valid.
 
@@ -1077,18 +1090,11 @@ Identifiers are stable. A resolved question keeps its number and is listed below
 | **U4** — method-call syntax versus functions | Functions only. There is no member-access expression and no method syntax (6.9, 11.2, 16) | [DECISIONS.md](DECISIONS.md) D023 |
 | **U8** — representing absence | `T?`, with `none`, `some`, and narrowing through a single `if` (23) | [DECISIONS.md](DECISIONS.md) D025 |
 | **U3** — string indexing cost and unit | Scalar indexing over UTF-8 is kept; all-ASCII strings index and measure in constant time, others in linear time (10.4) | [DECISIONS.md](DECISIONS.md) D026 |
+| **U5** — shared mutable module state | A function may mutate a reference-typed global and may not rebind any global (3.4, 9.4, 9.6) | [DECISIONS.md](DECISIONS.md) D027 |
 
 The shadowing question that D011 settled was never a numbered entry here; it is recorded in [DECISIONS.md](DECISIONS.md) D011 and specified in 9.3 and 9.6.
 
-**Still open.**
-
-### U5 — Shared mutable module state
-
-9.4 forbids assigning to a global from a function, and no replacement mechanism exists. A program that needs a counter shared across functions cannot express one except by threading a `List` through every call.
-
-Alternatives: an explicit `global` declaration inside the function that assigns; mutable-reference parameters; keep the restriction and rely on reference-typed parameters; allow module-level assignment from functions and accept the readability cost.
-
-**Blocks:** realistic Phase 5 programs. Needed before the benchmark suite in Phase 8, which will want shared state.
+**Nothing is open.** Every question this section raised has been resolved and recorded. New questions are added here when they are found, not invented to fill it.
 
 ## 22. Modules and Imports
 

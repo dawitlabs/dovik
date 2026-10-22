@@ -294,10 +294,16 @@ fn the_loop_variable_may_not_shadow_a_local() {
 }
 
 #[test]
-fn a_function_cannot_mutate_a_global_collection() {
+fn a_function_may_mutate_a_global_collection() {
+    ok("xs: List<Int> = [1]\n\nfunction f():\n    xs[0] = 2\n");
+    ok("d: Dict<String, Int> = {}\n\nfunction f():\n    d[\"k\"] = 1\n");
+}
+
+#[test]
+fn a_function_still_cannot_rebind_a_global() {
     assert_eq!(
-        errors("xs: List<Int> = [1]\n\nfunction f():\n    xs[0] = 2\n"),
-        [MutateGlobalInFunction("xs".into())]
+        errors("n = 0\n\nfunction f():\n    n = n + 1\n"),
+        [AssignToGlobal("n".into())]
     );
 }
 
@@ -392,4 +398,9 @@ while count < 3:
 
 total = factorial(5) + len(names) * 2 - 1
 ");
+}
+
+#[test]
+fn a_local_alias_of_a_global_mutates_the_global() {
+    ok("xs: List<Int> = [1]\n\nfunction f():\n    mine = xs\n    mine[0] = 2\n");
 }

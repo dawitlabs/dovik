@@ -981,3 +981,28 @@ The case worth testing is a string that crosses the boundary. `"abc" + "é"` has
 `true` to invalidate, and after the append `s[3]` must take the byte-walking path and return
 `é` rather than one byte of it. The tests walk such a string by index and compare against
 iterating it with `for`.
+
+## The global-mutation ban was a lint, not a rule
+
+`DVK3007` used to reject `global_list[0] = v` inside a function, and [SPEC.md](SPEC.md) 9.4
+claimed on that basis that a function's effects were limited to its arguments, its return
+value, and mutation through reference-typed parameters.
+
+The check matched one syntactic shape. This compiled and printed `2`:
+
+```dovk
+counter: List<Int> = [0]
+
+function bump():
+    mine = counter
+    mine[0] = mine[0] + 1
+```
+
+Reading a global is allowed by 9.4 and mutating through a reference is allowed by 3.4, so the
+two together were always enough. The check is gone and 9.4 now says what is true
+([DECISIONS.md](DECISIONS.md) D027).
+
+The lesson generalises: a restriction that inspects the *spelling* of an expression rather
+than a property of the value will be one local variable away from useless. The rebinding ban
+that remains is not like that — it is a rule about which scope owns a binding, and no
+rephrasing reaches around it.

@@ -16,7 +16,6 @@ pub enum ResolveErrorKind {
     ReservedTypeName(String),
     RedeclaresBuiltin(String),
     AssignToGlobal(String),
-    MutateGlobalInFunction(String),
     AssignToLoopVariable(String),
     NotAssignable { name: String, what: &'static str },
     BreakOutsideLoop,
@@ -44,10 +43,6 @@ impl fmt::Display for ResolveErrorKind {
             Self::AssignToGlobal(name) => {
                 write!(f, "a function cannot assign to the module-scope variable `{name}`")
             }
-            Self::MutateGlobalInFunction(name) => write!(
-                f,
-                "a function cannot mutate the module-scope variable `{name}`; pass it as a parameter"
-            ),
             Self::AssignToLoopVariable(name) => {
                 write!(f, "the loop variable `{name}` cannot be assigned inside the loop")
             }
@@ -76,7 +71,6 @@ impl ResolveErrorKind {
             Self::ReservedTypeName(_) => "DVK3004",
             Self::RedeclaresBuiltin(_) => "DVK3005",
             Self::AssignToGlobal(_) => "DVK3006",
-            Self::MutateGlobalInFunction(_) => "DVK3007",
             Self::AssignToLoopVariable(_) => "DVK3008",
             Self::NotAssignable { .. } => "DVK3009",
             Self::BreakOutsideLoop => "DVK3010",
