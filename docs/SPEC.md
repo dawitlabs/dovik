@@ -102,12 +102,14 @@ A `#` inside a string literal is ordinary text.
 The complete keyword list for the initial version:
 
 ```
-and  break  continue  else  false  for  function  if  in  not  or  return  true  while
+and  break  continue  else  false  for  function  if  import  in  not  or  return  true  while
 ```
 
 Keywords are lowercase and case-sensitive. `If` and `FUNCTION` are ordinary identifiers, not keywords. This differs deliberately from built-in type names, which are case-insensitive (3.2).
 
-Future versions will need keywords this list does not reserve — `import` is the obvious example. Adding one is a breaking change and is governed by section 20.
+`as` is **not** a keyword. It is meaningful only inside an import list (22.2), where no identifier can appear in its position, so a variable may still be named `as`.
+
+Future versions will need keywords this list does not reserve. Adding one is a breaking change and is governed by section 20.
 
 ### 2.8 Literals
 
@@ -598,6 +600,8 @@ Declaration order works differently for variables than for functions:
 
 Because module-scope variables are initialized in source order, one more check is required: the compiler must reject a module-scope call that can reach — directly, or through further calls — a function that reads a module-scope variable declared after that call. This is a compile-time error, which is what makes it impossible to read a global before its initializer has run.
 
+Across modules, the same rule holds with no extra checking: an imported module's top-level statements all run before any statement of the module that imports it (22.5), so an imported variable is always initialized before it can be read.
+
 ---
 
 ## 9. Scope and Name Resolution
@@ -607,7 +611,7 @@ Because module-scope variables are initialized in source order, one more check i
 Scopes nest in this order, outermost first:
 
 1. **Built-in scope** — `print`, `len`, `to_int`, `to_float`, and the rest of the built-in surface.
-2. **Module scope** — top-level variables and all function declarations.
+2. **Module scope** — top-level variables, all function declarations, and every name the module imports (22.4). Imported names are indistinguishable from the module's own declarations once resolved.
 3. **Function scope** — one per function; holds its parameters and locals. A function scope's enclosing scope is the module scope.
 4. **Block scope** — one per `if`, `else if`, `else`, `while`, or `for` body.
 
@@ -919,6 +923,10 @@ The compiler rejects, at minimum:
 - Invalid syntax, including bad indentation, tab indentation, an empty block, and a missing block-header colon.
 - A reference to an undeclared name, or to a name not visible at that point.
 - A module-scope call to a function declared later in the file (8.5).
+- An import whose path cannot be read (22.3).
+- An import of a name the named module does not declare (22.4).
+- An import statement that is not among the first statements of its file (22.2).
+- A cycle in the import graph (22.6).
 - A module-scope call that can reach a function reading a module-scope variable declared after that call (8.5).
 - A function in a recursive cycle whose return type is circular and carries no explicit annotation (5.5).
 - Duplicate declarations in one scope (9.5).
@@ -948,7 +956,8 @@ The initial runtime terminates the program with a diagnostic on:
 - An invalid `to_int` conversion — NaN, infinity, or out of range (7.5).
 - A string, list, or dictionary index out of bounds (10.4, 11.3).
 - A missing dictionary key (12.4).
-- A file that cannot be read or written ([STDLIB.md](STDLIB.md) 5).
+- A file or directory that cannot be read, written, created, or removed ([STDLIB.md](STDLIB.md) 5 and 11).
+- A failed assertion ([STDLIB.md](STDLIB.md) 8).
 
 Each must report what failed and where, and must terminate predictably — never continue with a corrupted value.
 
@@ -968,7 +977,6 @@ Diagnostic output must be consumable by both humans and tools. The machine-reada
 
 These are named here only to record that they are deliberately absent from the initial language, with no syntax reserved for them.
 
-- **Modules and imports.** One file per program. A module system must define import syntax, visibility, initialization order, dependency resolution, circular imports, and multi-file compilation before it can be specified.
 - **Concurrency.** No threads, no async/await, no memory model. The runtime promises no thread safety for mutable collections.
 - **User-defined types**, generics, interfaces, and operator overloading.
 - **Exceptions**, `try`/`catch`, and error values.
@@ -1083,7 +1091,82 @@ Alternatives: an `Option`-like built-in parameterized type, which is a real type
 
 ---
 
-## 22. Document Status
+## 22. Modules and Imports
+
+A **module** is one source file. A program is one or more modules reached from an entry file.
+
+### 22.1 What a module exports
+
+Every module-scope declaration is importable: both variables and functions. There is no export marker and no privacy mechanism.
+
+An imported variable cannot be assigned by the importing module, because 9.4 already forbids a function from assigning to any module-scope variable and an import is a module-scope name. A module is therefore not a mechanism for shared mutable state, and U5 is unaffected.
+
+### 22.2 Import syntax
+
+```dovk
+import "text.dovk" (split_lines, word_count)
+import "lib/format.dovk" (pad as pad_left)
+```
+
+An import statement is the keyword `import`, a string literal naming a file, and a parenthesised list of one or more names.
+
+- The name list is mandatory. There is no form that imports every name, and no wildcard.
+- `name as other` binds the module's `name` to `other` in the importing module. Only the name after `as` is visible.
+- The list may not be empty, and a trailing comma is permitted wherever one is permitted in a collection literal (2.3).
+- An import statement may appear only before every other top-level statement in its file. An import after any other statement is a compile-time error.
+
+An import is not an expression and not a statement that can appear inside a function or a block.
+
+### 22.3 Resolving a path
+
+The path is resolved relative to the directory of the file containing the `import`, not to the working directory and not to a project root.
+
+- The `.dovk` extension is written out. There is no implicit extension and no search path.
+- `..` is permitted. An absolute path is a compile-time error.
+- Two paths that resolve to the same file are the same module. The compiler canonicalises a path before comparing it, so a module reached by two routes is compiled and initialized once.
+- A path that cannot be read is a compile-time error naming the importing file and the path.
+
+### 22.4 Name resolution
+
+Imported names enter the importing module's module scope (9.1), beside its own declarations. The scope chain is unchanged.
+
+Three consequences follow from rules that already exist:
+
+- An imported name that collides with a declaration in the same module is a duplicate declaration in one scope (9.5).
+- An imported name that collides with a built-in name is a module-scope declaration reusing a built-in name, which 9.3 forbids.
+- Two imports binding the same name collide under 9.5. `as` is the way to resolve it.
+
+Importing a name the named module does not declare at module scope is a compile-time error.
+
+**Imports do not re-export.** A name imported by module A is not importable *from* A. Every module names the modules it depends on directly.
+
+There is no qualified access. `text.split(line)` is not valid syntax, because Dovik has no member-access expression (U4).
+
+### 22.5 Initialization order
+
+Each module's top-level statements execute exactly once, and a module's statements all execute before any statement of a module that imports it.
+
+The order is a depth-first traversal of the import graph, visiting each module's imports in source order and executing a module once its imports have executed. The entry module executes last. The order is fully determined by the source, so it does not vary between runs or machines.
+
+A module meant to be imported should declare rather than act: its top-level statements run whenever something imports it.
+
+### 22.6 Circular imports
+
+A cycle in the import graph is a compile-time error. The compiler names every module in the cycle.
+
+A cycle makes 22.5 unsatisfiable: if two modules each read a module-scope variable the other declares, no initialization order exists in which both read an initialized value. Rejecting the cycle is the same rule 8.5 applies within a file.
+
+Mutual recursion (5.5) therefore works within a module and not across modules. Two functions that call each other belong in one file, or share a third module that both import.
+
+### 22.7 Compilation
+
+Function signatures are collected across every module in the program before any body is checked, which is what 5.5 requires and extends unchanged to a graph of modules.
+
+The compiler discovers the whole program from the entry file by following imports transitively. No manifest, no dependency resolution beyond the file system, and no network. Project configuration and dependency management are separate and not specified here; see [CLI.md](CLI.md).
+
+---
+
+## 23. Document Status
 
 This is the language contract to implement against. None of it is implemented.
 

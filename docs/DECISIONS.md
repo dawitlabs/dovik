@@ -239,3 +239,25 @@ Module-scope *statements* still require declaration-before-call, so top-level co
 NaN remains reachable from other operations, such as `inf - inf`, so the rules about NaN equality and `Float` dictionary keys still stand.
 
 **Status:** Accepted. Resolves U2. Specified in [SPEC.md](SPEC.md) 6.2, 7.3, 7.4, and 15.2.
+
+## D021: Modules Are Files, Imports Are Flat and Explicit
+
+**Decision:** A module is one source file. `import "path.dovk" (name, other as alias)` brings exactly the listed names into the importing module's own module scope. There is no wildcard, no qualified access, no re-export, and no privacy marker — every module-scope declaration is importable. Imports must precede every other top-level statement in a file. A module is fully initialized before any module that imports it begins, in a deterministic depth-first order, and a cycle in the import graph is a compile-time error. Paths resolve relative to the importing file; the whole program is discovered from the entry file with no manifest.
+
+**Reason:** Three of the choices are load-bearing and the rest follow from them.
+
+Imported names landing in the *existing* module scope rather than a new scope layer means [SPEC.md](SPEC.md) 9.1 is unchanged and three rules already on the books handle every new collision: 9.5 rejects an import that duplicates a local declaration or another import, and 9.3 rejects one that reuses a built-in name. A module system that needed no new scope rules is the cheapest one available.
+
+Flat imports rather than `module.name` avoid claiming the dot. A qualified form needs a member-access expression, and U4 has not decided whether Dovik gets one; once `.` means module access nobody would accept it meaning something different for `xs.append(v)`.
+
+Rejecting cycles rather than half-initializing keeps the guarantee 8.5 already makes. Python accepts cycles and hands out partly-constructed modules; Dovik would rather name the cycle.
+
+An explicit name list with no wildcard means adding a declaration to a module can never break a module that imports from it, and a reader can see where every name came from without opening another file.
+
+**Trade-off:** Mutual recursion stops at the file boundary. D019 exists to let two functions call each other, and under 22.6 they must share a file to do it — the workaround is to put them in one file, which is usually where they belong, or to extract what they share into a third module.
+
+Everything being importable means a module author cannot mark a helper private, so any name can be depended on and then cannot be renamed. This is acceptable only while a module's author and its user are the same person, which is true today because there is no dependency management. A package ecosystem would force either an `export` marker or a naming convention, and both are breaking changes from here.
+
+The cost in the compiler is not the parsing or the scope rules. It is that a diagnostic must name its file, which the single-source-string pipeline could not do.
+
+**Status:** Accepted. Resolves the first bullet of [SPEC.md](SPEC.md) 16. Specified in [SPEC.md](SPEC.md) 22, with amendments to 2.7, 8.5, 9.1, 15.1, and 16. Design record and rejected alternatives in [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md).

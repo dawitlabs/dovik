@@ -1,13 +1,12 @@
 # Proposal: Modules and Imports (resolves SPEC section 16's first bullet)
 
-**Status:** Proposal. Not implemented, and deliberately not yet merged into
-[SPEC.md](SPEC.md).
+**Status:** **Ratified.** The normative text now lives in [SPEC.md](SPEC.md) section 22 and
+the decision is recorded as [DECISIONS.md](DECISIONS.md) D021. This file is the design record
+— the reasoning, the alternatives, and the costs — and is **not** authoritative. Where it
+disagrees with [SPEC.md](SPEC.md), the specification is right.
 
-[SPEC.md](SPEC.md) section 20 requires that a change to syntax or scope rules is recorded in
-the specification *before* the implementation follows. [SPEC.md](SPEC.md) 16 lists six things
-a module system must define — import syntax, visibility, initialization order, dependency
-resolution, circular imports, and multi-file compilation — and this document answers all six
-so they can be argued with. Nothing in the compiler depends on it.
+One estimate in section 8 was wrong and is corrected there: giving every diagnostic a file
+does not require changing `Span`.
 
 ## 1. Why
 
@@ -201,12 +200,24 @@ imports the module under test and holds nothing but tests, which needs no new ru
 Honestly, in the order it has to happen. The first item is the bulk of the work and is worth
 reading before deciding anything else:
 
-1. **Every span needs a file.** `Span` is `{ start, end }` with no file identity, and the
-   whole pipeline is built on one source string: `backend::emit(program, source)` computes
-   line and column by walking that string, `Report { path, source }` prints diagnostics
-   against it, and the interpreter's traps carry a bare span. A second file breaks all of it.
-   This is a change to a type that appears in every stage of the compiler, and it is the real
-   price of modules — not the parsing, not the scope rules.
+1. **Every diagnostic needs a file — but `Span` does not have to change.** `Span` is
+   `{ start, end }` with no file identity, and the whole pipeline is built on one source
+   string: `backend::emit(program, source)` computes line and column by walking it,
+   `Report { path, source }` prints diagnostics against it, and a trap carries a bare span.
+
+   The original estimate here was that `Span` must grow a file field, which would have
+   touched every stage. It does not. A **source map** holds every file's text concatenated,
+   records each file's base offset, and lexes each file with its spans shifted by that base.
+   Spans stay two numbers and become offsets into the whole program rather than into one
+   file; the parser still slices text with a span, because the combined string contains each
+   file's text at that offset. Only the layer that turns an offset into a line and column
+   learns about files, by finding the file whose range contains the offset and counting from
+   that file's base.
+
+   `Span`, the lexer's output shape, the AST, the IR, and the interpreter are all unchanged.
+   The signature `emit(program, source: &str)` becomes `emit(program, &SourceMap)`, and
+   `line_col(source, offset)` becomes a method on the map that also returns the path. This is
+   the technique rustc uses, and it turns the largest item on this list into one new type.
 2. **Lexer.** `import` becomes a keyword, a breaking addition to 2.7.
 3. **Parser.** One statement form, plus the rule that imports come first.
 4. **A new stage, before name resolution.** Discover the graph from the entry file,
@@ -224,8 +235,9 @@ reading before deciding anything else:
    8.5, 9.1 and 9.5 are amended; [DECISIONS.md](DECISIONS.md) records it as D021;
    [CLI.md](CLI.md) 5 and 6 change; [ROADMAP.md](ROADMAP.md) Phase 9 stops being blocked.
 
-Items 2 through 8 are a weekend. Item 1 is not, and it is unavoidable: there is no version of
-multi-file compilation where a diagnostic does not have to say which file.
+With the source map, item 1 is one small type plus two signature changes rather than a
+pipeline-wide edit. Item 4 is the only genuinely new component. Nothing here is a weekend's
+work on its own, and nothing here is the structural hazard the first estimate described.
 
 ## 9. What this deliberately leaves out
 
