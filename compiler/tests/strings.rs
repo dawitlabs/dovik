@@ -162,11 +162,9 @@ fn trim_removes_surrounding_whitespace_only() {
 }
 
 #[test]
-fn case_conversion_is_ascii_only() {
+fn case_conversion_handles_ascii() {
     assert_eq!(output("print(upper(\"dovik 42\"))\n"), ["DOVIK 42"]);
     assert_eq!(output("print(lower(\"DOVIK 42\"))\n"), ["dovik 42"]);
-    assert_eq!(output("print(upper(\"héllo\"))\n"), ["HéLLO"]);
-    assert_eq!(output("print(lower(\"HÉLLO\"))\n"), ["hÉllo"]);
 }
 
 #[test]
@@ -304,4 +302,34 @@ fn assert_requires_a_bool_and_returns_unit() {
         [BuiltinArgument { name: "assert", found: Type::Int }]
     );
     assert_eq!(errors("x = assert(true)\n"), [UnitAsValue]);
+}
+
+#[test]
+fn case_conversion_covers_more_than_ascii() {
+    assert_eq!(output("print(upper(\"héllo wörld\"))\n"), ["HÉLLO WÖRLD"]);
+    assert_eq!(output("print(lower(\"HÉLLO WÖRLD\"))\n"), ["héllo wörld"]);
+    assert_eq!(output("print(upper(\"αβγ\"))\n"), ["ΑΒΓ"]);
+}
+
+#[test]
+fn case_conversion_may_change_the_scalar_count() {
+    let source = "\
+word = \"straße\"
+print(len(word))
+print(upper(word))
+print(len(upper(word)))
+";
+    assert_eq!(output(source), ["6", "STRASSE", "7"]);
+}
+
+#[test]
+fn case_conversion_is_locale_independent() {
+    assert_eq!(output("print(lower(\"I\"))\n"), ["i"]);
+    assert_eq!(output("print(upper(\"i\"))\n"), ["I"]);
+}
+
+#[test]
+fn case_conversion_leaves_uncased_scalars_alone() {
+    assert_eq!(output("print(upper(\"漢字 123 !\"))\n"), ["漢字 123 !"]);
+    assert_eq!(output("print(lower(\"漢字 123 !\"))\n"), ["漢字 123 !"]);
 }

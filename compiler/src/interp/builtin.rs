@@ -71,8 +71,8 @@ impl Interpreter<'_> {
             Builtin::EndsWith => Ok(Value::Bool(
                 values[0].as_str().ends_with(values[1].as_str()),
             )),
-            Builtin::Upper => Ok(Value::str(ascii_case(values[0].as_str(), true))),
-            Builtin::Lower => Ok(Value::str(ascii_case(values[0].as_str(), false))),
+            Builtin::Upper => Ok(Value::str(values[0].as_str().to_uppercase())),
+            Builtin::Lower => Ok(Value::str(values[0].as_str().to_lowercase())),
             Builtin::Replace => Ok(Value::str(replace(
                 values[0].as_str(),
                 values[1].as_str(),
@@ -252,15 +252,6 @@ fn read_input() -> String {
     let mut text = String::new();
     let _ = std::io::stdin().read_to_string(&mut text);
     text
-}
-
-fn ascii_case(text: &str, upper: bool) -> String {
-    text.chars()
-        .map(|scalar| match upper {
-            true => scalar.to_ascii_uppercase(),
-            false => scalar.to_ascii_lowercase(),
-        })
-        .collect()
 }
 
 fn rendered(value: &Value, ty: &Type) -> String {

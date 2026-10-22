@@ -295,3 +295,21 @@ There is also a sequencing argument. User-defined types are deferred ([SPEC.md](
 What would fix it is a composition operator rather than a dot: an operator cannot be mistaken for field access, needs no marker on any declaration, and does not pre-commit `.`. None is proposed, and nothing in this decision blocks one later. Resolving U4 this way costs no rewrites, which was the risk that made it urgent — every day it stayed open added call sites that a reversal would have invalidated.
 
 **Status:** Accepted. Resolves U4. Specified in [SPEC.md](SPEC.md) 6.8, 6.9, 11.2, and 16.
+
+## D024: Case Conversion Uses a Generated Table; Graphemes Wait for Data
+
+**Decision:** `upper` and `lower` perform full, locale-independent Unicode case mapping. The tables are generated at build time by `build.rs`, which walks every scalar value and asks the Rust standard library for its mapping, then emits a sorted C table the runtime binary-searches. Scalar count is no longer preserved: `upper("straße")` is `"STRASSE"`.
+
+Grapheme segmentation and normalization stay unimplemented. They need Unicode Character Database properties that no part of the current toolchain carries.
+
+**Reason:** Case conversion was reachable without a dependency and without a vendored data file, because the data is already in the compiler's own toolchain — `char::to_uppercase` has the tables, and a build script can simply enumerate the code points and write out what it learns. Nothing is downloaded, nothing is checked in, and the table cannot drift from the mapping the interpreter uses, because both come from the same source. That is also what makes the oracle trustworthy here: the interpreter calls `str::to_uppercase` and the runtime reads a table generated from it.
+
+ASCII-only case conversion was a placeholder that gave wrong answers for every language with accents, which is most of them, including Amharic's neighbours in the Latin set and every European language Dovik might be used from.
+
+Grapheme segmentation has no such shortcut. UAX #29 needs the `Grapheme_Cluster_Break` property, the Rust standard library does not expose it, and approximating it would be worse than not having it — a wrong grapheme boundary corrupts text silently. The two honest options are a vendored UCD extract or a dependency, and both are the project's call rather than the compiler's.
+
+**Trade-off:** The table costs about 30 KB, and it is paid only by programs that call `upper` or `lower`. Compiling the runtime with `-ffunction-sections -fdata-sections` lets the link-time optimizer drop the table entirely when nothing references it: a program that does not convert case still links to 16,840 bytes, and one that does links to 46,472. That number is worth watching, because it is the first time a library function has had a measurable size cost.
+
+Full case mapping also breaks a property `upper` and `lower` used to have. A program that assumed `len(upper(text)) == len(text)` is now wrong, and [SPEC.md](SPEC.md) 10.4 says plainly that no library function preserves scalar count.
+
+**Status:** Accepted. Specified in [SPEC.md](SPEC.md) 10.4 and [STDLIB.md](STDLIB.md) 7.

@@ -790,6 +790,8 @@ Two consequences worth stating plainly:
 
 Byte-level access, grapheme segmentation, normalization, and case conversion belong to the standard library (section 17).
 
+Case conversion is **full** Unicode case mapping and is locale-independent ([STDLIB.md](STDLIB.md) 7). It may therefore change a string's scalar count: uppercasing `ß` yields `SS`, so `len` of the result can exceed `len` of the input. No library function is required to preserve scalar count, and none should be assumed to.
+
 ---
 
 ## 11. Lists

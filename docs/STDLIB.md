@@ -152,8 +152,8 @@ scalar values, never bytes.
 | `trim(text: String) -> String` | Removes leading and trailing whitespace |
 | `starts_with(text: String, prefix: String) -> Bool` | |
 | `ends_with(text: String, suffix: String) -> Bool` | |
-| `upper(text: String) -> String` | ASCII only |
-| `lower(text: String) -> String` | ASCII only |
+| `upper(text: String) -> String` | Full Unicode case mapping, locale-independent. May change the scalar count |
+| `lower(text: String) -> String` | As above |
 | `replace(text: String, from: String, to: String) -> String` | Every occurrence. An empty `from` changes nothing |
 
 `contains` pairs with `index_of` the way `file_exists` pairs with `read_file`: the predicate
@@ -173,11 +173,15 @@ Three decisions worth knowing:
 - **`split` keeps empty fields.** `split("a,,b", ",")` has three elements and
   `split(",a", ",")` has two. Dropping them would lose information a caller may want, and
   `trim` plus a length test recovers the other behaviour.
-- **`upper` and `lower` are ASCII only.** `upper("héllo")` is `"HéLLO"`. Full Unicode case
-  conversion is locale-dependent and can change a string's scalar count, which would make
-  these the only text functions whose output length is unpredictable.
-  [SPEC.md](SPEC.md) 10.4 already assigns case conversion to the library without specifying
-  its extent, so this is a starting point rather than an answer.
+- **`upper` and `lower` do full Unicode case mapping.** `upper("héllo")` is `"HÉLLO"` and
+  `upper("straße")` is `"STRASSE"` — which is seven scalars from six, so **the scalar count
+  can change**. That is the price of being correct, and [SPEC.md](SPEC.md) 10.4 now says no
+  library function preserves scalar count.
+
+  The mapping is locale-independent: Turkish `I` does not lowercase to `ı`, because the
+  language has no locale and silently picking one would be worse than being predictable.
+  This is full case mapping, not case *folding* — `upper` is for display, not for
+  caseless comparison, and no caseless comparison is provided.
 
 ## 8. Standard Input and Assertions
 
@@ -299,12 +303,14 @@ no way to say which failure occurred ([PROPOSAL-OPTIONAL-TYPES.md](PROPOSAL-OPTI
 
 Named by [SPEC.md](SPEC.md) 17 as library surface, still with no implementation:
 
-- **Grapheme segmentation and normalization** (10.4). Both need the Unicode Character
-  Database. Neither can be written honestly without either a generated table in the
-  runtime or a dependency, and that is a decision about what the runtime is allowed to
-  carry, not a function to name.
-- **Full Unicode case conversion.** The same table, plus the problem that it can change a
-  string's scalar count, which `upper` and `lower` currently guarantee it never does.
+- **Grapheme segmentation and normalization** (10.4). Both need Unicode Character Database
+  properties — `Grapheme_Cluster_Break` for UAX #29, the decomposition and composition
+  tables for normalization — and neither is derivable from anything the toolchain already
+  carries. Full case conversion was generated from the Rust standard library's own tables
+  ([DECISIONS.md](DECISIONS.md) D024); `char::to_uppercase` exists, a grapheme-break
+  property does not. Supplying these needs either a vendored extract of the UCD in this
+  repository or a dependency, and that is a decision about what the project carries rather
+  than a function to name.
 - **Calendar operations.** `now()` exists; turning a timestamp into a year and a month
   does not.
 - **Descending order.** `sort` only ascends, and with no function values there is no

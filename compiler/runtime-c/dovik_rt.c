@@ -11,6 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "dovik_case.h"
+
 #define TAG_INT 0
 #define TAG_FLOAT 1
 #define TAG_BOOL 2
@@ -1148,18 +1150,111 @@ uint8_t dovik_str_ends_with(uint64_t text, uint64_t suffix) {
                : 0;
 }
 
-static uint64_t recase(uint64_t text, int to_upper) {
-    Str *source = (Str *)(uintptr_t)text;
-    Str *value = new_string(source->len);
+static uint32_t decode_scalar(const char *bytes, size_t width) {
+    unsigned char lead = (unsigned char)bytes[0];
 
-    for (size_t i = 0; i < source->len; i++) {
-        unsigned char byte = (unsigned char)source->bytes[i];
-        if (to_upper && byte >= 'a' && byte <= 'z') byte -= 32;
-        if (!to_upper && byte >= 'A' && byte <= 'Z') byte += 32;
-        value->bytes[i] = (char)byte;
+    if (width == 1) return lead;
+    if (width == 2) return (uint32_t)(lead & 0x1F) << 6 | (bytes[1] & 0x3F);
+    if (width == 3)
+        return (uint32_t)(lead & 0x0F) << 12 | (uint32_t)(bytes[1] & 0x3F) << 6 |
+               (bytes[2] & 0x3F);
+
+    return (uint32_t)(lead & 0x07) << 18 | (uint32_t)(bytes[1] & 0x3F) << 12 |
+           (uint32_t)(bytes[2] & 0x3F) << 6 | (bytes[3] & 0x3F);
+}
+
+static size_t encode_scalar(uint32_t scalar, char *out) {
+    if (scalar < 0x80) {
+        out[0] = (char)scalar;
+        return 1;
+    }
+    if (scalar < 0x800) {
+        out[0] = (char)(0xC0 | scalar >> 6);
+        out[1] = (char)(0x80 | (scalar & 0x3F));
+        return 2;
+    }
+    if (scalar < 0x10000) {
+        out[0] = (char)(0xE0 | scalar >> 12);
+        out[1] = (char)(0x80 | (scalar >> 6 & 0x3F));
+        out[2] = (char)(0x80 | (scalar & 0x3F));
+        return 3;
+    }
+    out[0] = (char)(0xF0 | scalar >> 18);
+    out[1] = (char)(0x80 | (scalar >> 12 & 0x3F));
+    out[2] = (char)(0x80 | (scalar >> 6 & 0x3F));
+    out[3] = (char)(0x80 | (scalar & 0x3F));
+    return 4;
+}
+
+static const uint32_t *lookup_case(const uint32_t table[][2], size_t count, uint32_t scalar) {
+    size_t low = 0;
+    size_t high = count;
+
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        if (table[middle][0] == scalar) return table[middle];
+        if (table[middle][0] < scalar) low = middle + 1;
+        else high = middle;
     }
 
-    return (uint64_t)(uintptr_t)value;
+    return NULL;
+}
+
+static const uint32_t *lookup_case_multi(const uint32_t table[][4], size_t count,
+                                         uint32_t scalar) {
+    size_t low = 0;
+    size_t high = count;
+
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        if (table[middle][0] == scalar) return table[middle];
+        if (table[middle][0] < scalar) low = middle + 1;
+        else high = middle;
+    }
+
+    return NULL;
+}
+
+static size_t map_case(uint32_t scalar, int to_upper, uint32_t *out) {
+    const uint32_t *wide = to_upper
+        ? lookup_case_multi(case_upper_multi, CASE_UPPER_MULTI_COUNT, scalar)
+        : lookup_case_multi(case_lower_multi, CASE_LOWER_MULTI_COUNT, scalar);
+
+    if (wide != NULL) {
+        size_t written = 0;
+        for (size_t i = 1; i < 4; i++)
+            if (wide[i] != 0) out[written++] = wide[i];
+        return written;
+    }
+
+    const uint32_t *one = to_upper ? lookup_case(case_upper, CASE_UPPER_COUNT, scalar)
+                                   : lookup_case(case_lower, CASE_LOWER_COUNT, scalar);
+
+    out[0] = one != NULL ? one[1] : scalar;
+    return 1;
+}
+
+static uint64_t recase(uint64_t text, int to_upper) {
+    Str *source = (Str *)(uintptr_t)text;
+    size_t cap = source->len * 3 + 4;
+    char *bytes = checked_alloc(cap);
+    size_t len = 0;
+    size_t offset = 0;
+
+    while (offset < source->len) {
+        size_t width = scalar_width((unsigned char)source->bytes[offset]);
+        if (offset + width > source->len) width = source->len - offset;
+
+        uint32_t mapped[3];
+        size_t count = map_case(decode_scalar(source->bytes + offset, width), to_upper, mapped);
+
+        for (size_t i = 0; i < count; i++) len += encode_scalar(mapped[i], bytes + len);
+        offset += width;
+    }
+
+    uint64_t result = make_string(bytes, len);
+    free(bytes);
+    return result;
 }
 
 uint64_t dovik_str_upper(uint64_t text) { return recase(text, 1); }

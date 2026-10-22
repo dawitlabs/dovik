@@ -855,3 +855,28 @@ the entry point. With modules that would also run an imported module's tests, wh
 `ir::Program` therefore carries `entry_functions`, filled by lowering for the entry unit only.
 It is a CLI concern living in the IR, which is a small wart; the alternative was for the
 command to re-derive which file a function came from, and the IR no longer knows.
+
+## The case tables are generated from the Rust standard library, not downloaded
+
+`upper` and `lower` need full Unicode case mapping, which needs the Unicode Character
+Database. `build.rs` does not fetch it and the repository does not vendor it. Instead the
+build script walks every scalar value, asks `char::to_uppercase` and `char::to_lowercase`
+what each maps to, and writes a sorted C table into `OUT_DIR/dovik_case.h` that the runtime
+binary-searches. The data is already in the toolchain compiling the compiler.
+
+The valuable property is that the oracle cannot drift: the interpreter calls
+`str::to_uppercase` and the runtime reads a table generated from the same function, so the
+two agree by construction rather than by testing.
+
+Two things to know before touching it. The table is about 30 KB, and it stays out of a
+binary that does not use it only because the runtime is compiled with `-ffunction-sections
+-fdata-sections` and the link-time optimizer drops unreferenced data — a program that never
+calls `upper` links to 16,840 bytes, one that does links to 46,472. Dropping those flags
+would put 30 KB into every Dovik program. And one mapping is not a single scalar:
+`upper("ß")` is `"SS"`, so there is a separate multi-scalar table and the output buffer is
+sized at three times the input rather than exactly the input.
+
+Grapheme segmentation has no equivalent shortcut. `Grapheme_Cluster_Break` is not exposed by
+the Rust standard library, so it cannot be generated this way, and approximating a grapheme
+boundary corrupts text silently rather than failing. It needs a vendored UCD extract or a
+dependency, and [DECISIONS.md](DECISIONS.md) D024 leaves that to the project.
