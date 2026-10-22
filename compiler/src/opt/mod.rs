@@ -1,4 +1,5 @@
 pub(crate) mod escape;
+mod hoist;
 mod range;
 mod fold;
 
@@ -24,6 +25,7 @@ fn optimize_function(function: &mut Function, errors: &mut Vec<TypeError>) {
         fold::fold_block(block, &escaping, errors);
     }
 
+    hoist::hoist_lengths(function);
     range::elide_checks(function);
 
     for block in &mut function.blocks {

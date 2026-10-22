@@ -500,3 +500,39 @@ optimized build.
 Three repetitions reported `recursion` at 2.75x C when twenty-one put it at 1.53x, and a
 single run reported `collections` regressing by 75% when it had not moved. This machine
 throttles hard enough that small samples invent results in both directions.
+
+## Hoisting a length out of a loop is safe only when nothing can mutate
+
+`for v in xs` reads `len(xs)` on every iteration, which keeps the loop countable to nobody:
+LLVM reports "cannot vectorize uncountable loop" and reloads the length each time.
+`src/opt/hoist.rs` moves that read into the preheader when no instruction in the loop body
+can mutate a container.
+
+The test for "can mutate" leans on [SPEC.md](SPEC.md) 9.4: a function cannot write a global,
+so the only way a call can reach a container is by receiving one as an argument. A call with
+only scalar arguments therefore cannot mutate the list being iterated, which is what makes
+hoisting provable in real code rather than almost never.
+
+Anything that could mutate — `ListSet`, `DictSet`, `append`, `insert`, `remove_at`,
+`remove_key`, or a call taking a reference-typed argument — blocks the hoist for that loop.
+Loosening that test without re-deriving the argument means a program that mutates while
+iterating can read past the end, because the `for` loop's bounds check is already elided on
+the grounds that the cursor is below a *freshly read* length.
+
+## Two benchmarks are bounded by C's vectorization, not by anything fixable
+
+`arith` and `calls` are both scalar in Dovik and SIMD in C — `calls` shows `pmulhuw` and
+`paddw` on `xmm` registers, eight 16-bit lanes at once. The overflow check is an early exit
+and LLVM will not vectorize a loop with one.
+
+They differ in whether that is closable:
+
+- **`arith` is closable.** Its accumulator grows by `i % 7`, which is `[0, 6]`, over a trip
+  count of ten million — so a scalar-evolution analysis could bound it by 6e7 and elide the
+  check. Not implemented.
+- **`calls` is not.** Its accumulator grows by `value * 3` where `value` comes from a list,
+  so no analysis can bound it. The check must stay, so the loop cannot vectorize, so C wins
+  this workload for as long as D009 holds.
+
+Removing the overflow checks closes both and is the only thing that does. That trades away
+[DECISIONS.md](DECISIONS.md) D009.
