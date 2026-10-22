@@ -88,6 +88,38 @@ impl Emitter<'_> {
             Builtin::CanParseFloat => {
                 self.boolean_call(dest, &format!("@dovik_can_parse_float(i64 {})", words[0]))
             }
+            Builtin::FileExists => {
+                self.boolean_call(dest, &format!("@dovik_file_exists(i64 {})", words[0]))
+            }
+            Builtin::ReadFile => {
+                if let Some(dest) = dest {
+                    self.line(&format!(
+                        "  %r{dest} = call i64 @dovik_read_file(i64 {}, i32 {line}, i32 {column})",
+                        words[0]
+                    ));
+                }
+            }
+            Builtin::WriteFile => self.line(&format!(
+                "  call void @dovik_write_file(i64 {}, i64 {}, i32 {line}, i32 {column})",
+                words[0], words[1]
+            )),
+            Builtin::AppendFile => self.line(&format!(
+                "  call void @dovik_append_file(i64 {}, i64 {}, i32 {line}, i32 {column})",
+                words[0], words[1]
+            )),
+            Builtin::ArgumentCount => {
+                if let Some(dest) = dest {
+                    self.line(&format!("  %r{dest} = call i64 @dovik_argument_count()"));
+                }
+            }
+            Builtin::Argument => {
+                if let Some(dest) = dest {
+                    self.line(&format!(
+                        "  %r{dest} = call i64 @dovik_argument(i64 {}, i32 {line}, i32 {column})",
+                        words[0]
+                    ));
+                }
+            }
             _ => {}
         }
     }

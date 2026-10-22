@@ -94,14 +94,60 @@ one `to_int` raises. [SPEC.md](SPEC.md) 15.2 lists that error as "an invalid `to
 conversion"; its wording should widen to cover parsing, or parsing should get an
 error of its own. That is an open question.
 
-## 5. Not Yet Provided
+## 5. Files
+
+[SPEC.md](SPEC.md) 17 names file I/O as library surface, and section 16 does not defer it,
+so it is library rather than a language change.
+
+| Signature | Behaviour |
+| --- | --- |
+| `read_file(path: String) -> String` | The whole file as text. A failure is a runtime error |
+| `write_file(path: String, contents: String) -> Unit` | Creates or truncates. A failure is a runtime error |
+| `append_file(path: String, contents: String) -> Unit` | Creates if absent, otherwise appends |
+| `file_exists(path: String) -> Bool` | Whether the path can be opened for reading |
+
+Failures trap rather than return a status, for the same reason parsing does: the error model
+has no recoverable errors ([SPEC.md](SPEC.md) 15.2) and no optional type (U8). `file_exists`
+is the predicate that lets a program avoid the trap, exactly as `can_parse_int` does:
+
+```dovk
+if file_exists(path):
+    print(read_file(path))
+else:
+    print("missing")
+```
+
+`file_exists` is a check, not a guarantee. A file can disappear between the test and the
+read, and then the read traps. There is no way to express that race away without a result
+type.
+
+Reading a file yields text, not bytes. Invalid UTF-8 is replaced rather than rejected, since
+`String` is defined as UTF-8 text (3.1) and there is no byte type to return instead.
+
+**This extends [SPEC.md](SPEC.md) 15.2**, which enumerated six runtime errors. File I/O adds
+a seventh, `DVK5007`. That list is normative, so the addition is recorded there too.
+
+## 6. Command-Line Arguments
+
+| Signature | Behaviour |
+| --- | --- |
+| `argument_count() -> Int` | How many arguments the program was given, excluding its own name |
+| `argument(index: Int) -> String` | The argument at that index, zero-based. Out of range is a runtime error |
+
+The program's own name is deliberately not argument zero, because a program that wants its
+arguments almost never wants its name, and the alternative makes every loop start at one.
+
+## 7. Not Yet Provided
 
 Named by [SPEC.md](SPEC.md) 17 as library surface, with no implementation and no
-chosen names: file I/O, time, substring and search operations, splitting and
-joining, case conversion, grapheme segmentation and normalization (10.4), and
-sorting.
+chosen names: time, substring and search operations, splitting and joining, case
+conversion, grapheme segmentation and normalization (10.4), sorting, standard input,
+and directory operations.
 
-## 6. Open Decisions
+Splitting is the most missed. `wordcount` in `examples/` has to walk scalars by hand
+because there is no `split`, which works but is the kind of thing a library should carry.
+
+## 8. Open Decisions
 
 - Every name above. They are chosen, not ratified.
 - Whether a failed parse keeps `DVK5004` or gets its own runtime error.
@@ -110,3 +156,7 @@ sorting.
 - Whether dictionaries ever gain an iteration form, which 12.6 currently forbids.
 - Whether `insert` at `len(xs)` should instead be a separate function, keeping every
   index argument in the language uniform at `0 .. len - 1`.
+- Whether reading a file should replace invalid UTF-8 or trap on it.
+- Whether `argument` should include the program name at index zero.
+- Whether file errors deserve distinct codes — not found, permission denied, is a
+  directory — rather than one `DVK5007`.

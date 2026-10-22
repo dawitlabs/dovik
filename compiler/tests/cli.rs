@@ -239,7 +239,7 @@ fn emit_flags_write_to_stdout() {
     let path = sandbox.write("emit.dovk", "print(1 + 2)\n");
 
     for (flag, expected) in [
-        ("--emit-llvm", "define i32 @main()"),
+        ("--emit-llvm", "define i32 @main(i32 %argc"),
         ("--emit-ir", "function main()"),
         ("--emit-tokens", "Identifier"),
     ] {

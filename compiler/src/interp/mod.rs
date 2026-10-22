@@ -37,6 +37,10 @@ impl Run {
 }
 
 pub fn run(program: &ir::Program) -> Run {
+    run_with_arguments(program, Vec::new())
+}
+
+pub fn run_with_arguments(program: &ir::Program, arguments: Vec<String>) -> Run {
     let mut interpreter = Interpreter {
         program,
         globals: program
@@ -48,6 +52,7 @@ pub fn run(program: &ir::Program) -> Run {
         output: Vec::new(),
         steps: 0,
         depth: 0,
+        arguments,
     };
 
     let outcome = match interpreter.call(program.main, Vec::new()) {
@@ -74,6 +79,7 @@ pub(crate) struct Interpreter<'a> {
     pub(crate) output: Vec<String>,
     pub(crate) steps: u64,
     pub(crate) depth: usize,
+    pub(crate) arguments: Vec<String>,
 }
 
 pub(crate) struct Frame {

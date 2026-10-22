@@ -39,6 +39,13 @@ declare i8 @dovik_eq(i8, i64, i64)
 declare void @dovik_retain(i8, i64)
 declare void @dovik_release(i8, i64)
 declare void @dovik_report_leaks()
+declare void @dovik_set_arguments(i32, ptr)
+declare i64 @dovik_argument_count()
+declare i64 @dovik_argument(i64, i32, i32)
+declare i8 @dovik_file_exists(i64)
+declare i64 @dovik_read_file(i64, i32, i32)
+declare void @dovik_write_file(i64, i64, i32, i32)
+declare void @dovik_append_file(i64, i64, i32, i32)
 declare void @dovik_list_insert(i64, i64, i64, i32, i32)
 declare i64 @dovik_list_remove_at(i64, i64, i32, i32)
 declare i8 @dovik_dict_has_key(i64, i8, i64)
@@ -110,8 +117,9 @@ impl Emitter<'_> {
             self.function(index, function);
         }
 
-        self.line("define i32 @main() {");
+        self.line("define i32 @main(i32 %argc, ptr %argv) {");
         self.line("entry:");
+        self.line("  call void @dovik_set_arguments(i32 %argc, ptr %argv)");
 
         for (index, text) in self.program.strings.iter().enumerate() {
             let len = text.len();

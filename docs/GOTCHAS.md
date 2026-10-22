@@ -654,3 +654,26 @@ so the change bought only locality while growing the object from 48 to 80 bytes.
 Reverted. The remaining 5.3x on allocation churn is the object model: a Dovik list carries
 a reference count, a length, a capacity and an element tag that C's `malloc(24)` does not.
 Closing it means a smaller representation, not a smarter allocator.
+
+## File I/O traps, and `file_exists` is a check rather than a guarantee
+
+[SPEC.md](SPEC.md) 17 forbids a library function from introducing a recoverable error, and
+the language has no optional type (U8), so `read_file`, `write_file` and `append_file` trap
+on failure. `file_exists` is the predicate that lets a program avoid the trap, the same
+shape as `can_parse_int` before `parse_int`.
+
+It is not a guarantee. A file can vanish between the test and the read, and then the read
+traps. That race cannot be closed without a result type, and pretending otherwise would be
+worse than the trap.
+
+This added a seventh entry to [SPEC.md](SPEC.md) 15.2's runtime error list, `DVK5007`. That
+list is normative, so the addition is recorded in the spec and not only in the library doc.
+
+## The entry point now takes argc and argv
+
+The emitted `main` is `define i32 @main(i32 %argc, ptr %argv)` and immediately calls
+`dovik_set_arguments`, which stores them for `argument_count` and `argument`. A test
+asserting on the old zero-argument signature will fail, which is how this was caught.
+
+`argument(0)` is the first argument the user typed, not the program name. The runtime drops
+`argv[0]` when recording the count.

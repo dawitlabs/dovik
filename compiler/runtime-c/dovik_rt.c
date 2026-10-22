@@ -91,7 +91,8 @@ static const char *trap_message(uint32_t code) {
         case 2: return "remainder by zero";
         case 3: return "invalid conversion";
         case 4: return "index out of bounds";
-        default: return "dictionary key not found";
+        case 5: return "dictionary key not found";
+        default: return "could not read or write that file";
     }
 }
 
@@ -102,7 +103,8 @@ static const char *trap_code(uint32_t code) {
         case 2: return "DVK5003";
         case 3: return "DVK5004";
         case 4: return "DVK5005";
-        default: return "DVK5006";
+        case 5: return "DVK5006";
+        default: return "DVK5007";
     }
 }
 
@@ -830,4 +832,84 @@ static int cell_equal(Cell left, Cell right) {
 
 uint8_t dovik_eq(uint8_t tag, uint64_t left, uint64_t right) {
     return cell_equal((Cell){tag, left}, (Cell){tag, right}) ? 1 : 0;
+}
+
+static int saved_argc = 0;
+static char **saved_argv = NULL;
+
+void dovik_set_arguments(int argc, char **argv) {
+    saved_argc = argc > 0 ? argc - 1 : 0;
+    saved_argv = argv;
+}
+
+int64_t dovik_argument_count(void) { return saved_argc; }
+
+uint64_t dovik_argument(int64_t index, uint32_t line, uint32_t column) {
+    if (index < 0 || index >= saved_argc) dovik_trap(4, line, column);
+    const char *text = saved_argv[index + 1];
+    return dovik_str_new(text, (int64_t)strlen(text));
+}
+
+uint8_t dovik_file_exists(uint64_t path) {
+    FILE *handle = fopen(((Str *)(uintptr_t)path)->bytes, "rb");
+    if (handle == NULL) return 0;
+    fclose(handle);
+    return 1;
+}
+
+uint64_t dovik_read_file(uint64_t path, uint32_t line, uint32_t column) {
+    FILE *handle = fopen(((Str *)(uintptr_t)path)->bytes, "rb");
+    if (handle == NULL) dovik_trap(6, line, column);
+
+    size_t cap = 4096;
+    size_t len = 0;
+    char *bytes = checked_alloc(cap + 1);
+
+    for (;;) {
+        if (len == cap) {
+            cap *= 2;
+            char *grown = checked_alloc(cap + 1);
+            memcpy(grown, bytes, len);
+            free(bytes);
+            bytes = grown;
+        }
+
+        size_t read = fread(bytes + len, 1, cap - len, handle);
+        len += read;
+
+        if (read == 0) break;
+    }
+
+    int failed = ferror(handle);
+    fclose(handle);
+
+    if (failed) {
+        free(bytes);
+        dovik_trap(6, line, column);
+    }
+
+    Str *value = new_string(len);
+    memcpy(value->bytes, bytes, len);
+    free(bytes);
+    return (uint64_t)(uintptr_t)value;
+}
+
+static void write_bytes(uint64_t path, uint64_t contents, const char *mode, uint32_t line,
+                        uint32_t column) {
+    FILE *handle = fopen(((Str *)(uintptr_t)path)->bytes, mode);
+    if (handle == NULL) dovik_trap(6, line, column);
+
+    Str *text = (Str *)(uintptr_t)contents;
+    size_t written = text->len == 0 ? 0 : fwrite(text->bytes, 1, text->len, handle);
+    int failed = written != text->len || ferror(handle);
+
+    if (fclose(handle) != 0 || failed) dovik_trap(6, line, column);
+}
+
+void dovik_write_file(uint64_t path, uint64_t contents, uint32_t line, uint32_t column) {
+    write_bytes(path, contents, "wb", line, column);
+}
+
+void dovik_append_file(uint64_t path, uint64_t contents, uint32_t line, uint32_t column) {
+    write_bytes(path, contents, "ab", line, column);
 }

@@ -19,6 +19,10 @@ impl Interpreter<'_> {
             .map(|(value, _)| self.value(value, frame))
             .collect();
 
+        if which == Builtin::ArgumentCount {
+            return Ok(Value::Int(self.arguments.len() as i64));
+        }
+
         let result = match which {
             Builtin::Append => append(&values),
             Builtin::Insert => insert(&values),
@@ -34,11 +38,55 @@ impl Interpreter<'_> {
                     .parse::<f64>()
                     .is_ok_and(|value| value.is_finite()),
             )),
+            Builtin::ReadFile => read_file(&values[0]),
+            Builtin::WriteFile => write_file(&values[0], &values[1], false),
+            Builtin::AppendFile => write_file(&values[0], &values[1], true),
+            Builtin::FileExists => Ok(Value::Bool(
+                std::path::Path::new(values[0].as_str()).is_file(),
+            )),
+            Builtin::Argument => self.argument(&values[0]),
             _ => Ok(Value::Unit),
         };
 
         result.map_err(|error| Fault::Trap(Trap { error, span }))
     }
+}
+
+impl Interpreter<'_> {
+    fn argument(&self, index: &Value) -> Result<Value, RuntimeError> {
+        let position = index.as_int();
+
+        if position < 0 || position as usize >= self.arguments.len() {
+            return Err(RuntimeError::IndexOutOfBounds);
+        }
+
+        Ok(Value::str(self.arguments[position as usize].as_str()))
+    }
+}
+
+fn read_file(path: &Value) -> Result<Value, RuntimeError> {
+    std::fs::read_to_string(path.as_str())
+        .map(Value::str)
+        .map_err(|_| RuntimeError::InputOutput)
+}
+
+fn write_file(path: &Value, contents: &Value, append: bool) -> Result<Value, RuntimeError> {
+    use std::io::Write;
+
+    let opened = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(append)
+        .truncate(!append)
+        .open(path.as_str());
+
+    let Ok(mut file) = opened else {
+        return Err(RuntimeError::InputOutput);
+    };
+
+    file.write_all(contents.as_str().as_bytes())
+        .map(|()| Value::Unit)
+        .map_err(|_| RuntimeError::InputOutput)
 }
 
 fn rendered(value: &Value, ty: &Type) -> String {

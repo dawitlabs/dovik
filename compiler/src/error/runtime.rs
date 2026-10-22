@@ -21,6 +21,7 @@ impl fmt::Display for RuntimeError {
             ),
             Self::IndexOutOfBounds => write!(f, "index out of bounds"),
             Self::MissingKey => write!(f, "dictionary key not found"),
+            Self::InputOutput => write!(f, "could not read or write that file"),
         }
     }
 }

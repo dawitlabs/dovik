@@ -948,6 +948,7 @@ The initial runtime terminates the program with a diagnostic on:
 - An invalid `to_int` conversion — NaN, infinity, or out of range (7.5).
 - A string, list, or dictionary index out of bounds (10.4, 11.3).
 - A missing dictionary key (12.4).
+- A file that cannot be read or written ([STDLIB.md](STDLIB.md) 5).
 
 Each must report what failed and where, and must terminate predictably — never continue with a corrupted value.
 

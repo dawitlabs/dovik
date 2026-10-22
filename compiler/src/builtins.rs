@@ -1,6 +1,6 @@
 use crate::types::Type;
 
-pub const NAMES: [&str; 14] = [
+pub const NAMES: [&str; 20] = [
     "print",
     "len",
     "to_int",
@@ -15,6 +15,12 @@ pub const NAMES: [&str; 14] = [
     "parse_float",
     "can_parse_int",
     "can_parse_float",
+    "read_file",
+    "write_file",
+    "append_file",
+    "file_exists",
+    "argument_count",
+    "argument",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +39,12 @@ pub enum Builtin {
     ParseFloat,
     CanParseInt,
     CanParseFloat,
+    ReadFile,
+    WriteFile,
+    AppendFile,
+    FileExists,
+    ArgumentCount,
+    Argument,
 }
 
 impl Builtin {
@@ -52,6 +64,12 @@ impl Builtin {
             "parse_float" => Self::ParseFloat,
             "can_parse_int" => Self::CanParseInt,
             "can_parse_float" => Self::CanParseFloat,
+            "read_file" => Self::ReadFile,
+            "write_file" => Self::WriteFile,
+            "append_file" => Self::AppendFile,
+            "file_exists" => Self::FileExists,
+            "argument_count" => Self::ArgumentCount,
+            "argument" => Self::Argument,
             _ => return None,
         })
     }
@@ -72,13 +90,25 @@ impl Builtin {
             Self::ParseFloat => "parse_float",
             Self::CanParseInt => "can_parse_int",
             Self::CanParseFloat => "can_parse_float",
+            Self::ReadFile => "read_file",
+            Self::WriteFile => "write_file",
+            Self::AppendFile => "append_file",
+            Self::FileExists => "file_exists",
+            Self::ArgumentCount => "argument_count",
+            Self::Argument => "argument",
         }
     }
 
     pub fn arity(self) -> usize {
         match self {
             Self::Insert => 3,
-            Self::Append | Self::RemoveAt | Self::HasKey | Self::RemoveKey => 2,
+            Self::Append
+            | Self::RemoveAt
+            | Self::HasKey
+            | Self::RemoveKey
+            | Self::WriteFile
+            | Self::AppendFile => 2,
+            Self::ArgumentCount => 0,
             _ => 1,
         }
     }
@@ -89,11 +119,19 @@ impl Builtin {
 
     pub fn result(self, first: &Type) -> Type {
         match self {
-            Self::Print | Self::Append | Self::Insert => Type::Unit,
-            Self::Len | Self::ToInt | Self::ParseInt => Type::Int,
+            Self::Print
+            | Self::Append
+            | Self::Insert
+            | Self::WriteFile
+            | Self::AppendFile => Type::Unit,
+            Self::Len | Self::ToInt | Self::ParseInt | Self::ArgumentCount => Type::Int,
             Self::ToFloat | Self::ParseFloat => Type::Float,
-            Self::ToString => Type::Str,
-            Self::HasKey | Self::RemoveKey | Self::CanParseInt | Self::CanParseFloat => Type::Bool,
+            Self::ToString | Self::ReadFile | Self::Argument => Type::Str,
+            Self::HasKey
+            | Self::RemoveKey
+            | Self::CanParseInt
+            | Self::CanParseFloat
+            | Self::FileExists => Type::Bool,
             Self::RemoveAt => match first {
                 Type::List(item) => (**item).clone(),
                 _ => Type::Unknown,

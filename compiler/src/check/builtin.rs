@@ -27,6 +27,10 @@ impl Checker<'_> {
             return builtin.result(&Type::Unknown);
         }
 
+        if args.is_empty() {
+            return builtin.result(&Type::Unit);
+        }
+
         let first = self.value_of(&args[0], hint(builtin).as_ref());
 
         if !accepts_first(builtin, &first) && !first.is_unknown() {
@@ -67,7 +71,12 @@ fn hint(builtin: Builtin) -> Option<Type> {
         Builtin::ParseInt
         | Builtin::ParseFloat
         | Builtin::CanParseInt
-        | Builtin::CanParseFloat => Some(Type::Str),
+        | Builtin::CanParseFloat
+        | Builtin::ReadFile
+        | Builtin::WriteFile
+        | Builtin::AppendFile
+        | Builtin::FileExists => Some(Type::Str),
+        Builtin::Argument => Some(Type::Int),
         _ => None,
     }
 }
@@ -85,7 +94,13 @@ fn accepts_first(builtin: Builtin, found: &Type) -> bool {
         Builtin::ParseInt
         | Builtin::ParseFloat
         | Builtin::CanParseInt
-        | Builtin::CanParseFloat => *found == Type::Str,
+        | Builtin::CanParseFloat
+        | Builtin::ReadFile
+        | Builtin::WriteFile
+        | Builtin::AppendFile
+        | Builtin::FileExists => *found == Type::Str,
+        Builtin::Argument => *found == Type::Int,
+        Builtin::ArgumentCount => true,
     }
 }
 
@@ -104,6 +119,7 @@ fn remaining_types(builtin: Builtin, first: &Type) -> Vec<Type> {
         Builtin::Insert => vec![Type::Int, element],
         Builtin::RemoveAt => vec![Type::Int],
         Builtin::HasKey | Builtin::RemoveKey => vec![key],
+        Builtin::WriteFile | Builtin::AppendFile => vec![Type::Str],
         _ => Vec::new(),
     }
 }
