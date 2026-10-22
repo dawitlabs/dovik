@@ -17,6 +17,10 @@ pub(crate) enum Range {
 }
 
 impl Range {
+    fn envelope() -> Self {
+        Self::Known { lo: INT_MIN, hi: INT_MAX }
+    }
+
     fn exact(value: i128) -> Self {
         Self::Known { lo: value, hi: value }
     }
@@ -57,8 +61,8 @@ impl Range {
             return Self::Unknown;
         };
 
-        let lo = if lo < plo { -LIMIT } else { lo };
-        let hi = if hi > phi { LIMIT } else { hi };
+        let lo = if lo < plo { INT_MIN } else { lo };
+        let hi = if hi > phi { INT_MAX } else { hi };
         Self::bounded(lo, hi)
     }
 
@@ -146,11 +150,11 @@ struct State {
 
 impl State {
     fn slot(&self, slot: LocalId) -> Range {
-        self.slots.get(&slot).copied().unwrap_or(Range::Unknown)
+        self.slots.get(&slot).copied().unwrap_or(Range::envelope())
     }
 
     fn global(&self, global: GlobalId) -> Range {
-        self.globals.get(&global).copied().unwrap_or(Range::Unknown)
+        self.globals.get(&global).copied().unwrap_or(Range::envelope())
     }
 
     fn place(&self, place: Place) -> Range {
@@ -171,15 +175,16 @@ impl State {
         match value {
             Value::Int(inner) => Range::exact(*inner as i128),
             Value::Bool(inner) => Range::exact(i128::from(*inner)),
-            Value::Reg(register) => self.regs.get(register).copied().unwrap_or(Range::Unknown),
+            Value::Reg(register) => self.regs.get(register).copied().unwrap_or(Range::envelope()),
             _ => Range::Unknown,
         }
     }
 
     fn prune(mut self) -> Self {
-        self.slots.retain(|_, range| *range != Range::Unknown);
-        self.globals.retain(|_, range| *range != Range::Unknown);
-        self.regs.retain(|_, range| *range != Range::Unknown);
+        let top = Range::envelope();
+        self.slots.retain(|_, range| *range != top && *range != Range::Unknown);
+        self.globals.retain(|_, range| *range != top && *range != Range::Unknown);
+        self.regs.retain(|_, range| *range != top && *range != Range::Unknown);
         self
     }
 
@@ -195,8 +200,8 @@ impl State {
         }
 
         for key in self.regs.keys().chain(other.regs.keys()) {
-            let a = self.regs.get(key).copied().unwrap_or(Range::Unknown);
-            let b = other.regs.get(key).copied().unwrap_or(Range::Unknown);
+            let a = self.regs.get(key).copied().unwrap_or(Range::envelope());
+            let b = other.regs.get(key).copied().unwrap_or(Range::envelope());
             joined.regs.insert(*key, a.join(b));
         }
 
@@ -215,7 +220,7 @@ impl State {
         }
 
         for (key, value) in &self.regs {
-            let before = previous.regs.get(key).copied().unwrap_or(Range::Unknown);
+            let before = previous.regs.get(key).copied().unwrap_or(Range::envelope());
             widened.regs.insert(*key, value.widen(before));
         }
 

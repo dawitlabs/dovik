@@ -536,3 +536,57 @@ They differ in whether that is closable:
 
 Removing the overflow checks closes both and is the only thing that does. That trades away
 [DECISIONS.md](DECISIONS.md) D009.
+
+## `memory(none)` is unsound for any function that can trap
+
+A function marked `memory(none)` is one LLVM may delete when its result is unused, hoist
+out of a loop, or merge with an identical call. A Dovik function containing checked
+arithmetic can call `dovik_trap`, which writes to stderr and exits — so marking it pure
+lets LLVM **delete an overflow trap**.
+
+`src/backend/purity.rs` therefore requires that a function contain no instruction whose
+`runtime_error()` is `Some` before it is considered pure, as well as no memory access. In
+practice that means a function is pure only once every check inside it has been elided, or
+if it contains no checkable operation at all.
+
+This was caught before shipping. If purity is ever widened, re-derive this: the attribute
+is about observable effects, and terminating the program is the most observable effect
+there is.
+
+## An unknown integer is bounded by `Int`, which makes guards useful
+
+`src/opt/range.rs` treats a value it knows nothing about as `[Int::MIN, Int::MAX]` rather
+than as a lattice top, because every `Int` is in that range by definition — after a checked
+operation, after a load, after a list read. Widening targets the same envelope.
+
+That single change is what lets a guard narrow a parameter. In `fib`, `if n < 2` proves
+`n >= 2` on the other branch, so `n - 1` and `n - 2` provably fit and lose their checks:
+two of three in that function, where previously none were elided.
+
+## Hoisting a loop-invariant load across a call is a pessimisation
+
+Moving `len` out of a loop header looked free and cost 27% on a call-heavy workload. The
+hoisted value has to survive every call in the loop body, in a callee-saved register or a
+spill slot, and that costs more than re-reading a field that is already in cache.
+
+`src/opt/hoist.rs` therefore skips any loop whose body contains a call, a built-in or a
+print. Measured interleaved, since the first attempt looked like a win on a drifting
+machine.
+
+## Vectorization is where D009 is actually paid
+
+The remaining gap to C on `arith`, `calls` and list reductions is one thing: LLVM will not
+vectorize a loop containing an early exit, and an overflow check is an early exit. C
+vectorizes the same loops at width 2 interleaved 2.
+
+Removing **every** check does not close it — `calls` with no checks at all is still 2.4x C,
+because the loop also has to be countable and its induction variable identifiable.
+
+Worse, the check that blocks a reduction loop is the accumulator's, and that is the one
+check an interval analysis can never elide: `total = total + v` where `v` is read from a
+list has no bound. Only `arith` is closable, because its increment is `i % 7`, which is
+`[0, 6]`, over a known trip count — that needs scalar evolution.
+
+So reduction loops in Dovik will keep their check, and C will keep winning them, until
+either list element ranges are tracked or D009 is traded away. This is the structural cost
+of the guarantee, not an implementation deficiency.

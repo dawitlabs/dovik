@@ -4,7 +4,7 @@ use crate::builtins::Builtin;
 use crate::ir::{BlockId, Function, InstKind, Terminator, Value};
 use crate::types::Type;
 
-pub(crate) fn hoist_lengths(function: &mut Function) -> usize {
+pub(crate) fn hoist_lengths(function: &mut Function, signatures: &[Vec<Type>]) -> usize {
     let mut hoisted = 0;
 
     for header in 0..function.blocks.len() {
@@ -12,7 +12,11 @@ pub(crate) fn hoist_lengths(function: &mut Function) -> usize {
             continue;
         };
 
-        if body.iter().any(|block| mutates(function, *block)) {
+        if body.iter().any(|block| mutates(function, *block, signatures)) {
+            continue;
+        }
+
+        if body.iter().any(|block| calls_out(function, *block)) {
             continue;
         }
 
@@ -75,17 +79,27 @@ fn sole_entry(function: &Function, header: BlockId, body: &HashSet<BlockId>) -> 
     }
 }
 
-fn mutates(function: &Function, block: BlockId) -> bool {
+fn mutates(function: &Function, block: BlockId, signatures: &[Vec<Type>]) -> bool {
     function.blocks[block].instructions.iter().any(|inst| match &inst.kind {
         InstKind::ListSet { .. } | InstKind::DictSet { .. } => true,
         InstKind::Builtin { which, args, .. } => match which {
             Builtin::Append | Builtin::Insert | Builtin::RemoveAt | Builtin::RemoveKey => true,
             _ => args.iter().any(|(_, ty)| reference(ty)),
         },
-        InstKind::Call { args, .. } => args
-            .iter()
-            .any(|arg| matches!(arg, Value::Reg(_)) || matches!(arg, Value::Str(_))),
+        InstKind::Call { function: target, .. } => signatures
+            .get(*target)
+            .map(|params| params.iter().any(reference))
+            .unwrap_or(true),
         _ => false,
+    })
+}
+
+fn calls_out(function: &Function, block: BlockId) -> bool {
+    function.blocks[block].instructions.iter().any(|inst| {
+        matches!(
+            inst.kind,
+            InstKind::Call { .. } | InstKind::Builtin { .. } | InstKind::Print { .. }
+        )
     })
 }
 

@@ -10,22 +10,37 @@ use crate::token::Span;
 pub fn optimize(program: &mut Program) -> Vec<TypeError> {
     let mut errors = Vec::new();
 
+    let signatures: Vec<Vec<crate::types::Type>> = program
+        .functions
+        .iter()
+        .map(|function| {
+            function.locals[..function.param_count]
+                .iter()
+                .map(|local| local.ty.clone())
+                .collect()
+        })
+        .collect();
+
     for function in &mut program.functions {
-        optimize_function(function, &mut errors);
+        optimize_function(function, &signatures, &mut errors);
     }
 
     errors.sort_by_key(|error| error.span.start);
     errors
 }
 
-fn optimize_function(function: &mut Function, errors: &mut Vec<TypeError>) {
+fn optimize_function(
+    function: &mut Function,
+    signatures: &[Vec<crate::types::Type>],
+    errors: &mut Vec<TypeError>,
+) {
     let escaping = escape::escaping_registers(function);
 
     for block in &mut function.blocks {
         fold::fold_block(block, &escaping, errors);
     }
 
-    hoist::hoist_lengths(function);
+    hoist::hoist_lengths(function, signatures);
     range::elide_checks(function);
 
     for block in &mut function.blocks {

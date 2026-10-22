@@ -1,4 +1,5 @@
 mod builtin;
+mod purity;
 pub(crate) mod ownership;
 mod checks;
 mod collection;
@@ -65,6 +66,7 @@ pub fn emit_with(program: &Program, source: &str, checks: bool) -> String {
         temp: 0,
         label: String::new(),
         checks,
+        pure: purity::classify(program),
     };
 
     emitter.module();
@@ -78,6 +80,7 @@ pub(crate) struct Emitter<'a> {
     pub(crate) temp: usize,
     pub(crate) label: String,
     pub(crate) checks: bool,
+    pub(crate) pure: Vec<bool>,
 }
 
 impl Emitter<'_> {
@@ -153,8 +156,13 @@ impl Emitter<'_> {
             .map(|(slot, local)| format!("{} %arg{slot}", llvm_type(&local.ty)))
             .collect();
 
+        let attributes = match self.pure.get(index).copied().unwrap_or(false) {
+            true => " nounwind memory(none)",
+            false => " nounwind",
+        };
+
         self.line(&format!(
-            "define internal {result} @dvk{index}({}) {{",
+            "define internal {result} @dvk{index}({}){attributes} {{",
             params.join(", ")
         ));
 
