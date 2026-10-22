@@ -1,6 +1,8 @@
 # Dovik Benchmarking
 
-**Status:** Draft
+**Status:** Draft — no measurements exist
+
+No benchmark has been run, because there is no compiler. Every number in Dovik's documentation must come from this process once it exists ([DECISIONS.md](DECISIONS.md) D017).
 
 ## 1. Purpose
 
@@ -52,6 +54,11 @@ The first benchmark suite should include:
 - Memory allocation and object reclamation
 - A small real-world command-line program
 
+Two costs that Dovik's design choices impose deserve their own measurements:
+
+- The checked-arithmetic guarantees: the overflow check on every `+`, `-`, `*`, and negation ([SPEC.md](SPEC.md) 7.2, [DECISIONS.md](DECISIONS.md) D009), and the zero-divisor check on every `/` and `%` including `Float` division ([SPEC.md](SPEC.md) 6.2, [DECISIONS.md](DECISIONS.md) D020). Measure both against an unchecked build to price the correctness guarantees honestly. Float-heavy numeric loops are the workload where the division check is most likely to show.
+- String indexing by Unicode scalar value over UTF-8 storage, which is O(n) per index ([SPEC.md](SPEC.md) 10.4). Measure it before resolving U3.
+
 More complex workloads can be added as the language develops.
 
 ## 5. Comparisons
@@ -101,7 +108,7 @@ Results should be recorded consistently so that changes can be compared over tim
 
 - Which benchmark suite should be adopted?
 - Which optimization levels should be tested?
-- How should garbage collection pauses be measured?
+- How should automatic memory-reclamation pauses be measured? The measurement method depends on which strategy the runtime adopts, and no strategy has been chosen ([RUNTIME.md](RUNTIME.md) section 8).
 - Which results should block a release?
 - How should benchmark results be published?
 

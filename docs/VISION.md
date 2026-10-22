@@ -1,5 +1,9 @@
 # Dovik Vision
 
+**Status:** Language design and planning. Nothing described here is implemented.
+
+This document states intent. [SPEC.md](SPEC.md) states the rules, and it is authoritative wherever the two could be read as disagreeing.
+
 ## 1. Purpose
 
 Dovik is an experimental, statically typed programming language designed to combine simple, readable syntax with native compilation, efficient memory usage, and broad cross-platform capabilities.
@@ -31,7 +35,7 @@ Make software development simple for humans while allowing the compiler and runt
 
 ## 5. Initial Scope
 
-The first implementation will focus on small native CLI programs on Linux.
+The first implementation will focus on small, single-file native CLI programs on Linux x86-64. Multi-file programs are not expressible, because Dovik has no module system yet ([SPEC.md](SPEC.md) section 16).
 
 The initial version should establish:
 
@@ -67,7 +71,9 @@ Performance claims must be supported by reproducible benchmarks.
 
 Language design and planning.
 
-The compiler, runtime, and standard library are not yet established.
+The compiler, runtime, and standard library are not yet established. No Dovik program has ever been compiled.
+
+The decisions that gated the first compiler stages are settled. The questions that remain open gate the runtime and standard library rather than the frontend, and they are listed in [SPEC.md](SPEC.md) section 21.
 
 ## 10. Naming
 

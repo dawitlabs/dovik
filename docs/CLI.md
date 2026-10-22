@@ -1,6 +1,8 @@
 # Dovik Command-Line Interface
 
-**Status:** Draft
+**Status:** Draft — no CLI exists
+
+Nothing in this document is implemented. Command names and behavior are proposals, not a contract; the only contract is [SPEC.md](SPEC.md).
 
 ## 1. Purpose
 
@@ -16,7 +18,7 @@ Compile a Dovik program or project into an executable.
 
 ### `dovik run`
 
-Compile and execute a Dovik program.
+Compile and execute a Dovik program. This compiles first and then runs; Dovik has no interpreter or REPL ([DECISIONS.md](DECISIONS.md) D016).
 
 ### `dovik check`
 
@@ -59,9 +61,9 @@ The CLI should provide:
 
 ## 5. Project Structure
 
-The initial version should support compiling individual `.dovk` files.
+The initial version compiles a single `.dovk` file. Dovik has no module system ([SPEC.md](SPEC.md) section 16), so multi-file programs are not expressible yet, and a manifest would have nothing to describe.
 
-A project manifest and dependency-management system may be introduced when multi-file programs require them.
+A project manifest and dependency management belong with the module system, in Roadmap Phase 9.
 
 ## 6. Open Decisions
 
@@ -75,4 +77,4 @@ A project manifest and dependency-management system may be introduced when multi
 
 ## 7. Status
 
-This document defines the proposed CLI, not a finalized interface contract.
+This document defines the proposed CLI, not a finalized interface contract. `dovik build`, `run`, `check`, `test`, and `format` are all unimplemented.

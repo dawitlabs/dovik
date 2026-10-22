@@ -1,6 +1,8 @@
 # Dovik Platform Support
 
-**Status:** Draft
+**Status:** Draft — no platform is supported yet
+
+Linux x86-64 is the initial *target*, not a working one: no compiler exists, so no platform is currently supported. Every other platform in this document is a goal.
 
 ## 1. Goal
 
@@ -10,14 +12,14 @@ Platform support will expand gradually as the compiler and runtime mature.
 
 ## 2. Initial Target
 
-The first supported target is:
+The first target is:
 
 - Linux x86-64
 - Native executable output
 - LLVM-based code generation
 - A minimal runtime
 
-The initial compiler will prioritize correctness and reliability on this target before expanding.
+The initial compiler will prioritize correctness and reliability on this target before expanding ([DECISIONS.md](DECISIONS.md) D015).
 
 ## 3. Planned Platforms
 
@@ -75,4 +77,4 @@ Unsupported features should produce clear diagnostics rather than failing unpred
 
 ## 9. Status
 
-This document describes planned platform support. It does not mean these targets are already implemented.
+This document describes planned platform support. None of it is implemented — not Linux, and certainly not Windows, macOS, WebAssembly, Android, iOS, desktop, or cross-compilation. A target counts as supported only once it has working builds and a passing test suite.
