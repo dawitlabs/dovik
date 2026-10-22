@@ -1,9 +1,16 @@
-function step(n: Int) -> Int:
-    return n + 1
+xs: List<Int> = []
+i = 0
+while i < 1024:
+    append(xs, i % 7)
+    i = i + 1
+
+function step(total: Int, value: Int) -> Int:
+    return total + value * 3
 
 total = 0
-i = 0
-while i < 10000000:
-    total = step(total)
-    i = i + 1
+round = 0
+while round < 10000:
+    for v in xs:
+        total = step(total, v)
+    round = round + 1
 print(total)

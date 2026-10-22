@@ -132,111 +132,121 @@ Produced by `bench/run.py`; raw data in `bench/results.json`.
 - Dovik 0.1.0, clang 22.1.8, rustc 1.94.1, CPython 3.13.15
 - Builds: Dovik `dovik build` (clang -O2 -flto=full over the emitted IR and the runtime),
   C `clang -O2`, Rust `rustc -O`, CPython unoptimized
-- 5 repetitions per measurement; the best is reported
-- Timing and peak memory are measured in separate passes: sampling `VmHWM` steals CPU
-  from the program it watches.
+- 3 repetitions per measurement; the **minimum** is reported
+- Timing and peak memory are measured in separate passes: sampling `VmHWM` perturbs the
+  program it watches
+- This machine throttles. Medians run 1.3-1.5x the minimum, so a single run can invent a
+  result. Re-measure anything that looks new.
 
 ### Execution time, milliseconds (lower is better)
 
 | Workload | Dovik | Dovik (no checks) | C | Rust | Python |
 | --- | --- | --- | --- | --- | --- |
-| `arith` | 15.0 | 19.7 | 12.1 | 12.2 | 2662.2 |
-| `recursion` | 2.1 | 1.7 | 1.6 | 1.7 | 56.6 |
-| `calls` | 0.9 | 0.9 | 0.8 | 19.1 | 2785.7 |
-| `collections` | 29.8 | 30.1 | 2.5 | 10.2 | 161.2 |
-| `strings` | 1.3 | 1.4 | 4.6 | 8.2 | 35.0 |
-| `string_index` | 2.7 | 2.5 | 0.9 | 1.4 | 20.8 |
-| `allocation` | 8.8 | 7.1 | 0.9 | 1.9 | 123.1 |
+| `arith` | 20.0 | 26.0 | 15.1 | 15.9 | 4915.1 |
+| `recursion` | 2.9 | 2.2 | 1.9 | 2.3 | 71.3 |
+| `calls` | 12.1 | 9.1 | 4.4 | 6.9 | 2730.8 |
+| `collections` | 34.1 | 24.5 | 19.5 | 31.1 | 303.3 |
+| `strings` | 2.7 | 3.1 | 11.2 | 21.1 | 39.1 |
+| `string_index` | 3.1 | 4.1 | 0.9 | 1.7 | 24.3 |
+| `allocation` | 6.3 | 6.2 | 0.9 | 1.7 | 141.1 |
 
 ### Peak memory, MB (lower is better)
 
 | Workload | Dovik | Dovik (no checks) | C | Rust | Python |
 | --- | --- | --- | --- | --- | --- |
-| `arith` | 1.9 | 2.0 | 1.5 | 2.1 | 11.9 |
-| `recursion` | 2.0 | 2.0 | 1.5 | 2.1 | 12.0 |
-| `calls` | 1.0 | 0.8 | 1.1 | 2.1 | 11.9 |
-| `collections` | 22.8 | 22.8 | 3.7 | 7.8 | 36.3 |
-| `strings` | 2.3 | 1.9 | 1.7 | 2.3 | 12.0 |
-| `string_index` | 2.1 | 2.0 | 0.8 | 2.1 | 11.9 |
-| `allocation` | 2.0 | 2.0 | 0.7 | 2.1 | 11.9 |
+| `arith` | 2.0 | 2.0 | 1.5 | 2.1 | 11.9 |
+| `recursion` | 2.0 | 2.2 | 1.5 | 2.1 | 12.0 |
+| `calls` | 2.0 | 2.0 | 1.6 | 2.1 | 12.0 |
+| `collections` | 12.9 | 12.9 | 10.5 | 17.4 | 36.4 |
+| `strings` | 2.4 | 2.3 | 1.7 | 2.2 | 12.0 |
+| `string_index` | 2.0 | 2.0 | 0.6 | 2.1 | 11.9 |
+| `allocation` | 2.0 | 2.0 | 0.9 | 2.1 | 11.9 |
 
 ### Compilation time and binary size
 
 | Workload | Dovik compile (ms) | Dovik binary (KB) | C compile (ms) | C binary (KB) |
 | --- | --- | --- | --- | --- |
-| `arith` | 132.3 | 15 | 87.5 | 15 |
-| `recursion` | 140.9 | 15 | 92.2 | 15 |
-| `calls` | 122.5 | 15 | 88.0 | 15 |
-| `collections` | 169.8 | 16 | 101.5 | 15 |
-| `strings` | 199.9 | 16 | 104.0 | 15 |
-| `string_index` | 172.6 | 16 | 116.4 | 15 |
-| `allocation` | 202.1 | 16 | 129.8 | 15 |
+| `arith` | 204.8 | 15 | 163.5 | 15 |
+| `recursion` | 204.2 | 15 | 130.4 | 15 |
+| `calls` | 215.5 | 16 | 158.6 | 15 |
+| `collections` | 399.9 | 16 | 249.1 | 15 |
+| `strings` | 203.9 | 16 | 212.7 | 15 |
+| `string_index` | 196.9 | 16 | 133.6 | 15 |
+| `allocation` | 237.7 | 16 | 134.2 | 15 |
 
-### The one workload where Dovik beats C, stated carefully
+### Two benchmarks were measuring the wrong thing
 
-`strings` builds a 20000-character string one character at a time. Three versions of
-the same program:
+Both are fixed above. They are recorded because the suite's credibility depends on it
+more than on any number in it.
+
+**`collections` was comparing a hash map against an array.** The Dovik program builds a
+`Dict<Int, Int>` with keys `0..99999`; the C program noticed those keys are dense and
+used `calloc` plus direct indexing, doing no hashing at all. That is not equivalent work
+([BENCHMARKS.md](BENCHMARKS.md) section 2), and it reported Dovik at 6.8x C. Against an
+open-addressing hash map in C with the same load factor and growth policy, dictionary
+insertion alone is 19.3 ms against 17.4 ms — 1.11x — and the whole workload is 1.75x.
+
+**`calls` was measuring process startup.** It reported about 1 ms for 10 million
+iterations, which is 0.1 ns each: both compilers had proved the loop's result and deleted
+it. It now accumulates through a function over values read from a list, which neither can
+fold.
+
+Fixing the second one produced a false result in the other direction first. Adding
+`noinline` to the C and Rust versions stopped their loops being deleted, but Dovik has no
+such annotation, so C and Rust were forbidden to inline while Dovik's call was inlined
+freely — and Dovik appeared to win by 1.6x. With the annotations removed and all three
+compilers equally free, the honest figure is 2.77x.
+
+### Where Dovik beats C
+
+`strings` builds a 20000-character string one character at a time.
 
 | Implementation | Time |
 | --- | --- |
-| Dovik, `s = s + "x"` | 1.17 ms |
-| C, the equivalent source — allocate, copy, free each round | 4.54 ms |
-| C, hand-rolled capacity-doubling buffer | 0.78 ms |
+| Dovik, `s = s + "x"` | 2.7 ms |
+| C, the equivalent source | 11.2 ms |
+| C, hand-rolled capacity-doubling buffer | 0.8 ms |
 
-**Dovik is 3.9x faster than the natural C translation, and 1.5x slower than C a careful
-programmer tuned by hand.** At ten times the workload the first gap becomes 3.1 ms
-against 1593.8 ms, because the two have different asymptotics: Dovik is amortized O(n)
-and naive C is O(n²).
+**Dovik is 4.1x faster than the natural C translation and 3.4x slower than C a programmer
+tuned by hand.** At ten times the workload the first gap becomes 3.1 ms against 1593.8 ms,
+because the asymptotics differ: Dovik is amortized O(n), naive C is O(n²).
 
-The reason is structural, not a trick. [SPEC.md](SPEC.md) 10.3 makes strings immutable,
-so `s = s + "x"` means "produce a new string". But the runtime holds a reference count,
-so it can see that the old string has exactly one owner and no one can observe the
-difference — and extend it in place instead of copying. C has no reference counts and
-cannot know that, so the equivalent C must copy.
+The mechanism is structural. [SPEC.md](SPEC.md) 10.3 makes strings immutable, so
+`s = s + "x"` means "produce a new string". The runtime holds a reference count, so it can
+see the old string has exactly one owner, know that nobody can observe the difference, and
+extend it in place. C has no reference count and cannot know this.
 
-**What this does and does not support.** It supports: Dovik beats C on this workload for
-equivalent source, and gives amortized append from code that reads like the naive
-version. It does not support: Dovik is faster than C. Hand-tuned C still wins here, and
-C wins every other workload in the suite.
+String-keyed dictionary lookup is the second case, for the same reason: an immutable string
+can memoize its hash, where C recomputes it on every lookup. Measured separately at 20000
+keys and 400000 lookups, Dovik is 15.9 ms against 16.3 ms.
 
-The honest general claim is that Dovik's semantics permit optimizations C cannot perform
-automatically, and this is one of them being exploited.
+**What this supports:** Dovik's semantics permit optimizations C cannot perform
+automatically, and two of them are exploited. **What it does not support:** that Dovik is
+faster than C.
 
 ### Reading the rest
 
-**Scalar work is within 1.2-1.7x of C.** `arith`, `recursion` and `calls` are close.
+**Scalar work is 1.3-1.5x C.** `arith` and `recursion` are close; `calls` is 2.8x.
 
-**Checked arithmetic is not free, and comparing the two Dovik builds cannot see why.**
-LLVM declines to vectorize the checked loop and names the reason:
+**Checked arithmetic is not free, and the two Dovik builds cannot price it.** The analysis
+in `src/opt/range.rs` now elides 11 of the 19 overflow checks in this suite, including every
+loop induction variable. The one it cannot elide is the accumulator — `total = total + i % 7`
+needs the trip count times the per-iteration increment, which is scalar evolution rather
+than interval arithmetic — and one remaining `llvm.sadd.with.overflow` is enough that LLVM
+still reports:
 
 ```
 loop not vectorized: call instruction cannot be vectorized
-loop not vectorized: value that could not be identified as reduction
-                     is used outside the loop
 ```
 
-`llvm.sadd.with.overflow` is a call the loop vectorizer will not handle. The same loop in
-C vectorizes at width 2 interleaved 2. The unchecked build does not recover it either, so
-timing the two Dovik builds against each other reports nothing. **Pricing the checks
-requires measuring vectorization, not wall time.** Eliding a check that provably cannot
-fire would restore it without weakening [DECISIONS.md](DECISIONS.md) D009; that analysis
-is not implemented.
+against C vectorizing the same loop at width 2 interleaved 2. Closing `arith` means bounding
+that accumulator.
 
-**Collections remain the worst gap, around 12x C.** Each element is a 16-byte tagged cell
-against C's 8-byte `long long`, which doubles memory traffic and blocks vectorized
-summing. Monomorphizing `List<Int>` to a raw array would close most of it.
+**`allocation` at 7.2x is the largest honest gap.** The workload creates and drops 200000
+three-element lists. Each Dovik list carries a reference count, a length and a capacity that
+C's `malloc(24)` does not, and pays retain and release it cannot skip.
 
-**String indexing is still O(n) per index, as [SPEC.md](SPEC.md) 10.4 specifies.** It is
-35x faster than the first implementation, because the runtime walks UTF-8 continuation
-bytes directly, but the asymptotics are unchanged. That is the measurement U3 wanted.
-
-### What the C runtime and pooling changed
-
-| | Rust runtime | C runtime, LTO, in-place append, pooling |
-| --- | --- | --- |
-| Binary, program printing one number | 5,582,432 bytes | 16,344 bytes |
-| `strings` | 172.6 ms | 1.3 ms |
-| `string_index` | 235.4 ms | 6.7 ms |
-| `allocation` | 62.9 ms | 8.8 ms |
-| `collections` | 136.4 ms | 29.8 ms |
+**`string_index` at 3.4x is specified, not slow.** [SPEC.md](SPEC.md) 10.4 indexes strings by
+Unicode scalar over UTF-8 storage, which is O(n) per index; C indexes bytes in O(1) and so
+solves an easier problem. This is the measurement U3 asked for.
 
