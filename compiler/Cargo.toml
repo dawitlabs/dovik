@@ -8,6 +8,6 @@ name = "dovik"
 path = "src/main.rs"
 
 [workspace]
-members = [".", "runtime"]
+members = ["."]
 
 [dependencies]

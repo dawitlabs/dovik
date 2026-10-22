@@ -329,3 +329,29 @@ Every memory measurement carries that ~3 MB floor, so a workload reporting 3.1 M
 using about 0.1 MB of its own. Before concluding anything about allocation behaviour
 from a memory number, subtract the floor — and know that shrinking the runtime is worth
 more than tuning the allocator.
+
+## The runtime is C, compiled to bitcode, linked with full LTO
+
+`runtime-c/dovik_rt.c` is built by `build.rs` with `clang -O2 -flto` into `OUT_DIR`, and
+the path is baked into the compiler as `DOVIK_RUNTIME_OBJECT`. Programs link with
+`-flto=full`, which lets LLVM inline runtime calls into the hot loop.
+
+**`-flto=full`, not `-flto`.** Plain `-flto` selects thin LTO here and leaves
+`dovik_list_push`, `dovik_list_get` and the rest as calls; checking the final binary with
+`objdump | grep 'call.*dovik_'` shows them. Full LTO inlines them, which is most of why
+collection work got 3.6x faster.
+
+An earlier runtime was written in Rust and linked as a staticlib. It cost 5.58 MB of
+binary and ~3 MB of resident memory for a program that prints one number, because it
+pulled in Rust's standard library, and it blocked all inlining. The C version is 21 KB
+total. Do not reintroduce a Rust-std dependency in the native runtime.
+
+`DOVIK_RUNTIME` overrides the object path. Setting it to a stale artifact silently
+measures the wrong runtime — that mistake made the benchmark harness report collection
+work as 120 ms when the real figure was 38 ms.
+
+## Benchmark timing and memory must be measured in separate passes
+
+Sampling `/proc/<pid>/status` for `VmHWM` perturbs the process being watched. Measuring
+both at once inflated every timing in an earlier revision of the results. `bench/run.py`
+now runs the timing repetitions first and the memory passes afterwards.

@@ -2,6 +2,7 @@
 
 - **Status:** Draft — nothing here is implemented
 - **Goal:** Automatic memory management with low overhead.
+- **Implementation:** C, compiled to bitcode and linked into each program with full LTO
 
 Language semantics are defined by [SPEC.md](SPEC.md), which is authoritative. This document covers runtime goals and the decisions still open. The runtime may not introduce observable behavior the specification does not define.
 

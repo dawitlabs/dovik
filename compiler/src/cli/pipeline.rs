@@ -232,8 +232,8 @@ fn link(llvm: &str, target: &str) -> Result<(), String> {
     }
 
     let status = Command::new("clang")
-        .args(["-O2", "-o", target, &ll_path, &runtime_archive()])
-        .args(["-lm", "-lpthread", "-ldl"])
+        .args(["-O2", "-flto=full", "-o", target, &ll_path, &runtime_archive()])
+        .arg("-lm")
         .status();
 
     match status {
@@ -247,13 +247,5 @@ fn link(llvm: &str, target: &str) -> Result<(), String> {
 }
 
 pub fn runtime_archive() -> String {
-    if let Ok(path) = std::env::var("DOVIK_RUNTIME") {
-        return path;
-    }
-
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("libdovik_rt.a")))
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "libdovik_rt.a".to_string())
+    std::env::var("DOVIK_RUNTIME").unwrap_or_else(|_| env!("DOVIK_RUNTIME_OBJECT").to_string())
 }

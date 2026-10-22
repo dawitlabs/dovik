@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -23,25 +23,12 @@ fn lowered(source: &str, optimize: bool) -> ir::Program {
     program
 }
 
-fn target_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("target").join("debug")
-}
-
 fn runtime_archive() -> &'static PathBuf {
     static ARCHIVE: OnceLock<PathBuf> = OnceLock::new();
 
     ARCHIVE.get_or_init(|| {
-        let path = target_dir().join("libdovik_rt.a");
-
-        if !path.exists() {
-            let status = Command::new("cargo")
-                .args(["build", "-p", "dovik-rt"])
-                .current_dir(env!("CARGO_MANIFEST_DIR"))
-                .status()
-                .expect("cargo build -p dovik-rt");
-            assert!(status.success(), "the runtime archive failed to build");
-        }
-
+        let path = PathBuf::from(env!("DOVIK_RUNTIME_OBJECT"));
+        assert!(path.exists(), "the runtime object is missing: {path:?}");
         path
     })
 }
@@ -63,12 +50,12 @@ fn compile_and_run(source: &str, name: &str) -> Native {
     std::fs::write(&ll, &llvm).expect("write ir");
 
     let build = Command::new("clang")
-        .arg("-O2")
+        .args(["-O2", "-flto=full"])
         .arg("-o")
         .arg(&binary)
         .arg(&ll)
         .arg(runtime_archive())
-        .args(["-lm", "-lpthread", "-ldl"])
+        .arg("-lm")
         .output()
         .expect("clang");
 
@@ -239,12 +226,12 @@ fn live_objects_at_exit(source: &str, name: &str) -> i64 {
     std::fs::write(&ll, backend::emit(&program, source)).expect("write ir");
 
     let build = Command::new("clang")
-        .arg("-O2")
+        .args(["-O2", "-flto=full"])
         .arg("-o")
         .arg(&binary)
         .arg(&ll)
         .arg(runtime_archive())
-        .args(["-lm", "-lpthread", "-ldl"])
+        .arg("-lm")
         .output()
         .expect("clang");
     assert!(

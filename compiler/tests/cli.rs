@@ -6,30 +6,7 @@ const DOVIK: &str = env!("CARGO_BIN_EXE_dovik");
 
 fn runtime_ready() -> &'static PathBuf {
     static ARCHIVE: OnceLock<PathBuf> = OnceLock::new();
-
-    ARCHIVE.get_or_init(|| {
-        let path = PathBuf::from(DOVIK)
-            .parent()
-            .expect("binary directory")
-            .join("libdovik_rt.a");
-
-        if !path.exists() {
-            let status = Command::new("cargo")
-                .args(["build", "-p", "dovik-rt"])
-                .current_dir(env!("CARGO_MANIFEST_DIR"))
-                .status()
-                .expect("cargo build -p dovik-rt");
-            assert!(status.success());
-
-            let built = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("target")
-                .join("debug")
-                .join("libdovik_rt.a");
-            let _ = std::fs::copy(&built, &path);
-        }
-
-        path
-    })
+    ARCHIVE.get_or_init(|| PathBuf::from(env!("DOVIK_RUNTIME_OBJECT")))
 }
 
 struct Sandbox {

@@ -15,7 +15,6 @@ PROGRAMS = ROOT / "programs"
 BUILD = ROOT / "build"
 COMPILER = ROOT.parent / "compiler"
 DOVIK = COMPILER / "target" / "debug" / "dovik"
-RUNTIME = COMPILER / "target" / "debug" / "libdovik_rt.a"
 
 WORKLOADS = [
     "arith",
@@ -94,7 +93,7 @@ def build(workload):
 
     for name, (command, binary) in targets.items():
         start = time.perf_counter()
-        result = shell(command, env={**os.environ, "DOVIK_RUNTIME": str(RUNTIME)})
+        result = shell(command)
         elapsed = time.perf_counter() - start
 
         if result.returncode != 0:
@@ -130,32 +129,38 @@ def high_water(pid, out):
         time.sleep(0.0005)
 
 
+def time_once(command):
+    start = time.perf_counter()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    stdout = process.stdout.read().decode()
+    process.stdout.close()
+    code = process.wait()
+    return time.perf_counter() - start, stdout, code
+
+
+def memory_once(command):
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    observed = [0]
+    watcher = threading.Thread(target=high_water, args=(process.pid, observed), daemon=True)
+    watcher.start()
+    process.wait()
+    watcher.join(timeout=0.05)
+    return observed[0]
+
+
 def measure(command):
     samples = []
-    peak = 0
     stdout = ""
 
     for _ in range(REPS):
-        start = time.perf_counter()
-        process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
-        )
-        observed = [0]
-        watcher = threading.Thread(
-            target=high_water, args=(process.pid, observed), daemon=True
-        )
-        watcher.start()
-        stdout = process.stdout.read().decode()
-        process.stdout.close()
-        code = process.wait()
-        elapsed = time.perf_counter() - start
-        watcher.join(timeout=0.05)
+        elapsed, stdout, code = time_once(command)
 
         if code != 0:
             return None
 
         samples.append(elapsed)
-        peak = max(peak, observed[0])
+
+    peak = max(memory_once(command) for _ in range(2))
 
     return {
         "best_seconds": min(samples),
@@ -169,10 +174,6 @@ def main():
     if not DOVIK.exists():
         print("build the compiler first: cargo build", file=sys.stderr)
         return 1
-    if not RUNTIME.exists():
-        print("build the runtime first: cargo build -p dovik-rt", file=sys.stderr)
-        return 1
-
     report = {"environment": environment(), "workloads": {}}
     print(f"environment: {report['environment']['cpu']}, {REPS} reps per measurement")
     print("peak RSS is absolute VmHWM, sampled; runs under ~20ms may under-report\n")

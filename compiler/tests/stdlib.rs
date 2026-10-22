@@ -248,19 +248,7 @@ const CORPUS: &[(&str, &str)] = &[
 
 #[test]
 fn native_matches_the_interpreter_for_the_standard_library() {
-    let archive = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("debug")
-        .join("libdovik_rt.a");
-
-    if !archive.exists() {
-        let status = Command::new("cargo")
-            .args(["build", "-p", "dovik-rt"])
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .status()
-            .expect("cargo build -p dovik-rt");
-        assert!(status.success());
-    }
+    let archive = std::path::PathBuf::from(env!("DOVIK_RUNTIME_OBJECT"));
 
     let dir = std::env::temp_dir().join("dovik-stdlib-tests");
     std::fs::create_dir_all(&dir).expect("temp dir");
@@ -275,12 +263,12 @@ fn native_matches_the_interpreter_for_the_standard_library() {
         std::fs::write(&ll, backend::emit(&program, source)).expect("write ir");
 
         let build = Command::new("clang")
-            .arg("-O2")
+            .args(["-O2", "-flto=full"])
             .arg("-o")
             .arg(&binary)
             .arg(&ll)
             .arg(&archive)
-            .args(["-lm", "-lpthread", "-ldl"])
+            .arg("-lm")
             .output()
             .expect("clang");
         assert!(
