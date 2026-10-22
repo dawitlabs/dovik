@@ -113,7 +113,7 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 **Completion criterion:** Dovik can support maintainable multi-module applications.
 
-**Blocked by:** the module system is entirely unspecified ([SPEC.md](SPEC.md) section 16). Import syntax, visibility, initialization order, dependency resolution, and circular imports all need designing first, and that design is a specification change rather than an implementation detail.
+**Blocked by:** the module system is entirely unspecified ([SPEC.md](SPEC.md) section 16). Import syntax, visibility, initialization order, dependency resolution, and circular imports all need designing first, and that design is a specification change rather than an implementation detail. [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) is that design, awaiting ratification into [SPEC.md](SPEC.md) under section 20.
 
 ## Phase 10: Platform Expansion
 

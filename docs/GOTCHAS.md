@@ -731,7 +731,12 @@ specification first, and that the implementation must not diverge silently.
 branch: resolving U8 touches the lexer, the type checker's first flow-sensitive rule, the
 IR representation, the runtime, five library signatures and six documents.
 
-Nothing in the compiler depends on that file. If it is rejected, deleting it costs nothing,
+[PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) is the same thing for
+[SPEC.md](SPEC.md) 16's first bullet, and its section 8 is the part to read first: the cost of
+modules is not the parsing or the scope rules, it is that `Span` carries no file identity and
+every stage of the compiler is built on a single source string.
+
+Nothing in the compiler depends on either file. If one is rejected, deleting it costs nothing,
 which is the point of writing it before writing code.
 
 ## A `for` loop over a list typed its element register `Unknown`

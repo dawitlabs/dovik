@@ -64,6 +64,8 @@ The CLI should provide:
 The initial version compiles a single `.dovk` file. Dovik has no module system ([SPEC.md](SPEC.md) section 16), so multi-file programs are not expressible yet, and a manifest would have nothing to describe.
 
 A project manifest and dependency management belong with the module system, in Roadmap Phase 9.
+[PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) designs that module system and deliberately leaves
+both out; it also answers section 6's question about where tests belong.
 
 ## 6. Open Decisions
 
