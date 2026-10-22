@@ -10,6 +10,7 @@ pub mod interp;
 pub mod ir;
 pub mod lexer;
 pub mod lower;
+pub mod modules;
 pub mod opt;
 pub mod parser;
 pub mod resolve;

@@ -92,6 +92,17 @@ impl Resolver {
         self.bindings.insert(ident.span, id);
         let symbol = self.symbols[id].kind;
 
+        if self.imported_here.contains(&id) {
+            self.error(
+                ResolveErrorKind::NotAssignable {
+                    name: ident.name.clone(),
+                    what: "an imported name",
+                },
+                ident.span,
+            );
+            return;
+        }
+
         let error = match symbol {
             SymbolKind::Global if self.in_function() => {
                 Some(ResolveErrorKind::AssignToGlobal(ident.name.clone()))
@@ -196,12 +207,13 @@ impl Resolver {
             return;
         }
 
-        let Some(&declared_at) = self.global_positions.get(&id) else {
+        let Some(&(unit, declared_at)) = self.global_positions.get(&id) else {
             return;
         };
 
         self.graph.nodes[function].global_reads.push(GlobalRead {
             name: self.symbols[id].name.clone(),
+            unit,
             declared_at,
         });
     }
@@ -211,7 +223,11 @@ impl Resolver {
             return;
         };
 
-        let Some(&target) = self.graph.by_name.get(name) else {
+        let target = self
+            .lookup(name)
+            .and_then(|binding| self.graph.by_binding.get(&binding).copied());
+
+        let Some(target) = target else {
             return;
         };
 
@@ -219,6 +235,7 @@ impl Resolver {
             Some(caller) => self.graph.nodes[caller].calls.push(target),
             None => self.graph.module_calls.push(ModuleCall {
                 function: target,
+                unit: self.unit,
                 statement_index: self.statement_index,
                 span: callee.span,
             }),

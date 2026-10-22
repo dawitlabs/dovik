@@ -1,0 +1,15 @@
+function lines(text: String) -> List<String>:
+    return split(text, "\n")
+
+function flatten(text: String) -> String:
+    spaced = join(split(text, "\n"), " ")
+    return join(split(spaced, "\t"), " ")
+
+function count_words(text: String) -> Int:
+    words = 0
+
+    for piece in split(text, " "):
+        if len(trim(piece)) > 0:
+            words = words + 1
+
+    return words

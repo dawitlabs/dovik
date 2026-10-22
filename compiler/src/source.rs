@@ -9,6 +9,7 @@ pub struct SourceFile {
 pub struct SourceMap {
     files: Vec<SourceFile>,
     combined: String,
+    entry: usize,
 }
 
 impl SourceMap {
@@ -35,11 +36,7 @@ impl SourceMap {
         &self.combined
     }
 
-    pub fn files(&self) -> &[SourceFile] {
-        &self.files
-    }
-
-    pub fn file_of(&self, offset: usize) -> &SourceFile {
+    fn file_of(&self, offset: usize) -> &SourceFile {
         let index = self
             .files
             .partition_point(|file| file.base <= offset)
@@ -64,16 +61,12 @@ impl SourceMap {
         (line, column)
     }
 
-    pub fn path(&self, offset: usize) -> &str {
-        self.locate(offset).0
-    }
-
     pub fn entry_text(&self) -> &str {
-        self.files.last().map(|file| file.text.as_str()).unwrap_or("")
+        self.files.get(self.entry).map(|file| file.text.as_str()).unwrap_or("")
     }
 
     pub fn entry_path(&self) -> &str {
-        self.files.last().map(|file| file.path.as_str()).unwrap_or("")
+        self.files.get(self.entry).map(|file| file.path.as_str()).unwrap_or("")
     }
 }
 

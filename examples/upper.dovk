@@ -1,5 +1,5 @@
-text = read_input()
+import "lib/text.dovk" (lines)
 
-for line in split(text, "\n"):
+for line in lines(read_input()):
     if len(line) > 0:
         print(upper(trim(line)))

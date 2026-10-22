@@ -23,7 +23,10 @@ impl Checker<'_> {
                 Some(builtin) => self.check_builtin(builtin, args, span),
                 None => Type::Unknown,
             },
-            SymbolKind::Function => self.check_function_call(name.clone(), args, span),
+            SymbolKind::Function => {
+                let binding = self.resolution.binding_id(callee.span);
+                self.check_function_call(name.clone(), binding, args, span)
+            }
             _ => self.reject_callee(callee, args),
         }
     }
@@ -42,8 +45,16 @@ impl Checker<'_> {
         Type::Unknown
     }
 
-    fn check_function_call(&mut self, name: String, args: &[Expr], span: Span) -> Type {
-        let Some(&index) = self.by_name.get(&name) else {
+    fn check_function_call(
+        &mut self,
+        name: String,
+        binding: Option<crate::resolve::BindingId>,
+        args: &[Expr],
+        span: Span,
+    ) -> Type {
+        let index = binding.and_then(|binding| self.by_binding.get(&binding).copied());
+
+        let Some(index) = index else {
             return Type::Unknown;
         };
 

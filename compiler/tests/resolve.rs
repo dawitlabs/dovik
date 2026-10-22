@@ -1,19 +1,19 @@
 use compiler::error::ResolveErrorKind::{self, *};
 use compiler::resolve::{self, SymbolKind};
-use compiler::{lexer, parser};
+use compiler::{lexer, modules, parser};
 
 fn errors(source: &str) -> Vec<ResolveErrorKind> {
     let (tokens, lex_errors) = lexer::lex(source);
     assert_eq!(lex_errors, [], "lex errors in {source:?}");
     let (program, parse_errors) = parser::parse(source, &tokens);
     assert!(parse_errors.is_empty(), "parse errors: {parse_errors:?}");
-    resolve::resolve(&program).1.into_iter().map(|e| e.kind).collect()
+    resolve::resolve(&modules::unit_graph("test.dovk", source, program)).1.into_iter().map(|e| e.kind).collect()
 }
 
 fn errors_unchecked(source: &str) -> Vec<ResolveErrorKind> {
     let (tokens, _) = lexer::lex(source);
     let (program, _) = parser::parse(source, &tokens);
-    resolve::resolve(&program).1.into_iter().map(|e| e.kind).collect()
+    resolve::resolve(&modules::unit_graph("test.dovk", source, program)).1.into_iter().map(|e| e.kind).collect()
 }
 
 fn ok(source: &str) {
@@ -32,7 +32,7 @@ fn reassignment_in_a_loop_does_not_declare() {
 
     let (tokens, _) = lexer::lex(source);
     let (program, _) = parser::parse(source, &tokens);
-    let (resolution, _) = resolve::resolve(&program);
+    let (resolution, _) = resolve::resolve(&modules::unit_graph("test.dovk", source, program));
 
     let declaring = resolution.declares.len();
     assert_eq!(declaring, 1, "exactly one declaration of `total`");
@@ -337,7 +337,7 @@ function f(p: Int) -> Int:
 ";
     let (tokens, _) = lexer::lex(source);
     let (program, _) = parser::parse(source, &tokens);
-    let (resolution, errors) = resolve::resolve(&program);
+    let (resolution, errors) = resolve::resolve(&modules::unit_graph("test.dovk", source, program));
     assert!(errors.is_empty(), "{errors:?}");
 
     let kind_of = |name: &str| {
@@ -361,7 +361,7 @@ fn name_occurrences_resolve_to_their_declaration() {
     let source = "age = 23\nnext = age + 1\n";
     let (tokens, _) = lexer::lex(source);
     let (program, _) = parser::parse(source, &tokens);
-    let (resolution, _) = resolve::resolve(&program);
+    let (resolution, _) = resolve::resolve(&modules::unit_graph("test.dovk", source, program));
 
     let read = source.rfind("age").expect("the second `age`");
     let symbol = resolution

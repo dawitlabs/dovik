@@ -5,8 +5,10 @@ the decision is recorded as [DECISIONS.md](DECISIONS.md) D021. This file is the 
 — the reasoning, the alternatives, and the costs — and is **not** authoritative. Where it
 disagrees with [SPEC.md](SPEC.md), the specification is right.
 
-One estimate in section 8 was wrong and is corrected there: giving every diagnostic a file
-does not require changing `Span`.
+**Implemented.** Two things in this document turned out to be wrong and are corrected where
+they appear: giving every diagnostic a file does not require changing `Span` (section 8), and
+the claim in section 3 that 9.4 already prevents assigning to an imported variable was false
+at module scope, so that needed a rule of its own ([GOTCHAS.md](GOTCHAS.md)).
 
 ## 1. Why
 
@@ -69,11 +71,15 @@ initialization order a property of a file's header rather than its body.
 **Every module-scope declaration is importable. There is no `export` keyword and no privacy
 mechanism.**
 
-This is safe for variables in a way it would not be in most languages, because
-[SPEC.md](SPEC.md) 9.4 already forbids a function from assigning to a module-scope variable.
-An imported variable is therefore a constant from the importer's point of view, and no module
-can be used as a channel for mutable shared state. U5 stays exactly as open as it is today,
-and modules do not become a way around it.
+An imported variable is a constant from the importer's point of view, so no module can be used
+as a channel for mutable shared state. U5 stays exactly as open as it is today, and modules do
+not become a way around it.
+
+This paragraph originally credited [SPEC.md](SPEC.md) 9.4 for that, which was wrong: 9.4 stops
+a *function* from assigning to a module-scope variable, but at module scope a program may
+reassign its own global, and 9.2 made `value = 2` after `import "m.dovk" (value)` a legal
+reassignment of another module's state. Assignment to an imported name is now its own rule,
+recorded in 22.1.
 
 **This is the weakest decision in the document, and it is the one to argue with first.** A
 module author gets no way to say "this helper is mine", so any name can be imported and then

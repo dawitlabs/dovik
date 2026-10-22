@@ -21,6 +21,7 @@ pub enum ResolveErrorKind {
     NotAssignable { name: String, what: &'static str },
     BreakOutsideLoop,
     ContinueOutsideLoop,
+    NoSuchExport { name: String, module: String },
     CallReachesLaterGlobal { callee: String, global: String },
 }
 
@@ -55,6 +56,9 @@ impl fmt::Display for ResolveErrorKind {
             }
             Self::BreakOutsideLoop => write!(f, "`break` outside a loop"),
             Self::ContinueOutsideLoop => write!(f, "`continue` outside a loop"),
+            Self::NoSuchExport { name, module } => {
+                write!(f, "`{module}` does not declare `{name}`")
+            }
             Self::CallReachesLaterGlobal { callee, global } => write!(
                 f,
                 "this call reaches `{callee}`, which reads `{global}` before its initializer runs"
@@ -77,6 +81,7 @@ impl ResolveErrorKind {
             Self::NotAssignable { .. } => "DVK3009",
             Self::BreakOutsideLoop => "DVK3010",
             Self::ContinueOutsideLoop => "DVK3011",
+            Self::NoSuchExport { .. } => "DVK3013",
             Self::CallReachesLaterGlobal { .. } => "DVK3012",
         }
     }

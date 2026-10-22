@@ -3,7 +3,9 @@ mod expr;
 mod stmt;
 mod types;
 
-use crate::ast::{AssignTarget, Block, Expr, ExprKind, Ident, Program, Stmt, StmtKind};
+use crate::ast::{
+    AssignTarget, Block, Expr, ExprKind, Ident, Import, ImportName, Program, Stmt, StmtKind,
+};
 use crate::error::{ParseError, ParseErrorKind};
 use crate::token::{Span, Token, TokenKind};
 
@@ -18,8 +20,15 @@ pub fn parse(source: &str, tokens: &[Token]) -> (Program, Vec<ParseError>) {
         eq_token: TokenKind::Eq,
     };
 
+    let imports = parser.parse_imports();
     let statements = parser.parse_statements_until_eof();
-    (Program { statements }, parser.errors)
+    (
+        Program {
+            imports,
+            statements,
+        },
+        parser.errors,
+    )
 }
 
 struct Parser<'src> {
@@ -60,7 +69,88 @@ impl<'src> Parser<'src> {
         statements
     }
 
+    fn parse_imports(&mut self) -> Vec<Import> {
+        let mut imports = Vec::new();
+
+        loop {
+            if self.eat(&TokenKind::Newline) {
+                continue;
+            }
+
+            if !self.at(&TokenKind::Import) {
+                return imports;
+            }
+
+            match self.parse_import() {
+                Some(import) => imports.push(import),
+                None => self.synchronize(),
+            }
+        }
+    }
+
+    fn parse_import(&mut self) -> Option<Import> {
+        let start = self.span();
+        self.advance();
+
+        let path_span = self.span();
+        let TokenKind::Str(path) = self.kind().clone() else {
+            self.error_here("an import path in quotes");
+            return None;
+        };
+        self.advance();
+
+        if path.starts_with('/') {
+            self.error_at(ParseErrorKind::AbsoluteImportPath, path_span);
+            return None;
+        }
+
+        self.expect(&TokenKind::LParen, "`(` and the names to import")?;
+
+        let mut names = Vec::new();
+
+        while !self.at(&TokenKind::RParen) {
+            let exported = self.expect_ident("a name to import")?;
+
+            let alias = match self.at(&TokenKind::Identifier) && self.current_text() == "as" {
+                true => {
+                    self.advance();
+                    Some(self.expect_ident("a local name after `as`")?)
+                }
+                false => None,
+            };
+
+            names.push(ImportName { exported, alias });
+
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        let close = self.span();
+        self.expect(&TokenKind::RParen, "`)`")?;
+
+        if names.is_empty() {
+            self.error_at(ParseErrorKind::EmptyImportList, close);
+            return None;
+        }
+
+        self.expect_end_of_line()?;
+
+        Some(Import {
+            path,
+            path_span,
+            names,
+            span: Span::new(start.start, close.end),
+        })
+    }
+
     fn parse_statement(&mut self) -> Option<Stmt> {
+        if self.at(&TokenKind::Import) {
+            let span = self.span();
+            self.error_at(ParseErrorKind::ImportNotFirst, span);
+            self.parse_import();
+            return None;
+        }
         if self.at(&TokenKind::Function) {
             return self.parse_function();
         }

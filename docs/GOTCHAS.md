@@ -793,3 +793,65 @@ This looks inconsistent with [SPEC.md](SPEC.md) 12.6, which forbids a program fr
 a dictionary's order, but the two cases differ: a dictionary's internal order is meaningless
 and exposing it would leak an implementation detail, while a directory listing's
 alphabetical order is the thing a reader actually wants.
+
+## A source map beat giving `Span` a file field
+
+[PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) section 8 originally called this the real price of
+modules: `Span` is `{ start, end }`, every stage of the compiler carries it, and a diagnostic
+has to name its file.
+
+The cheaper answer is a source map. `SourceMap` concatenates every file's text, records each
+file's base offset, and lexes each file through `lexer::lex_at(text, base)`, which shifts that
+file's spans. A span is then an offset into the whole program, and the parser can still slice
+text with one because the combined string holds each file's text at its base. Only
+`SourceMap::locate` knows about files: it finds the file whose range contains the offset and
+counts the line from that file's base.
+
+`Span`, the token stream, the AST, the IR, and the interpreter did not change. Two signatures
+did: `emit(program, &SourceMap)` and `Diagnostic::render(&SourceMap)`.
+
+Two traps this leaves behind. The map appends a `\n` after each file, so `sources.text()` is
+**not** equal to a single file's text — `dovik format` compares its output against
+`entry_text()` for exactly this reason, and comparing against `text()` made every format test
+fail. And each file must be lexed **separately**: lexing the combined text would carry
+indentation state across a file boundary, so a file ending inside an indented block would
+corrupt the next one.
+
+## Function tables keyed by name break the moment two modules exist
+
+The resolver's call graph, the checker's signature table, and the lowerer's function map were
+all `HashMap<String, _>`. Two modules may each declare `helper`, and [SPEC.md](SPEC.md) 22.4
+says that is legal — neither is importable unless its module is imported, and neither collides.
+
+All three are now keyed by `BindingId`, which name resolution already makes unique per
+declaration across the whole program. `Typed::functions` changed key type with them, and the
+call sites look the callee's binding up from its span rather than its spelling. An alias makes
+this unavoidable rather than merely tidy: after `import "m.dovk" (f as g)` the call `g()` has
+to find the function declared as `f`.
+
+## Assigning to an imported name needed its own rule
+
+[SPEC.md](SPEC.md) 22.1 first justified "an imported variable cannot be assigned" by pointing
+at 9.4, which forbids a function from assigning to a module-scope variable. That is not
+enough. At module scope a program may reassign its own global — `total = total + 1` at the top
+level is ordinary — and an imported name is a module-scope name, so 9.2's mechanical rule made
+`value = 2` after importing `value` a legal reassignment of another module's global.
+
+That is precisely the shared mutable state U5 keeps closed, reached by accident. Assignment to
+an imported name is now rejected everywhere, by its own check, and 22.1 says so instead of
+delegating to 9.4. Mutation through a reference is untouched: importing a `List` and appending
+to it is visible to the exporting module, exactly as passing it to a function would be.
+
+The test that found this expected a duplicate-declaration error, which was the wrong
+expectation, not a wrong implementation — 9.2 makes it a reassignment, so only a rule about
+assignability could catch it.
+
+## `dovik test` needs the entry module, not the absence of `main`
+
+The test command used to collect every IR function whose name starts with `test_` and is not
+the entry point. With modules that would also run an imported module's tests, which
+[CLI.md](CLI.md) says it must not.
+
+`ir::Program` therefore carries `entry_functions`, filled by lowering for the entry unit only.
+It is a CLI concern living in the IR, which is a small wart; the alternative was for the
+command to re-derive which file a function came from, and the IR no longer knows.

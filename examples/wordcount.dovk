@@ -1,12 +1,7 @@
+import "lib/text.dovk" (lines, flatten, count_words)
+
 function usage():
     print("usage: wordcount <file.txt>")
-
-function count_words(text: String) -> Int:
-    words = 0
-    for piece in split(text, " "):
-        if len(trim(piece)) > 0:
-            words = words + 1
-    return words
 
 if argument_count() != 1:
     usage()
@@ -17,9 +12,7 @@ else:
         print("wordcount: cannot open " + path)
     else:
         text = read_file(path)
-        flat = join(split(text, "\n"), " ")
-        flat = join(split(flat, "\t"), " ")
 
-        print("lines      " + to_string(len(split(text, "\n")) - 1))
-        print("words      " + to_string(count_words(flat)))
+        print("lines      " + to_string(len(lines(text)) - 1))
+        print("words      " + to_string(count_words(flatten(text))))
         print("scalars    " + to_string(len(text)))

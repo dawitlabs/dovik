@@ -133,6 +133,7 @@ pub(super) fn keyword(kind: &TokenKind) -> &'static str {
         TokenKind::For => "for",
         TokenKind::Function => "function",
         TokenKind::If => "if",
+        TokenKind::Import => "import",
         TokenKind::In => "in",
         TokenKind::Not => "not",
         TokenKind::Or => "or",

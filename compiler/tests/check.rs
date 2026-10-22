@@ -1,15 +1,16 @@
 use compiler::error::TypeErrorKind::{self, *};
 use compiler::types::Type;
-use compiler::{check, lexer, parser, resolve};
+use compiler::{check, lexer, modules, parser, resolve};
 
 fn errors(source: &str) -> Vec<TypeErrorKind> {
     let (tokens, lex_errors) = lexer::lex(source);
     assert_eq!(lex_errors, [], "lex errors in {source:?}");
     let (program, parse_errors) = parser::parse(source, &tokens);
     assert!(parse_errors.is_empty(), "parse errors: {parse_errors:?}");
-    let (resolution, resolve_errors) = resolve::resolve(&program);
+    let graph = modules::unit_graph("test.dovk", source, program);
+    let (resolution, resolve_errors) = resolve::resolve(&graph);
     assert!(resolve_errors.is_empty(), "resolve errors: {resolve_errors:?}");
-    check::check(&program, &resolution)
+    check::check(&graph, &resolution)
         .1
         .into_iter()
         .map(|e| e.kind)

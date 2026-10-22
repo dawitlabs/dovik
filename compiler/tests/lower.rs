@@ -1,16 +1,17 @@
 use compiler::ir::{InstKind, RuntimeError, Terminator};
-use compiler::{check, ir, lexer, lower, parser, resolve};
+use compiler::{check, ir, lexer, lower, modules, parser, resolve};
 
 fn build(source: &str) -> ir::Program {
     let (tokens, lex_errors) = lexer::lex(source);
     assert_eq!(lex_errors, [], "lex errors");
     let (ast, parse_errors) = parser::parse(source, &tokens);
     assert!(parse_errors.is_empty(), "parse errors: {parse_errors:?}");
-    let (resolution, resolve_errors) = resolve::resolve(&ast);
+    let graph = modules::unit_graph("test.dovk", source, ast);
+    let (resolution, resolve_errors) = resolve::resolve(&graph);
     assert!(resolve_errors.is_empty(), "resolve errors: {resolve_errors:?}");
-    let (typed, type_errors) = check::check(&ast, &resolution);
+    let (typed, type_errors) = check::check(&graph, &resolution);
     assert!(type_errors.is_empty(), "type errors: {type_errors:?}");
-    lower::lower(&ast, &resolution, &typed)
+    lower::lower(&graph, &resolution, &typed)
 }
 
 fn text(source: &str) -> String {

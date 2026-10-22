@@ -7,7 +7,8 @@ mod stmt;
 
 use std::collections::HashMap;
 
-use crate::ast::{FunctionDecl, Program as Ast, StmtKind};
+use crate::ast::{FunctionDecl, StmtKind};
+use crate::modules::Graph;
 use crate::check::Typed;
 use crate::ir;
 use crate::resolve::{BindingId, Resolution, SymbolKind};
@@ -18,9 +19,9 @@ use crate::types::Type;
 
 const ENTRY_NAME: &str = "main";
 
-pub fn lower(ast: &Ast, resolution: &Resolution, typed: &Typed) -> ir::Program {
+pub fn lower(graph: &Graph, resolution: &Resolution, typed: &Typed) -> ir::Program {
     let mut lowerer = Lowerer {
-        ast,
+        graph,
         resolution,
         typed,
         program: ir::Program::default(),
@@ -43,13 +44,13 @@ pub fn lower(ast: &Ast, resolution: &Resolution, typed: &Typed) -> ir::Program {
 }
 
 pub(crate) struct Lowerer<'a> {
-    pub(crate) ast: &'a Ast,
+    pub(crate) graph: &'a Graph,
     pub(crate) resolution: &'a Resolution,
     pub(crate) typed: &'a Typed,
     pub(crate) program: ir::Program,
     strings: HashMap<String, ir::StrId>,
     globals: HashMap<BindingId, ir::GlobalId>,
-    functions: HashMap<String, ir::FuncId>,
+    functions: HashMap<BindingId, ir::FuncId>,
     slots: HashMap<BindingId, ir::LocalId>,
     pub(crate) blocks: Vec<ir::Block>,
     pub(crate) registers: Vec<Type>,
@@ -85,42 +86,61 @@ impl Lowerer<'_> {
     }
 
     fn declare_functions(&mut self) {
-        for statement in &self.ast.statements {
-            let StmtKind::Function(decl) = &statement.kind else {
-                continue;
-            };
+        for (index, unit) in self.graph.units.iter().enumerate() {
+            for statement in &unit.ast.statements {
+                let StmtKind::Function(decl) = &statement.kind else {
+                    continue;
+                };
 
-            if self.functions.contains_key(&decl.name.name) {
-                continue;
+                let Some(binding) = self.resolution.binding_id(decl.name.span) else {
+                    continue;
+                };
+
+                if self.functions.contains_key(&binding) {
+                    continue;
+                }
+
+                let id = self.program.functions.len();
+                self.functions.insert(binding, id);
+                self.program.functions.push(placeholder(&decl.name.name));
+
+                if index == self.graph.entry() {
+                    self.program.entry_functions.push(id);
+                }
             }
-
-            self.functions
-                .insert(decl.name.name.clone(), self.program.functions.len());
-            self.program.functions.push(placeholder(&decl.name.name));
         }
     }
 
     fn lower_functions(&mut self) {
-        let ast = self.ast;
+        for unit in &self.graph.units {
+            for statement in &unit.ast.statements {
+                let StmtKind::Function(decl) = &statement.kind else {
+                    continue;
+                };
 
-        for statement in &ast.statements {
-            let StmtKind::Function(decl) = &statement.kind else {
-                continue;
-            };
+                let id = self
+                    .resolution
+                    .binding_id(decl.name.span)
+                    .and_then(|binding| self.functions.get(&binding).copied());
 
-            let Some(&id) = self.functions.get(&decl.name.name) else {
-                continue;
-            };
+                let Some(id) = id else {
+                    continue;
+                };
 
-            if self.program.functions[id].blocks.is_empty() {
-                let function = self.lower_function(decl);
-                self.program.functions[id] = function;
+                if self.program.functions[id].blocks.is_empty() {
+                    let function = self.lower_function(decl);
+                    self.program.functions[id] = function;
+                }
             }
         }
     }
 
     fn lower_function(&mut self, decl: &FunctionDecl) -> ir::Function {
-        let signature = self.typed.functions.get(&decl.name.name).cloned();
+        let signature = self
+            .resolution
+            .binding_id(decl.name.span)
+            .and_then(|binding| self.typed.functions.get(&binding))
+            .cloned();
         let return_type = signature.map(|s| s.result).unwrap_or(Type::Unknown);
 
         self.begin_body();
@@ -146,15 +166,16 @@ impl Lowerer<'_> {
     }
 
     fn lower_entry(&mut self) {
-        let ast = self.ast;
         self.begin_body();
 
-        for statement in &ast.statements {
-            if matches!(statement.kind, StmtKind::Function(_)) {
-                continue;
-            }
+        for unit in &self.graph.units {
+            for statement in &unit.ast.statements {
+                if matches!(statement.kind, StmtKind::Function(_)) {
+                    continue;
+                }
 
-            self.lower_stmt(statement);
+                self.lower_stmt(statement);
+            }
         }
 
         self.seal(ir::Terminator::Return(None));
@@ -226,8 +247,10 @@ impl Lowerer<'_> {
         id
     }
 
-    pub(crate) fn function_id(&self, name: &str) -> Option<ir::FuncId> {
-        self.functions.get(name).copied()
+    pub(crate) fn function_id(&self, span: Span) -> Option<ir::FuncId> {
+        self.resolution
+            .binding_id(span)
+            .and_then(|binding| self.functions.get(&binding).copied())
     }
 }
 

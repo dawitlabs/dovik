@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use crate::error::{LexError, ParseError, ResolveError, TypeError};
+use crate::error::{LexError, ModuleError, ParseError, ResolveError, TypeError};
 use crate::source::SourceMap;
 use crate::token::Span;
 
@@ -45,6 +45,14 @@ pub fn from_lex(errors: &[LexError]) -> Vec<Diagnostic> {
             span: error.span,
         })
         .collect()
+}
+
+pub fn from_module(error: &ModuleError) -> Diagnostic {
+    Diagnostic {
+        code: error.kind.code(),
+        message: error.kind.to_string(),
+        span: error.span,
+    }
 }
 
 pub fn from_parse(errors: &[ParseError]) -> Vec<Diagnostic> {

@@ -10,11 +10,11 @@ impl Lowerer<'_> {
             return ir::Value::Int(0);
         };
 
-        if let Some(value) = self.lower_builtin(name, args, span, ty.clone()) {
+        if let Some(value) = self.lower_builtin(callee, name, args, span, ty.clone()) {
             return value;
         }
 
-        let Some(function) = self.function_id(name) else {
+        let Some(function) = self.function_id(callee.span) else {
             return ir::Value::Int(0);
         };
 
@@ -35,12 +35,13 @@ impl Lowerer<'_> {
 
     fn lower_builtin(
         &mut self,
+        callee: &Expr,
         name: &str,
         args: &[Expr],
         span: Span,
         ty: Type,
     ) -> Option<ir::Value> {
-        if self.function_id(name).is_some() {
+        if self.function_id(callee.span).is_some() {
             return None;
         }
 

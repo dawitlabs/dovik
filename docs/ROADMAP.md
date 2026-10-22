@@ -105,15 +105,15 @@ Phases are gated by the open language questions in [SPEC.md](SPEC.md) section 21
 
 ## Phase 9: Modules and Larger Projects
 
-- Define module and import semantics.
+- Define module and import semantics. *(done — [SPEC.md](SPEC.md) 22, [DECISIONS.md](DECISIONS.md) D021)*
+- Support larger multi-file programs. *(done — the entry file's import graph compiles as one program)*
 - Introduce project configuration.
 - Establish dependency management.
-- Support larger multi-file programs.
 - Improve incremental compilation where practical.
 
 **Completion criterion:** Dovik can support maintainable multi-module applications.
 
-**Blocked by:** the module system is entirely unspecified ([SPEC.md](SPEC.md) section 16). Import syntax, visibility, initialization order, dependency resolution, and circular imports all need designing first, and that design is a specification change rather than an implementation detail. [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) is that design, awaiting ratification into [SPEC.md](SPEC.md) under section 20.
+**Blocked by:** nothing. The module system is specified in [SPEC.md](SPEC.md) 22 and implemented; [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) is the design record. Project configuration and dependency management remain, and neither is blocked by a language question.
 
 ## Phase 10: Platform Expansion
 

@@ -81,10 +81,36 @@ impl Resolver {
         self.bindings.insert(ident.span, id);
 
         if self.current_scope().kind == ScopeKind::Module && kind == SymbolKind::Global {
-            self.global_positions.insert(id, self.statement_index);
+            self.global_positions
+                .insert(id, (self.unit, self.statement_index));
         }
 
         Some(id)
+    }
+
+    pub(crate) fn bind_import(&mut self, ident: &Ident, id: BindingId) -> bool {
+        if let Some(previous) = self.current_scope().names.get(&ident.name).copied() {
+            self.error(
+                ResolveErrorKind::DuplicateDeclaration {
+                    name: ident.name.clone(),
+                    previous: self.symbols[previous].span,
+                },
+                ident.span,
+            );
+            return false;
+        }
+
+        if self.scopes[0].names.contains_key(&ident.name) {
+            self.error(
+                ResolveErrorKind::RedeclaresBuiltin(ident.name.clone()),
+                ident.span,
+            );
+            return false;
+        }
+
+        self.current_scope_mut().names.insert(ident.name.clone(), id);
+        self.bindings.insert(ident.span, id);
+        true
     }
 
     fn shadowing(&self, name: &str) -> Shadowing {

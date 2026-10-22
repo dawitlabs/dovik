@@ -8,7 +8,28 @@ pub struct Ident {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+    pub imports: Vec<Import>,
     pub statements: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Import {
+    pub path: String,
+    pub path_span: Span,
+    pub names: Vec<ImportName>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportName {
+    pub exported: Ident,
+    pub alias: Option<Ident>,
+}
+
+impl ImportName {
+    pub fn local(&self) -> &Ident {
+        self.alias.as_ref().unwrap_or(&self.exported)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

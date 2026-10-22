@@ -4,18 +4,19 @@ use compiler::error::TypeErrorKind::{self, *};
 use compiler::ir::RuntimeError;
 use compiler::source::SourceMap;
 use compiler::types::Type;
-use compiler::{backend, check, interp, ir, lexer, lower, opt, parser, resolve};
+use compiler::{backend, check, interp, ir, lexer, lower, modules, opt, parser, resolve};
 
 fn lowered(source: &str) -> ir::Program {
     let (tokens, lex_errors) = lexer::lex(source);
     assert_eq!(lex_errors, [], "lex errors");
     let (ast, parse_errors) = parser::parse(source, &tokens);
     assert!(parse_errors.is_empty(), "parse errors: {parse_errors:?}");
-    let (resolution, resolve_errors) = resolve::resolve(&ast);
+    let graph = modules::unit_graph("test.dovk", source, ast);
+    let (resolution, resolve_errors) = resolve::resolve(&graph);
     assert!(resolve_errors.is_empty(), "resolve errors: {resolve_errors:?}");
-    let (typed, type_errors) = check::check(&ast, &resolution);
+    let (typed, type_errors) = check::check(&graph, &resolution);
     assert!(type_errors.is_empty(), "type errors: {type_errors:?}");
-    let mut program = lower::lower(&ast, &resolution, &typed);
+    let mut program = lower::lower(&graph, &resolution, &typed);
     assert!(opt::optimize(&mut program).is_empty());
     program
 }
@@ -37,9 +38,10 @@ fn errors(source: &str) -> Vec<TypeErrorKind> {
     let (tokens, _) = lexer::lex(source);
     let (ast, parse_errors) = parser::parse(source, &tokens);
     assert!(parse_errors.is_empty(), "parse errors: {parse_errors:?}");
-    let (resolution, resolve_errors) = resolve::resolve(&ast);
+    let graph = modules::unit_graph("test.dovk", source, ast);
+    let (resolution, resolve_errors) = resolve::resolve(&graph);
     assert!(resolve_errors.is_empty(), "resolve errors: {resolve_errors:?}");
-    check::check(&ast, &resolution)
+    check::check(&graph, &resolution)
         .1
         .into_iter()
         .map(|error| error.kind)
@@ -220,7 +222,8 @@ fn a_unit_returning_builtin_is_not_a_value() {
 fn builtin_names_cannot_be_redeclared() {
     let (tokens, _) = lexer::lex("append = 1\n");
     let (ast, _) = parser::parse("append = 1\n", &tokens);
-    let (_, resolve_errors) = resolve::resolve(&ast);
+    let graph = modules::unit_graph("test.dovk", "append = 1\n", ast);
+    let (_, resolve_errors) = resolve::resolve(&graph);
     assert!(!resolve_errors.is_empty(), "append is a built-in");
 }
 

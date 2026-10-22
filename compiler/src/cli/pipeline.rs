@@ -4,6 +4,7 @@ use std::process::{Command, ExitCode};
 use super::report::write_stdout;
 use super::{Emit, Options, Report};
 use crate::diagnostic::{self, Diagnostic};
+use crate::modules::{self, Graph};
 use crate::source::SourceMap;
 use crate::{backend, check, format as formatter, ir, lexer, lower, opt, parser, resolve};
 
@@ -12,13 +13,19 @@ pub struct Compiled {
     pub llvm: String,
 }
 
-pub fn check(sources: &SourceMap, options: &Options) -> ExitCode {
+pub fn check(path: &str, _source: &str, options: &Options) -> ExitCode {
+    let loaded = modules::load(Path::new(path));
     let report = Report {
-        sources,
+        sources: &loaded.graph.sources,
         json: options.json,
     };
 
-    match compile(sources, options) {
+    if !loaded.diagnostics.is_empty() {
+        report.emit(&loaded.diagnostics);
+        return ExitCode::FAILURE;
+    }
+
+    match compile(&loaded.graph, options) {
         Ok(_) => ExitCode::SUCCESS,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -27,13 +34,20 @@ pub fn check(sources: &SourceMap, options: &Options) -> ExitCode {
     }
 }
 
-pub fn test(sources: &SourceMap, options: &Options) -> ExitCode {
+pub fn test(path: &str, _source: &str, options: &Options) -> ExitCode {
+    let loaded = modules::load(Path::new(path));
+    let sources = &loaded.graph.sources;
     let report = Report {
         sources,
         json: options.json,
     };
 
-    let compiled = match compile(sources, options) {
+    if !loaded.diagnostics.is_empty() {
+        report.emit(&loaded.diagnostics);
+        return ExitCode::FAILURE;
+    }
+
+    let compiled = match compile(&loaded.graph, options) {
         Ok(compiled) => compiled,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -47,7 +61,7 @@ pub fn test(sources: &SourceMap, options: &Options) -> ExitCode {
         .iter()
         .enumerate()
         .filter(|(index, function)| {
-            *index != compiled.program.main
+            compiled.program.entry_functions.contains(index)
                 && function.name.starts_with("test_")
                 && function.param_count == 0
         })
@@ -95,7 +109,8 @@ pub fn test(sources: &SourceMap, options: &Options) -> ExitCode {
     }
 }
 
-pub fn format(sources: &SourceMap, options: &Options) -> ExitCode {
+pub fn format(path: &str, source: &str, options: &Options) -> ExitCode {
+    let sources = &SourceMap::single(path, source);
     let report = Report {
         sources,
         json: options.json,
@@ -136,7 +151,7 @@ pub fn format(sources: &SourceMap, options: &Options) -> ExitCode {
             return ExitCode::SUCCESS;
         }
 
-        return match std::fs::write(sources.entry_path(), &formatted) {
+        return match std::fs::write(path, &formatted) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 report.note(&format!("could not write: {err}"));
@@ -149,11 +164,18 @@ pub fn format(sources: &SourceMap, options: &Options) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-pub fn build(sources: &SourceMap, options: &Options) -> ExitCode {
+pub fn build(path: &str, _source: &str, options: &Options) -> ExitCode {
+    let loaded = modules::load(Path::new(path));
+    let sources = &loaded.graph.sources;
     let report = Report {
         sources,
         json: options.json,
     };
+
+    if !loaded.diagnostics.is_empty() {
+        report.emit(&loaded.diagnostics);
+        return ExitCode::FAILURE;
+    }
 
     if options.emit == Emit::Tokens {
         let (tokens, errors) = lexer::lex(sources.text());
@@ -170,7 +192,7 @@ pub fn build(sources: &SourceMap, options: &Options) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let compiled = match compile(sources, options) {
+    let compiled = match compile(&loaded.graph, options) {
         Ok(compiled) => compiled,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -191,7 +213,7 @@ pub fn build(sources: &SourceMap, options: &Options) -> ExitCode {
             let target = options
                 .output
                 .clone()
-                .unwrap_or_else(|| default_output(sources.entry_path()));
+                .unwrap_or_else(|| default_output(path));
 
             match link(&compiled.llvm, &target) {
                 Ok(()) => ExitCode::SUCCESS,
@@ -204,13 +226,20 @@ pub fn build(sources: &SourceMap, options: &Options) -> ExitCode {
     }
 }
 
-pub fn run(sources: &SourceMap, options: &Options) -> ExitCode {
+pub fn run(path: &str, _source: &str, options: &Options) -> ExitCode {
+    let loaded = modules::load(Path::new(path));
+    let sources = &loaded.graph.sources;
     let report = Report {
         sources,
         json: options.json,
     };
 
-    let compiled = match compile(sources, options) {
+    if !loaded.diagnostics.is_empty() {
+        report.emit(&loaded.diagnostics);
+        return ExitCode::FAILURE;
+    }
+
+    let compiled = match compile(&loaded.graph, options) {
         Ok(compiled) => compiled,
         Err(diagnostics) => {
             report.emit(&diagnostics);
@@ -242,32 +271,21 @@ pub fn run(sources: &SourceMap, options: &Options) -> ExitCode {
     }
 }
 
-pub fn compile(sources: &SourceMap, options: &Options) -> Result<Compiled, Vec<Diagnostic>> {
-    let (tokens, lex_errors) = lexer::lex(sources.text());
-
-    if !lex_errors.is_empty() {
-        return Err(diagnostic::from_lex(&lex_errors));
-    }
-
-    let (ast, parse_errors) = parser::parse(sources.text(), &tokens);
-
-    if !parse_errors.is_empty() {
-        return Err(diagnostic::from_parse(&parse_errors));
-    }
-
-    let (resolution, resolve_errors) = resolve::resolve(&ast);
+pub fn compile(graph: &Graph, options: &Options) -> Result<Compiled, Vec<Diagnostic>> {
+    let sources = &graph.sources;
+    let (resolution, resolve_errors) = resolve::resolve(graph);
 
     if !resolve_errors.is_empty() {
         return Err(diagnostic::from_resolve(&resolve_errors));
     }
 
-    let (typed, type_errors) = check::check(&ast, &resolution);
+    let (typed, type_errors) = check::check(graph, &resolution);
 
     if !type_errors.is_empty() {
         return Err(diagnostic::from_type(&type_errors));
     }
 
-    let mut program = lower::lower(&ast, &resolution, &typed);
+    let mut program = lower::lower(graph, &resolution, &typed);
 
     if options.optimize {
         let fold_errors = opt::optimize(&mut program);

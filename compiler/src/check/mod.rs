@@ -6,7 +6,8 @@ mod stmt;
 
 use std::collections::HashMap;
 
-use crate::ast::{FunctionDecl, Program, StmtKind};
+use crate::ast::{FunctionDecl, StmtKind};
+use crate::modules::Graph;
 use flow::{always_returns, has_valued_return};
 use crate::error::{TypeError, TypeErrorKind};
 use crate::resolve::{BindingId, Resolution};
@@ -17,7 +18,7 @@ use crate::types::Type;
 pub struct Typed {
     pub expr_types: HashMap<Span, Type>,
     pub var_types: HashMap<BindingId, Type>,
-    pub functions: HashMap<String, FunctionType>,
+    pub functions: HashMap<BindingId, FunctionType>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,12 +33,12 @@ impl Typed {
     }
 }
 
-pub fn check(program: &Program, resolution: &Resolution) -> (Typed, Vec<TypeError>) {
+pub fn check(graph: &Graph, resolution: &Resolution) -> (Typed, Vec<TypeError>) {
     let mut checker = Checker {
-        program,
+        graph,
         resolution,
         signatures: Vec::new(),
-        by_name: HashMap::new(),
+        by_binding: HashMap::new(),
         var_types: HashMap::new(),
         errors: Vec::new(),
         silent: true,
@@ -58,7 +59,7 @@ pub fn check(program: &Program, resolution: &Resolution) -> (Typed, Vec<TypeErro
         .iter()
         .map(|signature| {
             (
-                signature.name.clone(),
+                signature.binding,
                 FunctionType {
                     params: signature.params.clone(),
                     result: signature.return_type.clone().unwrap_or(Type::Unknown),
@@ -78,16 +79,17 @@ pub fn check(program: &Program, resolution: &Resolution) -> (Typed, Vec<TypeErro
 
 pub(crate) struct Signature {
     pub(crate) name: String,
+    pub(crate) binding: BindingId,
     pub(crate) span: Span,
     pub(crate) params: Vec<Type>,
     pub(crate) return_type: Option<Type>,
 }
 
 pub(crate) struct Checker<'a> {
-    pub(crate) program: &'a Program,
+    pub(crate) graph: &'a Graph,
     pub(crate) resolution: &'a Resolution,
     pub(crate) signatures: Vec<Signature>,
-    pub(crate) by_name: HashMap<String, usize>,
+    pub(crate) by_binding: HashMap<BindingId, usize>,
     pub(crate) var_types: HashMap<BindingId, Type>,
     pub(crate) errors: Vec<TypeError>,
     pub(crate) silent: bool,
@@ -99,13 +101,25 @@ pub(crate) struct Checker<'a> {
 
 impl<'a> Checker<'a> {
     fn collect_signatures(&mut self) {
-        for statement in &self.program.statements {
-            let StmtKind::Function(decl) = &statement.kind else {
-                continue;
+        for unit in &self.graph.units {
+            for statement in &unit.ast.statements {
+                let StmtKind::Function(decl) = &statement.kind else {
+                    continue;
+                };
+
+                self.collect_signature(decl);
+            }
+        }
+    }
+
+    fn collect_signature(&mut self, decl: &FunctionDecl) {
+        {
+            let Some(binding) = self.resolution.binding_id(decl.name.span) else {
+                return;
             };
 
-            if self.by_name.contains_key(&decl.name.name) {
-                continue;
+            if self.by_binding.contains_key(&binding) {
+                return;
             }
 
             let params = decl
@@ -123,10 +137,10 @@ impl<'a> Checker<'a> {
                 None => None,
             };
 
-            self.by_name
-                .insert(decl.name.name.clone(), self.signatures.len());
+            self.by_binding.insert(binding, self.signatures.len());
             self.signatures.push(Signature {
                 name: decl.name.name.clone(),
+                binding,
                 span: decl.name.span,
                 params,
                 return_type,
@@ -162,20 +176,26 @@ impl<'a> Checker<'a> {
     }
 
     fn walk_module(&mut self) {
-        let program = self.program;
         self.var_types.clear();
         self.expr_types.clear();
 
-        for statement in &program.statements {
-            match &statement.kind {
-                StmtKind::Function(decl) => self.check_function(decl),
-                _ => self.check_stmt(statement),
+        for unit in &self.graph.units {
+            for statement in &unit.ast.statements {
+                match &statement.kind {
+                    StmtKind::Function(decl) => self.check_function(decl),
+                    _ => self.check_stmt(statement),
+                }
             }
         }
     }
 
     fn check_function(&mut self, decl: &FunctionDecl) {
-        let Some(&index) = self.by_name.get(&decl.name.name) else {
+        let index = self
+            .resolution
+            .binding_id(decl.name.span)
+            .and_then(|binding| self.by_binding.get(&binding).copied());
+
+        let Some(index) = index else {
             return;
         };
 

@@ -5,16 +5,20 @@ mod walk;
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::{FunctionDecl, Program, StmtKind};
+use crate::modules::Graph;
 use crate::error::{ResolveError, ResolveErrorKind};
 use crate::token::Span;
 
 pub type BindingId = usize;
 
-pub fn resolve(program: &Program) -> (Resolution, Vec<ResolveError>) {
+pub fn resolve(graph: &Graph) -> (Resolution, Vec<ResolveError>) {
     let mut resolver = Resolver::new();
     resolver.declare_builtins();
-    resolver.collect_function_signatures(program);
-    resolver.resolve_module(program);
+
+    for index in 0..graph.units.len() {
+        resolver.resolve_unit(graph, index);
+    }
+
     resolver.check_module_call_order();
 
     let resolution = Resolution {
@@ -90,7 +94,7 @@ pub(crate) struct Scope {
 #[derive(Debug, Default)]
 pub(crate) struct CallGraph {
     pub(crate) nodes: Vec<FunctionNode>,
-    pub(crate) by_name: HashMap<String, usize>,
+    pub(crate) by_binding: HashMap<BindingId, usize>,
     pub(crate) module_calls: Vec<ModuleCall>,
 }
 
@@ -104,12 +108,14 @@ pub(crate) struct FunctionNode {
 #[derive(Debug)]
 pub(crate) struct GlobalRead {
     pub(crate) name: String,
+    pub(crate) unit: usize,
     pub(crate) declared_at: usize,
 }
 
 #[derive(Debug)]
 pub(crate) struct ModuleCall {
     pub(crate) function: usize,
+    pub(crate) unit: usize,
     pub(crate) statement_index: usize,
     pub(crate) span: Span,
 }
@@ -121,7 +127,10 @@ pub(crate) struct Resolver {
     pub(crate) declares: HashSet<Span>,
     pub(crate) errors: Vec<ResolveError>,
     pub(crate) graph: CallGraph,
-    pub(crate) global_positions: HashMap<BindingId, usize>,
+    pub(crate) global_positions: HashMap<BindingId, (usize, usize)>,
+    pub(crate) exports: Vec<HashMap<String, BindingId>>,
+    pub(crate) imported_here: HashSet<BindingId>,
+    pub(crate) unit: usize,
     pub(crate) statement_index: usize,
     pub(crate) current_function: Option<usize>,
     pub(crate) loop_depth: usize,
@@ -130,22 +139,19 @@ pub(crate) struct Resolver {
 impl Resolver {
     fn new() -> Self {
         Self {
-            scopes: vec![
-                Scope {
-                    kind: ScopeKind::Builtin,
-                    names: HashMap::new(),
-                },
-                Scope {
-                    kind: ScopeKind::Module,
-                    names: HashMap::new(),
-                },
-            ],
+            scopes: vec![Scope {
+                kind: ScopeKind::Builtin,
+                names: HashMap::new(),
+            }],
             symbols: Vec::new(),
             bindings: HashMap::new(),
             declares: HashSet::new(),
             errors: Vec::new(),
             graph: CallGraph::default(),
             global_positions: HashMap::new(),
+            exports: Vec::new(),
+            imported_here: HashSet::new(),
+            unit: 0,
             statement_index: 0,
             current_function: None,
             loop_depth: 0,
@@ -164,6 +170,52 @@ impl Resolver {
         }
     }
 
+    fn resolve_unit(&mut self, graph: &Graph, index: usize) {
+        let unit = &graph.units[index];
+        self.unit = index;
+        self.imported_here.clear();
+        self.push_scope(ScopeKind::Module);
+
+        let mut imported: Vec<String> = Vec::new();
+
+        for (import, &from) in unit.ast.imports.iter().zip(&unit.imports) {
+            for name in &import.names {
+                let local = name.local();
+
+                let Some(&id) = self.exports[from].get(&name.exported.name) else {
+                    self.error(
+                        ResolveErrorKind::NoSuchExport {
+                            name: name.exported.name.clone(),
+                            module: graph.units[from]
+                                .path
+                                .file_name()
+                                .map(|part| part.to_string_lossy().to_string())
+                                .unwrap_or_default(),
+                        },
+                        name.exported.span,
+                    );
+                    continue;
+                };
+
+                if self.bind_import(local, id) {
+                    imported.push(local.name.clone());
+                    self.imported_here.insert(id);
+                }
+            }
+        }
+
+        self.collect_function_signatures(&unit.ast);
+        self.resolve_module(&unit.ast);
+
+        let mut exports = self.current_scope().names.clone();
+        for name in imported {
+            exports.remove(&name);
+        }
+
+        self.exports.push(exports);
+        self.pop_scope();
+    }
+
     fn collect_function_signatures(&mut self, program: &Program) {
         for statement in &program.statements {
             let StmtKind::Function(decl) = &statement.kind else {
@@ -174,12 +226,16 @@ impl Resolver {
                 continue;
             }
 
+            let Some(binding) = self.lookup(&decl.name.name) else {
+                continue;
+            };
+
             let index = self.graph.nodes.len();
             self.graph.nodes.push(FunctionNode {
                 name: decl.name.name.clone(),
                 ..FunctionNode::default()
             });
-            self.graph.by_name.insert(decl.name.name.clone(), index);
+            self.graph.by_binding.insert(binding, index);
         }
     }
 
@@ -195,7 +251,11 @@ impl Resolver {
     }
 
     fn resolve_function(&mut self, decl: &FunctionDecl) {
-        let Some(&index) = self.graph.by_name.get(&decl.name.name) else {
+        let index = self
+            .lookup(&decl.name.name)
+            .and_then(|binding| self.graph.by_binding.get(&binding).copied());
+
+        let Some(index) = index else {
             return self.resolve_function_body(decl);
         };
 

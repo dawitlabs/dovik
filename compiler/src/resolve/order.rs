@@ -18,11 +18,9 @@ impl Resolver {
 
                 let node = &self.graph.nodes[index];
 
-                if let Some(read) = node
-                    .global_reads
-                    .iter()
-                    .find(|read| read.declared_at > call.statement_index)
-                {
+                if let Some(read) = node.global_reads.iter().find(|read| {
+                    read.unit == call.unit && read.declared_at > call.statement_index
+                }) {
                     found.push((
                         ResolveErrorKind::CallReachesLaterGlobal {
                             callee: node.name.clone(),

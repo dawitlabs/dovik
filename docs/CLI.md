@@ -1,6 +1,6 @@
 # Dovik Command-Line Interface
 
-**Status:** Partly implemented — `build`, `run`, `check`, `--version` and `--help` work; `format` and `test` do not
+**Status:** Implemented, including multi-file programs
 
 Command names and behavior remain proposals rather than a contract; the only contract is [SPEC.md](SPEC.md). Section 8 records what the current CLI actually does.
 
@@ -61,19 +61,29 @@ The CLI should provide:
 
 ## 5. Project Structure
 
-The initial version compiles a single `.dovk` file. Dovik has no module system ([SPEC.md](SPEC.md) section 16), so multi-file programs are not expressible yet, and a manifest would have nothing to describe.
+Every command takes one `.dovk` file. That file is the entry module, and the compiler
+discovers the rest of the program by following its imports transitively
+([SPEC.md](SPEC.md) 22.7). There is no manifest, no search path, and nothing to configure:
+an import path is relative to the file that writes it.
 
-A project manifest and dependency management belong with the module system, in Roadmap Phase 9.
-[PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) designs that module system and deliberately leaves
-both out; it also answers section 6's question about where tests belong.
+`dovik test <file>` collects tests from that file only, not from the modules it imports. A
+test file is therefore a file that imports the module under test and holds nothing but
+tests, which is how [PROPOSAL-MODULES.md](PROPOSAL-MODULES.md) answers section 6's question
+about where tests belong.
+
+A project manifest and dependency management remain unspecified and belong after the module
+system rather than inside it: a manifest describes a project, and nothing in the language
+needs one to compile a program.
 
 ## 6. Open Decisions
 
 - Project manifest format.
 - Dependency management.
-- Incremental compilation and caching.
-- Whether the `test_` prefix is the right convention, or whether tests belong in a separate
-  file that the module system (section 16) would make possible.
+- Incremental compilation and caching. The whole import graph is compiled on every build.
+- Whether the `test_` prefix is the right convention now that a test file can be a module of
+  its own.
+- Whether `dovik test` should collect tests from the whole import graph rather than the entry
+  file ([SPEC.md](SPEC.md) 22.7).
 
 Settled provisionally by the current implementation, and open to change:
 

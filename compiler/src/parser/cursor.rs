@@ -22,6 +22,11 @@ impl<'src> Parser<'src> {
         self.tokens[index].span
     }
 
+    pub(super) fn current_text(&self) -> &'src str {
+        let span = self.span();
+        &self.source[span.start..span.end]
+    }
+
     pub(super) fn at(&self, kind: &TokenKind) -> bool {
         self.kind() == kind
     }

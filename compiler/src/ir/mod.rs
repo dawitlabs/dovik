@@ -15,6 +15,7 @@ pub struct Program {
     pub strings: Vec<String>,
     pub globals: Vec<Global>,
     pub functions: Vec<Function>,
+    pub entry_functions: Vec<FuncId>,
     pub main: FuncId,
 }
 

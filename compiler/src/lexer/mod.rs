@@ -12,6 +12,28 @@ pub fn lex(source: &str) -> (Vec<Token>, Vec<LexError>) {
     (tokens, errors)
 }
 
+pub fn lex_at(source: &str, base: usize) -> (Vec<Token>, Vec<LexError>) {
+    let (mut tokens, mut errors) = lex(source);
+
+    if base == 0 {
+        return (tokens, errors);
+    }
+
+    for token in &mut tokens {
+        token.span = shift(token.span, base);
+    }
+
+    for error in &mut errors {
+        error.span = shift(error.span, base);
+    }
+
+    (tokens, errors)
+}
+
+fn shift(span: Span, base: usize) -> Span {
+    Span::new(span.start + base, span.end + base)
+}
+
 pub fn lex_with_trivia(source: &str) -> (Vec<Token>, Vec<Span>, Vec<LexError>) {
     let mut lexer = Lexer::new(source);
     lexer.run();

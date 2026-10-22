@@ -23,6 +23,9 @@ pub enum ParseErrorKind {
         found: usize,
     },
     NestedFunction,
+    ImportNotFirst,
+    EmptyImportList,
+    AbsoluteImportPath,
 }
 
 impl fmt::Display for ParseErrorKind {
@@ -47,6 +50,16 @@ impl fmt::Display for ParseErrorKind {
             Self::NestedFunction => {
                 write!(f, "functions may only be declared at module level")
             }
+            Self::ImportNotFirst => write!(
+                f,
+                "an `import` must come before every other statement in the file"
+            ),
+            Self::EmptyImportList => {
+                write!(f, "an import list must name at least one name")
+            }
+            Self::AbsoluteImportPath => {
+                write!(f, "an import path must be relative to this file")
+            }
         }
     }
 }
@@ -60,6 +73,9 @@ impl ParseErrorKind {
             Self::UnknownType(_) => "DVK2004",
             Self::TypeArity { .. } => "DVK2005",
             Self::NestedFunction => "DVK2006",
+            Self::ImportNotFirst => "DVK2007",
+            Self::EmptyImportList => "DVK2008",
+            Self::AbsoluteImportPath => "DVK2009",
         }
     }
 }

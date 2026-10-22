@@ -927,6 +927,7 @@ The compiler rejects, at minimum:
 - An import of a name the named module does not declare (22.4).
 - An import statement that is not among the first statements of its file (22.2).
 - A cycle in the import graph (22.6).
+- Assignment to an imported name (22.1).
 - A module-scope call that can reach a function reading a module-scope variable declared after that call (8.5).
 - A function in a recursive cycle whose return type is circular and carries no explicit annotation (5.5).
 - Duplicate declarations in one scope (9.5).
@@ -1099,7 +1100,9 @@ A **module** is one source file. A program is one or more modules reached from a
 
 Every module-scope declaration is importable: both variables and functions. There is no export marker and no privacy mechanism.
 
-An imported variable cannot be assigned by the importing module, because 9.4 already forbids a function from assigning to any module-scope variable and an import is a module-scope name. A module is therefore not a mechanism for shared mutable state, and U5 is unaffected.
+**An imported name cannot be assigned**, at module scope or inside a function. This is stricter than 9.4, which forbids only a function from assigning to a module-scope variable: at module scope a program may reassign its *own* global, and allowing that for an imported one would let a module write to another module's state. A module is therefore not a mechanism for shared mutable state, and U5 is unaffected.
+
+Mutation through a reference is unchanged (3.4). Importing a `List` and appending to it mutates the object the exporting module also refers to, exactly as passing that list to a function would. Only rebinding the imported name is forbidden.
 
 ### 22.2 Import syntax
 
@@ -1168,7 +1171,7 @@ The compiler discovers the whole program from the entry file by following import
 
 ## 23. Document Status
 
-This is the language contract to implement against. None of it is implemented.
+This is the language contract to implement against. Sections are implemented to differing degrees, and [ROADMAP.md](ROADMAP.md) records how far each phase has got; where the implementation and this document disagree, this document is right and the implementation is a bug.
 
 Resolve section 21 before, or during, the roadmap phase each entry names. Record every resolution in [DECISIONS.md](DECISIONS.md) and update this document in the same change.
 

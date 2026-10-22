@@ -85,7 +85,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
 
 fn with_file(
     args: &[String],
-    action: impl Fn(&crate::source::SourceMap, &Options) -> ExitCode,
+    action: impl Fn(&str, &str, &Options) -> ExitCode,
 ) -> ExitCode {
     let mut options = Options {
         json: false,
@@ -132,5 +132,5 @@ fn with_file(
         }
     };
 
-    action(&crate::source::SourceMap::single(path, source), &options)
+    action(&path, &source, &options)
 }
