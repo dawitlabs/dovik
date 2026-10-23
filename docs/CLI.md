@@ -135,6 +135,14 @@ it compares against. Both exist for targets without signals
 ([DECISIONS.md](DECISIONS.md) D030); a native build needs neither and emits no
 guard.
 
+`--target native` (the default) or `--target wasm`. A wasm build writes a
+`wasm32-wasip1` module, names the output `<stem>.wasm`, turns the depth guard on
+by itself, and needs `wasi-libc` present when the compiler was built — without
+it the build fails with that message rather than producing something broken. The
+module runs under any WASI host; `compiler/tests/wasi-host.mjs` is the one the
+test suite uses. [PROPOSAL-WASM.md](PROPOSAL-WASM.md) is the design record and
+section 7 carries the one limitation.
+
 Exit codes are 0 on success and 1 on any failure, including a runtime error in a
 program started by `dovik run`.
 

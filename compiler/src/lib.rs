@@ -15,6 +15,7 @@ pub mod opt;
 pub mod parser;
 pub mod resolve;
 pub mod source;
+pub mod target;
 pub mod runtime;
 pub mod types;
 pub mod token;

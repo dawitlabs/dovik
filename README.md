@@ -4,9 +4,9 @@ Dovik is an experimental, statically typed programming language designed for sim
 
 ## Status
 
-**Working, and narrow.** Dovik programs compile to native Linux x86-64 executables and run. The compiler, the C runtime, and a first standard library all exist, under 397 tests.
+**Working, and narrow.** Dovik programs compile to native Linux x86-64 executables and run, and `--target wasm` builds a WebAssembly module that runs under a WASI host. The compiler, the C runtime, and a first standard library all exist, under 401 tests.
 
-What is deliberately missing: user-defined types, any target other than Linux x86-64, a project manifest, dependency management, and reclamation of reference cycles. [docs/ROADMAP.md](docs/ROADMAP.md) tracks each one. No published performance claim exists outside [docs/BENCHMARKS.md](docs/BENCHMARKS.md), which carries the environment it was measured in.
+What is deliberately missing: user-defined types, networking, concurrency, a project manifest, dependency management, and reclamation of reference cycles. Windows, macOS and mobile are not targets. [docs/ROADMAP.md](docs/ROADMAP.md) tracks each one. No published performance claim exists outside [docs/BENCHMARKS.md](docs/BENCHMARKS.md), which carries the environment it was measured in.
 
 The documentation is the contract. Where the implementation disagrees with [docs/SPEC.md](docs/SPEC.md), the implementation is wrong.
 
@@ -48,6 +48,13 @@ cd compiler && cargo build --release && cd ..
 
 ```
 ./compiler/target/release/dovik run examples/fib.dovk -- 10
+```
+
+`--target wasm` builds a WebAssembly module instead, which needs `wasi-libc` installed and a WASI host to run:
+
+```
+./compiler/target/release/dovik build examples/fib.dovk --target wasm -o fib.wasm
+node --no-warnings compiler/tests/wasi-host.mjs fib.wasm 10
 ```
 
 `dovik check` stops after type checking, `dovik format` prints a formatted file or rewrites it with `--write`, and `dovik test` runs every `test_*` function in its own process. `--json` turns every diagnostic into one JSON object per line. [docs/CLI.md](docs/CLI.md) is the full interface, and [examples/](examples/) is the place to start reading Dovik itself.

@@ -1,6 +1,6 @@
 # Dovik Development Roadmap
 
-**Status:** Phases 1 through 7 and 9 are complete. See **Status** at the end.
+**Status:** Phases 1 through 7 and 9 are complete, and Phase 10 has begun. See **Status** at the end.
 
 Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 21. **All of them are now resolved** ([DECISIONS.md](DECISIONS.md) D013, D019, D020, D022, D023, D025, D026, D027), so no phase is blocked on a language question any more. What remains is implementation.
 
@@ -117,13 +117,13 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 - Evaluate additional processor architectures and operating systems.
 - Add Windows and macOS support.
-- Investigate WebAssembly. *(designed, not started — [PROPOSAL-WASM.md](PROPOSAL-WASM.md))*
+- Investigate WebAssembly. *(done — `--target wasm` builds a WASI module, tested in `tests/wasm.rs`; [PROPOSAL-WASM.md](PROPOSAL-WASM.md))*
 - Design mobile platform integrations.
 - Validate portability of the runtime and standard library.
 
 **Completion criterion:** Each new target has working builds, tests, and documented limitations. No document may describe a target as supported before that point ([PLATFORMS.md](PLATFORMS.md)).
 
-**Blocked by:** cross-compilation strategy ([ARCHITECTURE.md](ARCHITECTURE.md) section 7) and runtime portability. WebAssembly now has a design ([PROPOSAL-WASM.md](PROPOSAL-WASM.md)) and is blocked on one decision in it: stack exhaustion cannot be detected by a signal handler on a target with no signals, so either the backend emits a depth check or [SPEC.md](SPEC.md) 15.2 is amended. Mobile still has no design.
+**Blocked by:** nothing, for the first target beyond Linux. `wasm32-wasip1` builds and passes a test suite, which is the criterion above, and its one limitation is documented ([PLATFORMS.md](PLATFORMS.md) 9). Windows and macOS need the cross-compilation strategy in [ARCHITECTURE.md](ARCHITECTURE.md) section 7, which the wasm port did not need and so did not settle. Mobile still has no design.
 
 ## Phase 11: Self-Hosting
 
@@ -150,11 +150,11 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 This roadmap is provisional. Phases may overlap or change as technical constraints become clearer. Completion is determined by working implementations and tests, not by documentation alone.
 
-Current position: **Phases 1 through 7 and 9 are complete. Phase 8 is partly done, and Phases 10 and 11 have not started.**
+Current position: **Phases 1 through 7 and 9 are complete, and Phase 10 has its first target beyond Linux. Phase 8 is partly done, and Phase 11 has not started.**
 
 Dovik programs compile to native Linux x86-64 executables and run. The frontend, type checker,
 IR, LLVM backend, C runtime, standard library increments, module system, optional types and the
-`dovik` CLI all exist, under 397 tests. Every language question [SPEC.md](SPEC.md) section 21
+`dovik` CLI all exist, under 401 tests. Every language question [SPEC.md](SPEC.md) section 21
 raised is resolved, so nothing is blocked on a decision.
 
 What is actually left:
@@ -171,5 +171,7 @@ What is actually left:
   become reachable on purpose.
 - **Phase 9** keeps project configuration and dependency management open, both declined for now
   ([DECISIONS.md](DECISIONS.md) D029).
-- **Phase 10** has not started. Linux x86-64 is the only target.
+- **Phase 10** has one target beyond Linux: `wasm32-wasip1`, built and tested, with a
+  documented limitation on stack exhaustion. Windows, macOS and mobile have not started, and
+  the cross-compilation strategy they need is still unsettled.
 - **Phase 11** waits on language features Dovik does not have, user-defined types chief among them.

@@ -1,8 +1,11 @@
 #define _GNU_SOURCE
 
 #include <dirent.h>
+
+#if !defined(__wasm__)
 #include <pthread.h>
 #include <signal.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -143,6 +146,12 @@ static void report_without_location(const char *code, const char *message) {
     write_all(2, "\n", 1);
 }
 
+#if defined(__wasm__)
+
+static void install_fault_handler(void) {}
+
+#else
+
 static char *stack_low = NULL;
 
 static void on_fault(int signal_number, siginfo_t *info, void *context) {
@@ -187,6 +196,8 @@ static void install_fault_handler(void) {
     sigaction(SIGBUS, &action, NULL);
 }
 
+#endif
+
 static uint64_t call_depth = 0;
 static uint64_t depth_limit = 0;
 
@@ -195,7 +206,12 @@ static void read_depth_limit(void) {
     if (read) return;
     read = 1;
 
+#if defined(__wasm__)
+    depth_limit = 2000;
+#else
     depth_limit = 100000;
+#endif
+
     const char *text = getenv("DOVIK_MAX_DEPTH");
     if (text == NULL) return;
 

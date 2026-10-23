@@ -1,9 +1,9 @@
 # Proposal: WebAssembly as a Target
 
-**Status:** **Design accepted; one of five steps built.** No WebAssembly build exists, and
-none can until the sysroot in section 4 step 2 is a decision someone makes. The one part that
-did not need it — stack exhaustion without signals — is settled as
-[DECISIONS.md](DECISIONS.md) D030 and implemented. Nothing here is authoritative;
+**Status:** **Built.** `dovik build file.dovk --target wasm` produces a WebAssembly module
+that runs under a WASI host, and `tests/wasm.rs` runs a corpus and every runtime check through
+it against the interpreter. Section 7 records what the port taught that this design did not
+predict, including one limitation that remains. Nothing here is authoritative;
 [SPEC.md](SPEC.md) is.
 
 Everything measured below was measured on this machine with clang 22.1.8, and each number
@@ -122,10 +122,47 @@ Ordered, with the gate first:
    passing test suite, or the target is not supported. That means running the existing native
    corpus under a wasm runtime, not merely linking a module.
 
-Step 1 is done. Steps 3 through 5 are the work, and none of them can be *verified* before step
-2, which is why none of them has been written: [PLATFORMS.md](PLATFORMS.md) section 9 counts a
-target as supported only once it builds and passes tests, and scaffolding that cannot be run is
-worth less than the diff it costs.
+All five are done. The dependency turned out smaller than step 2 feared: `wasi-libc` and
+`wasi-compiler-rt` are in Arch's own repositories, and Node 26 ships a WASI host, so no
+`wasi-sdk` and no `wasmtime` were needed. `build.rs` compiles a second runtime object when the
+sysroot is present and emits an empty path when it is not, so a machine without wasi-libc
+still builds the compiler and the wasm tests report that they were skipped.
+
+## 7. What the port taught
+
+**Section 1 was right about the headers and wrong about the scale.** Against
+`--sysroot=/usr/share/wasi-sysroot`, exactly one thing failed to compile: the signal handler.
+`dirent.h`, `pthread.h`, `stdio.h` and the rest all resolved. Fifteen errors, all of them in
+`on_fault` and `install_fault_handler`, which `--depth-guard` had already made replaceable.
+
+**The entry point is not called `main`.** This cost an hour and appears in no part of the
+design above. wasi-libc's `crt1` calls `__main_argc_argv`, and clang performs that rename in
+the C frontend — so a hand-written LLVM module that defines `main` links successfully and then
+traps at `undefined_weak:main`, with no diagnostic that names the cause. `Target::entry_symbol`
+is the fix, and the lesson is that a target is more than a triple and a sysroot.
+
+**A frame counter cannot model a wasm stack.** The default limit of 100,000 from
+[DECISIONS.md](DECISIONS.md) D030 was measured against native, and under Node a module traps
+long before it. Measured, one recursive function per row:
+
+| Locals in the frame | Frames before the host trapped |
+| --- | --- |
+| 2 | ~13,000 |
+| 9 | ~6,000 |
+| 25 | ~4,500 |
+
+The product is not constant — 26,000, 54,000, 112,500 — so weighting the counter by frame size
+would overcorrect as badly as not weighting it. The per-frame cost is dominated by host
+overhead at small counts, and LLVM keeps most locals out of the shadow stack at `-O2`, so
+`__builtin_frame_address` would not measure the real thing either.
+
+**So the wasm default is 2,000 frames, and this is a documented limitation rather than a
+solved problem.** It leaves roughly a factor of two below the fattest frame measured, and a
+function with far more locals than that could still exhaust the host stack before the counter
+fires — which traps the module with no `DVK5009`, and is the one place the wasm target does
+not deliver what [SPEC.md](SPEC.md) 15.2 asks. `DOVIK_MAX_DEPTH` is the workaround, and
+removing the limitation needs a host that reports stack headroom. Native is unaffected: the
+signal handler measures the real stack, and its limit is unchanged.
 
 ## 5. What this deliberately leaves out
 
@@ -140,8 +177,11 @@ worth less than the diff it costs.
 
 - ~~Stack exhaustion under a target with no signals (3.1).~~ Settled as
   [DECISIONS.md](DECISIONS.md) D030 and implemented.
-- Whether the project takes on `wasi-sdk` and a wasm runtime as dependencies. **This is now
-  the only thing blocking a build.**
+- ~~Whether the project takes on `wasi-sdk` and a wasm runtime as dependencies.~~ Neither was
+  needed: `wasi-libc` and `wasi-compiler-rt` from the distribution, and a WASI host that Node
+  already ships.
 - Whether per-target standard library availability is documented per function or per platform.
-- Whether the default depth limit of 100,000 is right for a wasm host, which cannot be
-  answered without one to measure.
+  Still open; the test harness preopens `/`, so nothing has forced the question yet.
+- How to make the depth guard track real stack use on a host that does not expose it
+  (section 7). The 2,000-frame default is a margin, not an answer.
+- Whether `wasm32-wasip2` and the component model are worth following.

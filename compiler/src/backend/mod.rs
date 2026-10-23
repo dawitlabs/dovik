@@ -11,6 +11,7 @@ mod value;
 use std::fmt::Write;
 
 use crate::ir::{BlockId, Function, Program, Terminator};
+use crate::target::Target;
 use crate::source::SourceMap;
 use crate::types::Type;
 use ownership::is_reference;
@@ -94,7 +95,11 @@ pub fn emit(program: &Program, sources: &SourceMap) -> String {
 }
 
 pub fn emit_guarded(program: &Program, sources: &SourceMap) -> String {
-    emit_configured(program, sources, true, true)
+    emit_configured(program, sources, true, true, Target::Native)
+}
+
+pub fn emit_for(program: &Program, sources: &SourceMap, checks: bool, target: Target) -> String {
+    emit_configured(program, sources, checks, target.needs_depth_guard(), target)
 }
 
 pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> String {
@@ -108,6 +113,7 @@ pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> St
         pure: purity::classify(program),
         recursive: Vec::new(),
         guarding: false,
+        target: Target::Native,
         tests: tests.to_vec(),
     };
 
@@ -116,7 +122,7 @@ pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> St
 }
 
 pub fn emit_with(program: &Program, sources: &SourceMap, checks: bool) -> String {
-    emit_configured(program, sources, checks, false)
+    emit_configured(program, sources, checks, false, Target::Native)
 }
 
 fn emit_configured(
@@ -124,6 +130,7 @@ fn emit_configured(
     sources: &SourceMap,
     checks: bool,
     depth_guard: bool,
+    target: Target,
 ) -> String {
     let mut emitter = Emitter {
         program,
@@ -138,6 +145,7 @@ fn emit_configured(
             false => Vec::new(),
         },
         guarding: false,
+        target,
         tests: Vec::new(),
     };
 
@@ -155,12 +163,13 @@ pub(crate) struct Emitter<'a> {
     pub(crate) pure: Vec<bool>,
     pub(crate) recursive: Vec<bool>,
     pub(crate) guarding: bool,
+    pub(crate) target: Target,
     pub(crate) tests: Vec<usize>,
 }
 
 impl Emitter<'_> {
     fn module(&mut self) {
-        self.line("target triple = \"x86_64-pc-linux-gnu\"");
+        self.line(&format!("target triple = \"{}\"", self.target.triple()));
         self.line("");
         self.out.push_str(PREAMBLE);
         self.line("");
@@ -185,7 +194,10 @@ impl Emitter<'_> {
             self.function(index, function);
         }
 
-        self.line("define i32 @main(i32 %argc, ptr %argv) {");
+        self.line(&format!(
+            "define i32 @{}(i32 %argc, ptr %argv) {{",
+            self.target.entry_symbol()
+        ));
         self.line("entry:");
         self.line("  call void @dovik_start()");
         self.line("  call void @dovik_set_arguments(i32 %argc, ptr %argv)");

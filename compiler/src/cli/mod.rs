@@ -3,7 +3,9 @@ mod report;
 
 use std::process::ExitCode;
 
-pub use pipeline::{compile, Compiled};
+use crate::target::Target;
+
+pub use pipeline::{compile, wasm_runtime_archive, Compiled};
 pub use report::Report;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -12,7 +14,7 @@ const USAGE: &str = "\
 dovik — the Dovik compiler
 
 usage:
-  dovik build <file.dovk> [-o <out>] [options]
+  dovik build <file.dovk> [-o <out>] [--target <name>] [options]
   dovik run <file.dovk> [options] [-- <args for the program>]
   dovik check <file.dovk> [options]
   dovik format <file.dovk> [--check] [--write]
@@ -30,9 +32,12 @@ options:
   --write         rewrite the file in place (format only)
   --check         exit 1 if the file is not already formatted (format only)
   --              stop reading options; the rest goes to the program (run only)
+  --target <name> native (the default) or wasm. A wasm build writes a
+                  WebAssembly module and needs wasi-libc; run it with a WASI
+                  host such as `node --experimental-wasi-unstable-preview1`
   --depth-guard   check recursion depth in the program instead of relying on a
-                  signal handler. Needed for a target without signals; see
-                  PROPOSAL-WASM.md section 3.1
+                  signal handler. A wasm build turns this on by itself, because
+                  WebAssembly has no signals (DECISIONS.md D030)
 
   --omit-runtime-checks-for-benchmarking
                   build without the overflow, zero-divisor and conversion
@@ -50,6 +55,7 @@ pub struct Options {
     pub check_only: bool,
     pub omit_checks: bool,
     pub depth_guard: bool,
+    pub target: Target,
     pub program_args: Vec<String>,
 }
 
@@ -102,6 +108,7 @@ fn with_file(
         check_only: false,
         omit_checks: false,
         depth_guard: false,
+        target: Target::Native,
         program_args: Vec::new(),
     };
     let mut path = None;
@@ -118,6 +125,20 @@ fn with_file(
             "--check" => options.check_only = true,
             "--omit-runtime-checks-for-benchmarking" => options.omit_checks = true,
             "--depth-guard" => options.depth_guard = true,
+            "--target" => {
+                let Some(name) = pending.next() else {
+                    eprintln!("`--target` needs a name: native or wasm");
+                    return ExitCode::FAILURE;
+                };
+
+                match Target::parse(name) {
+                    Some(target) => options.target = target,
+                    None => {
+                        eprintln!("unknown target `{name}`; try native or wasm");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
             "-o" => options.output = pending.next().cloned(),
             "--" => {
                 options.program_args = pending.cloned().collect();

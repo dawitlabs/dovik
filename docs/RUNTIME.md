@@ -140,7 +140,9 @@ The fault handler above needs signals, an alternate signal stack, and a faulting
 compare against the thread's stack bounds. A target with none of those — WebAssembly is the
 first — gets `--depth-guard` instead: the backend increments a counter in the prologue of
 every function that can reach itself and decrements it in `release_frame`, which already runs
-on every exit path. Passing `DOVIK_MAX_DEPTH`, default 100,000, reports `DVK5009` and exits 1.
+on every exit path. Passing `DOVIK_MAX_DEPTH` reports `DVK5009` and exits 1. The default is per target — 100,000
+native, 2,000 on `wasm32` — because a frame count is not a stack measurement and a wasm host
+traps far sooner ([PROPOSAL-WASM.md](PROPOSAL-WASM.md) 7 has the numbers).
 
 Only a function on a call cycle is guarded, because only one can drive unbounded depth, and
 the backend already computes call reachability for purity. A default build emits no guard at

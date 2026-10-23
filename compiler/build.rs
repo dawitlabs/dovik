@@ -25,7 +25,37 @@ fn main() {
 
     assert!(status.success(), "failed to compile {}", source.display());
     println!("cargo:rustc-env=DOVIK_RUNTIME_OBJECT={}", object.display());
+
+    let sysroot = PathBuf::from(WASI_SYSROOT);
+
+    if !sysroot.join("include/wasm32-wasip1/stdio.h").exists() {
+        println!("cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT=");
+        return;
+    }
+
+    let wasm_object = out.join("dovik_rt.wasm.o");
+
+    let status = Command::new("clang")
+        .args(["--target=wasm32-wasip1", "-O2", "-c"])
+        .arg(format!("--sysroot={WASI_SYSROOT}"))
+        .arg("-I")
+        .arg(&out)
+        .arg(&source)
+        .arg("-o")
+        .arg(&wasm_object)
+        .status()
+        .expect("clang");
+
+    match status.success() {
+        true => println!(
+            "cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT={}",
+            wasm_object.display()
+        ),
+        false => println!("cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT="),
+    }
 }
+
+const WASI_SYSROOT: &str = "/usr/share/wasi-sysroot";
 
 fn case_tables() -> String {
     let mut out = String::from("#include <stdint.h>\n\n");

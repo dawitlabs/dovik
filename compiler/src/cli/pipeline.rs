@@ -6,6 +6,7 @@ use super::{Emit, Options, Report};
 use crate::diagnostic::{self, Diagnostic};
 use crate::modules::{self, Graph};
 use crate::source::SourceMap;
+use crate::target::Target;
 use crate::{backend, check, format as formatter, ir, lexer, lower, opt, parser, resolve};
 
 pub struct Compiled {
@@ -78,7 +79,7 @@ pub fn test(path: &str, _source: &str, options: &Options) -> ExitCode {
     let binary = std::env::temp_dir().join(format!("dovik-test-{}", std::process::id()));
     let target = binary.display().to_string();
 
-    if let Err(message) = link(&llvm, &target) {
+    if let Err(message) = link(&llvm, &target, Target::Native) {
         report.note(&message);
         return ExitCode::FAILURE;
     }
@@ -213,9 +214,9 @@ pub fn build(path: &str, _source: &str, options: &Options) -> ExitCode {
             let target = options
                 .output
                 .clone()
-                .unwrap_or_else(|| default_output(path));
+                .unwrap_or_else(|| default_output(path) + options.target.extension());
 
-            match link(&compiled.llvm, &target) {
+            match link(&compiled.llvm, &target, options.target) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(message) => {
                     report.note(&message);
@@ -250,7 +251,7 @@ pub fn run(path: &str, _source: &str, options: &Options) -> ExitCode {
     let target = std::env::temp_dir().join(format!("dovik-run-{}", std::process::id()));
     let target = target.display().to_string();
 
-    if let Err(message) = link(&compiled.llvm, &target) {
+    if let Err(message) = link(&compiled.llvm, &target, Target::Native) {
         report.note(&message);
         return ExitCode::FAILURE;
     }
@@ -295,9 +296,9 @@ pub fn compile(graph: &Graph, options: &Options) -> Result<Compiled, Vec<Diagnos
         }
     }
 
-    let llvm = match options.depth_guard {
+    let llvm = match options.depth_guard && !options.target.needs_depth_guard() {
         true => backend::emit_guarded(&program, sources),
-        false => backend::emit_with(&program, sources, !options.omit_checks),
+        false => backend::emit_for(&program, sources, !options.omit_checks, options.target),
     };
 
     Ok(Compiled { program, llvm })
@@ -310,15 +311,39 @@ fn default_output(path: &str) -> String {
         .unwrap_or_else(|| "a.out".to_string())
 }
 
-fn link(llvm: &str, target: &str) -> Result<(), String> {
-    let ll_path = format!("{target}.ll");
+fn link(llvm: &str, output: &str, target: Target) -> Result<(), String> {
+    let ll_path = format!("{output}.ll");
 
     if let Err(err) = std::fs::write(&ll_path, llvm) {
         return Err(format!("{ll_path}: {err}"));
     }
 
-    let status = Command::new("clang")
-        .args(["-O2", "-flto=full", "-o", target, &ll_path, &runtime_archive()])
+    let archive = match target {
+        Target::Native => runtime_archive(),
+        Target::Wasi => match wasm_runtime_archive() {
+            Some(archive) => archive,
+            None => {
+                return Err(
+                    "this compiler was built without a WebAssembly runtime: install                      wasi-libc and rebuild"
+                        .to_string(),
+                )
+            }
+        },
+    };
+
+    let mut command = Command::new("clang");
+
+    match target {
+        Target::Native => command.args(["-O2", "-flto=full"]),
+        Target::Wasi => command.args([
+            "--target=wasm32-wasip1",
+            "-O2",
+            "--sysroot=/usr/share/wasi-sysroot",
+        ]),
+    };
+
+    let status = command
+        .args(["-o", output, &ll_path, &archive])
         .arg("-lm")
         .status();
 
@@ -334,4 +359,15 @@ fn link(llvm: &str, target: &str) -> Result<(), String> {
 
 pub fn runtime_archive() -> String {
     std::env::var("DOVIK_RUNTIME").unwrap_or_else(|_| env!("DOVIK_RUNTIME_OBJECT").to_string())
+}
+
+pub fn wasm_runtime_archive() -> Option<String> {
+    if let Ok(path) = std::env::var("DOVIK_WASM_RUNTIME") {
+        return Some(path);
+    }
+
+    match env!("DOVIK_WASM_RUNTIME_OBJECT") {
+        "" => None,
+        path => Some(path.to_string()),
+    }
 }
