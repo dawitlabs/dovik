@@ -419,3 +419,66 @@ print(len(seen))
     assert_eq!(native.code, 0, "{native:?}");
     assert_eq!(native.stdout, ["3", "2", "1", "2"]);
 }
+
+fn run_with_env(source: &str, name: &str, env: &[(&str, &str)]) -> (i32, String) {
+    let program = lowered(source, true);
+    let dir = std::env::temp_dir().join("dovik-native-tests");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let ll = dir.join(format!("env-{name}.ll"));
+    let binary = dir.join(format!("env-{name}"));
+    std::fs::write(&ll, backend::emit(&program, &SourceMap::single("test.dovk", source)))
+        .expect("write ir");
+
+    let build = Command::new("clang")
+        .args(["-O2", "-flto=full"])
+        .arg("-o")
+        .arg(&binary)
+        .arg(&ll)
+        .arg(runtime_archive())
+        .arg("-lm")
+        .output()
+        .expect("clang");
+    assert!(
+        build.status.success(),
+        "clang rejected {name}:\n{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let mut command = Command::new(&binary);
+
+    for (key, value) in env {
+        command.env(key, value);
+    }
+
+    let run = command.output().expect("run");
+    (
+        run.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&run.stderr).to_string(),
+    )
+}
+
+#[test]
+fn running_out_of_memory_is_a_runtime_error_and_not_a_fault() {
+    let source = "\
+xs: List<String> = []
+i = 0
+
+while i < 100000:
+    append(xs, \"a string that occupies some bytes\")
+    i = i + 1
+
+print(len(xs))
+";
+    let (unlimited, _) = run_with_env(source, "oom-unlimited", &[]);
+    assert_eq!(unlimited, 0, "the program should succeed without a limit");
+
+    let (code, stderr) = run_with_env(source, "oom", &[("DOVIK_ALLOC_LIMIT", "100000")]);
+
+    assert_eq!(code, 1, "out of memory must exit 1, not fault: {stderr:?}");
+    assert!(stderr.contains("DVK5010"), "{stderr:?}");
+    assert!(stderr.contains("out of memory"), "{stderr:?}");
+    assert!(
+        !stderr.contains(" at "),
+        "out of memory has no source location: {stderr:?}"
+    );
+}

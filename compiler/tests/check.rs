@@ -496,3 +496,25 @@ flag: Bool = not (count > 1 and total % 2 == 0)
 ratio: Float = total / 2
 ");
 }
+
+#[test]
+fn no_value_can_be_made_to_reach_itself() {
+    let attempts = [
+        "xs: List<Int> = []\nappend(xs, xs)\n",
+        "xs: List<List<Int>> = []\nappend(xs, xs)\n",
+        "xs: List<List<List<Int>>> = []\nappend(xs, xs)\n",
+        "d: Dict<String, Dict<String, Int>> = {}\ninsert(d, \"k\", d)\n",
+        "xs: List<List<Int>> = []\nxs[0] = xs\n",
+        "a: List<List<List<Int>>> = []\nb: List<List<Int>> = []\nappend(a, b)\nappend(b, a)\n",
+        "g: List<List<Int>> = []\n\nfunction loop_it():\n    append(g, g)\n\nloop_it()\n",
+        "function f(xs: List<List<Int>>):\n    append(xs, xs)\n",
+    ];
+
+    for source in attempts {
+        assert!(
+            !errors(source).is_empty(),
+            "a cycle became constructible, so reference counting no longer reclaims \
+             everything: see RUNTIME.md section 11 before changing this test\n{source}"
+        );
+    }
+}

@@ -1,6 +1,6 @@
 # Dovik Development Roadmap
 
-**Status:** Phases 1 through 5, 7 and 9 are complete; Phase 6 is implemented but incomplete. See **Status** at the end.
+**Status:** Phases 1 through 7 and 9 are complete. See **Status** at the end.
 
 Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 21. **All of them are now resolved** ([DECISIONS.md](DECISIONS.md) D013, D019, D020, D022, D023, D025, D026, D027), so no phase is blocked on a language question any more. What remains is implementation.
 
@@ -38,7 +38,7 @@ Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 2
 - Validate function calls, assignments, and return values. *(done)*
 - Produce clear diagnostics for type errors. *(done)*
 
-**Completion criterion:** Invalid programs are rejected before code generation, every compile-time error in [SPEC.md](SPEC.md) 15.1 has a test, and mutual recursion both works and is diagnosed when it needs an annotation. **Met.** The compiler carries 88 error kinds across the lexer, parser, resolver, type checker and module loader; 87 are exercised by a test, by variant or by the diagnostic the test asserts. The exception is `OutOfMemory`, which is a runtime error (15.2) and has no deterministic trigger.
+**Completion criterion:** Invalid programs are rejected before code generation, every compile-time error in [SPEC.md](SPEC.md) 15.1 has a test, and mutual recursion both works and is diagnosed when it needs an annotation. **Met.** The compiler carries 88 error kinds across the lexer, parser, resolver, type checker and module loader; all 88 are exercised by a test, by variant or by the diagnostic the test asserts.
 
 ## Phase 4: First Native Executables
 
@@ -61,19 +61,19 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 - Establish consistent runtime behavior. *(done — the interpreter and the native build are tested against each other)*
 - Improve error messages and test coverage. *(done)*
 
-**Completion criterion:** Dovik supports its documented core language features, with tests for the runtime errors in [SPEC.md](SPEC.md) 15.2 — including division by zero for both `Int` and `Float` operands. **Met for nine of the ten runtime errors.** `OutOfMemory` is implemented and reachable but has no test, because provoking it deterministically means constraining the allocator, which the runtime does not yet allow.
+**Completion criterion:** Dovik supports its documented core language features, with tests for the runtime errors in [SPEC.md](SPEC.md) 15.2 — including division by zero for both `Int` and `Float` operands. **Met.** All ten have a test.
 
 **Blocked by:** nothing. U5 is resolved ([DECISIONS.md](DECISIONS.md) D027): a function may mutate a reference-typed global, which is shared mutable state without new syntax.
 
 ## Phase 6: Runtime and Standard Library
 
-- Implement memory management. *(partly — reference counting, which does not reclaim cycles)*
+- Implement memory management. *(done — reference counting)*
 - Add console and file I/O. *(done)*
 - Implement essential collection and string operations. *(done)*
 - Establish a stable runtime interface. *(done — `compiler/runtime-c/`)*
 - Measure runtime overhead and memory usage. *(done — [BENCHMARKS.md](BENCHMARKS.md))*
 
-**Completion criterion:** Ordinary programs can use core features without manual memory management, and cyclic garbage is reclaimable ([SPEC.md](SPEC.md) section 14). **Not met.** The first half holds. The second does not: reference counting leaks a cycle, and nothing collects one. This is the one place where the implementation contradicts the specification, which promises in 14 that unreachable values *including those in reference cycles* are eventually reclaimable. Either a cycle collector is built or 14 is amended; leaving both as they are is not an option.
+**Completion criterion:** Ordinary programs can use core features without manual memory management, and cyclic garbage is reclaimable ([SPEC.md](SPEC.md) section 14). **Met, on a precondition.** Reference counting cannot reclaim a cycle, and the initial language cannot build one: with no user-defined and no recursive types, a cycle needs a type that transitively contains itself, which no annotation can spell. `no_value_can_be_made_to_reach_itself` in `tests/check.rs` holds that precondition, and [RUNTIME.md](RUNTIME.md) section 11 is the argument. The first feature that lets a value reach itself breaks it and must revisit reclamation in the same change.
 
 **Blocked by:** nothing in section 21; U3, U7 and U8 are all resolved ([DECISIONS.md](DECISIONS.md) D026, D022, D025). The memory-management algorithm is also still unchosen ([RUNTIME.md](RUNTIME.md) section 8) and belongs before this phase, not inside it — and it must handle objects reachable from several bindings at once, since collections alias by default ([DECISIONS.md](DECISIONS.md) D013).
 
@@ -150,23 +150,25 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 This roadmap is provisional. Phases may overlap or change as technical constraints become clearer. Completion is determined by working implementations and tests, not by documentation alone.
 
-Current position: **Phases 1 through 5, 7 and 9 are complete. Phase 6 is implemented but its criterion is not met, Phase 8 is partly done, and Phases 10 and 11 have not started.**
+Current position: **Phases 1 through 7 and 9 are complete. Phase 8 is partly done, and Phases 10 and 11 have not started.**
 
 Dovik programs compile to native Linux x86-64 executables and run. The frontend, type checker,
 IR, LLVM backend, C runtime, standard library increments, module system, optional types and the
-`dovik` CLI all exist, under 389 tests. Every language question [SPEC.md](SPEC.md) section 21
+`dovik` CLI all exist, under 394 tests. Every language question [SPEC.md](SPEC.md) section 21
 raised is resolved, so nothing is blocked on a decision.
 
 What is actually left:
 
-- **Phase 6** is incomplete on one point: reference counting does not reclaim reference cycles,
-  which its completion criterion requires — and which [SPEC.md](SPEC.md) section 14 promises.
+- **Phase 6 carries a standing obligation, not a gap.** Reference counting satisfies
+  [SPEC.md](SPEC.md) section 14 only because no Dovik program can build a reference cycle. A
+  test holds that precondition, so adding a named type, a recursive type, a closure or a
+  reference cell fails the suite rather than silently leaking.
 - **Phase 8** has repeatable benchmarks and recorded results ([BENCHMARKS.md](BENCHMARKS.md));
   the release and compatibility practices it also asks for are not established, and the memory
   safety it asks to test has no sanitizer or fuzzing run behind it.
-- **One runtime error has no test.** `OutOfMemory` is implemented and reachable, but provoking
-  it deterministically needs an allocator limit the runtime does not expose. It is the single
-  gap in [SPEC.md](SPEC.md) 15.1 and 15.2 coverage; the other 87 error kinds are tested.
+- **Every error in [SPEC.md](SPEC.md) 15.1 and 15.2 now has a test**, all 88 of them. Out of
+  memory was the last, and needed `DOVIK_ALLOC_LIMIT` ([RUNTIME.md](RUNTIME.md) section 11) to
+  become reachable on purpose.
 - **Phase 9** keeps project configuration and dependency management open, both declined for now
   ([DECISIONS.md](DECISIONS.md) D029).
 - **Phase 10** has not started. Linux x86-64 is the only target.

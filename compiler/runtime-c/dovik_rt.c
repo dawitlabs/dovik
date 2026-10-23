@@ -208,14 +208,39 @@ __attribute__((noreturn, cold)) void dovik_trap(uint32_t code, uint32_t line, ui
     exit(1);
 }
 
+static size_t alloc_limit = 0;
+static size_t alloc_used = 0;
+
+static void read_alloc_limit(void) {
+    static int read = 0;
+    if (read) return;
+    read = 1;
+
+    const char *text = getenv("DOVIK_ALLOC_LIMIT");
+    if (text == NULL) return;
+
+    char *end = NULL;
+    unsigned long long value = strtoull(text, &end, 10);
+    if (end != text && *end == '\0') alloc_limit = (size_t)value;
+}
+
+__attribute__((noreturn, cold)) static void out_of_memory(void) {
+    flush_output();
+    fflush(stdout);
+    report_without_location("DVK5010", "out of memory");
+    _exit(1);
+}
+
 static void *checked_alloc(size_t bytes) {
-    void *block = malloc(bytes);
-    if (block == NULL) {
-        flush_output();
-        fflush(stdout);
-        report_without_location("DVK5010", "out of memory");
-        _exit(1);
+    read_alloc_limit();
+
+    if (alloc_limit > 0) {
+        if (bytes > alloc_limit - alloc_used) out_of_memory();
+        alloc_used += bytes;
     }
+
+    void *block = malloc(bytes);
+    if (block == NULL) out_of_memory();
     return block;
 }
 

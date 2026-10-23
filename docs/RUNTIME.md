@@ -92,7 +92,7 @@ Measurements should use reproducible programs and documented environments.
 ## 8. Open Decisions
 
 - Whether reference counting remains the strategy, or is replaced once the language gains features that can build a cycle. See section 11.
-- Cyclic reference handling, once cycles become constructible. They are not today; section 11 explains why.
+- Cyclic reference handling, once cycles become constructible. They are not today; section 11 explains why, and a test in `tests/check.rs` fails the moment that stops being true.
 - Object layout.
 - Whether the sixteen-scalar chunk is the right size. It was chosen for being obviously small enough and has not been tuned against anything.
 - Collection representation.
@@ -134,6 +134,16 @@ its own binding, or a reference cell — breaks it, and reclamation has to be re
 in the same change. Nothing in the compiler detects this; it is a standing obligation
 on whoever adds such a feature.
 
+### Forcing an allocation failure
+
+`DOVIK_ALLOC_LIMIT=<bytes>` caps the **total** bytes `checked_alloc` hands out over a
+program's life, and the program reports `DVK5010` and exits 1 once the cap is passed. It
+counts cumulatively and never decreases, so it is not a live-heap limit and is not a tuning
+knob — its only job is to make out-of-memory ([SPEC.md](SPEC.md) 15.2) reachable on purpose,
+which is what `running_out_of_memory_is_a_runtime_error_and_not_a_fault` needs. Every
+allocation in the runtime goes through that one function, which is why one variable is
+enough.
+
 ### Cost
 
 Measured in [BENCHMARKS.md](BENCHMARKS.md) section 11. Reclaiming memory took the
@@ -143,6 +153,13 @@ string workload from 197 MB to 3 MB and, because it stopped touching 200 MB, fro
 That is the honest shape of the trade.
 
 ### Verification
+
+`tests/check.rs` holds the precondition itself: `no_value_can_be_made_to_reach_itself`
+asserts that every way of making a value reach itself is a type error — through `append`,
+through an index assignment, through a global a function mutates ([DECISIONS.md](DECISIONS.md)
+D027), and through two collections pointing at each other. The standing obligation above is
+therefore checkable. A feature that makes a cycle constructible fails that test, which is
+where to start reading.
 
 `tests/native.rs` compiles programs with `DOVIK_CHECK_LEAKS=1` and asserts the runtime
 reports zero live objects at exit. The suite covers concatenation loops, list churn,
