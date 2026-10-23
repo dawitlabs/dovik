@@ -138,3 +138,22 @@ fn string_contents_are_never_touched() {
     let source = "x = \"  spaced  #not a comment  \"\n";
     assert_eq!(formatted(source), source);
 }
+
+#[test]
+fn the_optional_surface_survives_formatting() {
+    let source = "\
+missing: Int? = none
+found: Int? = some(42)
+
+if found != none:
+    print(found)
+else:
+    print(0)
+
+if missing == none:
+    print(1)
+";
+    assert_eq!(formatted(source), source);
+    assert_eq!(formatted("x=parse_int(s)\nif x==none:\n    print(0)\n"),
+        "x = parse_int(s)\nif x == none:\n    print(0)\n");
+}

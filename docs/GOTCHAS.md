@@ -1044,3 +1044,24 @@ token when the attempt plus `synchronize` moved the cursor nowhere. `progress` i
 
 The general rule: any loop that calls `parse_statement` and continues on failure must prove
 the cursor moved. A diagnostic is not progress.
+
+## The formatter renders tokens, so a forgotten token is deleted code
+
+`format` does not go through the AST. It re-prints the token stream, and `spacing::keyword`
+maps each token to its text. That table had a `_ => ""` arm, so a token it did not list
+printed as nothing at all.
+
+`none` arrived with optional types ([DECISIONS.md](DECISIONS.md) D025) and the table was never
+extended. `dovik format --write` turned `if text == none:` into `if text == :` — valid source
+rewritten into source that did not parse, in `examples/wordcount.dovk`, which was committed
+that way. The same release hung on the result, because a failed condition before an `else`
+looped the parser.
+
+The arm is now exhaustive: every `TokenKind` is listed, and the four layout tokens plus the
+four tokens `render::text` handles itself map to the empty string explicitly. Adding a token
+to `TokenKind` is now a compile error here, which is the point.
+
+A formatter may refuse to format. It may not silently drop a token. When adding a token,
+check `spacing::keyword` and `spacing::needs_space` together — `?` was listed but printed as
+`Int ?`, which parses and so would not have failed a round-trip through the compiler, only
+`format --check`.

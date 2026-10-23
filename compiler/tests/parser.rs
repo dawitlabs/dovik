@@ -377,6 +377,22 @@ fn parameters_need_types() {
 }
 
 #[test]
+fn block_header_must_carry_its_colon() {
+    assert_eq!(
+        errors("if a\n    x = 1\n"),
+        [Expected { what: "`:` to open a block", found: "a line break" }]
+    );
+    assert_eq!(
+        errors("while a\n    x = 1\n"),
+        [Expected { what: "`:` to open a block", found: "a line break" }]
+    );
+    assert_eq!(
+        errors("function f()\n    x = 1\n"),
+        [Expected { what: "`:` to open a block", found: "a line break" }]
+    );
+}
+
+#[test]
 fn block_must_be_indented() {
     assert_eq!(
         errors("if a:\nx = 1\n"),

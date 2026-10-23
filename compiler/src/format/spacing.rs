@@ -35,7 +35,10 @@ impl Context {
             return false;
         }
 
-        if matches!(next, TokenKind::Comma | TokenKind::Colon) {
+        if matches!(
+            next,
+            TokenKind::Comma | TokenKind::Colon | TokenKind::Question
+        ) {
             return false;
         }
 
@@ -135,6 +138,7 @@ pub(super) fn keyword(kind: &TokenKind) -> &'static str {
         TokenKind::If => "if",
         TokenKind::Import => "import",
         TokenKind::In => "in",
+        TokenKind::NoneLiteral => "none",
         TokenKind::Not => "not",
         TokenKind::Or => "or",
         TokenKind::Return => "return",
@@ -162,6 +166,13 @@ pub(super) fn keyword(kind: &TokenKind) -> &'static str {
         TokenKind::RBrace => "}",
         TokenKind::Comma => ",",
         TokenKind::Colon => ":",
-        _ => "",
+        TokenKind::Identifier
+        | TokenKind::Int(_)
+        | TokenKind::Float(_)
+        | TokenKind::Str(_)
+        | TokenKind::Newline
+        | TokenKind::Indent
+        | TokenKind::Dedent
+        | TokenKind::Eof => "",
     }
 }
