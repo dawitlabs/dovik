@@ -115,8 +115,8 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 ## Phase 10: Platform Expansion
 
-- Evaluate additional processor architectures and operating systems.
-- Add Windows and macOS support.
+- Evaluate additional processor architectures and operating systems. *(done — measured, and the order recommended in [PROPOSAL-TARGETS.md](PROPOSAL-TARGETS.md))*
+- Add Windows and macOS support. *(not started — Windows needs a six-function platform shim, macOS needs a Mac because the SDK is not redistributable; [PROPOSAL-TARGETS.md](PROPOSAL-TARGETS.md))*
 - Investigate WebAssembly. *(done — `--target wasm` builds a WASI module, tested in `tests/wasm.rs`; [PROPOSAL-WASM.md](PROPOSAL-WASM.md))*
 - Design mobile platform integrations.
 - Validate portability of the runtime and standard library.
@@ -127,7 +127,7 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 ## Phase 11: Self-Hosting
 
-- Implement enough of Dovik to express substantial compiler functionality.
+- Implement enough of Dovik to express substantial compiler functionality. *(measured — 90 type declarations the language cannot express; [PROPOSAL-SELF-HOSTING.md](PROPOSAL-SELF-HOSTING.md))*
 - Develop a Dovik implementation of the compiler.
 - Bootstrap it using the existing Rust-based compiler.
 - Verify that the resulting compiler can rebuild itself.
@@ -135,7 +135,9 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 **Completion criterion:** Dovik can compile its compiler without relying on the Rust implementation for the final bootstrap stage.
 
-**Blocked by:** language features a compiler needs that Dovik deliberately lacks, user-defined types chief among them. Modules (Phase 9) and a way to represent absence ([SPEC.md](SPEC.md) 23) both exist now. Each remaining one must earn its way in under [SPEC.md](SPEC.md) section 20 before this phase is realistic.
+**Blocked by:** one feature. [PROPOSAL-SELF-HOSTING.md](PROPOSAL-SELF-HOSTING.md) counts the Rust compiler's 11,573 lines against what Dovik has: optionals cover 104 `Option` uses, `Dict` covers 56 `HashMap` uses, `Box` is unnecessary because collections alias, and there are zero traits. What is left is **90 `struct` and `enum` declarations**, which no combination of six built-in types expresses.
+
+Adding them brings the cycle collector with them, because a recursive type makes a reference cycle constructible and [RUNTIME.md](RUNTIME.md) 11's precondition fails. That proposal recommends not pursuing self-hosting as a goal at all: write larger Dovik programs, and let the feature be requested by one that cannot describe its data.
 
 ## Development Principles
 
@@ -175,4 +177,11 @@ What is actually left:
 - **Phase 10** has one target beyond Linux: `wasm32-wasip1`, built and tested, with a
   documented limitation on stack exhaustion. Windows, macOS and mobile have not started, and
   the cross-compilation strategy they need is still unsettled.
-- **Phase 11** waits on language features Dovik does not have, user-defined types chief among them.
+- **Phase 11** waits on user-defined types, and should keep waiting
+  ([PROPOSAL-SELF-HOSTING.md](PROPOSAL-SELF-HOSTING.md)). The gap is measured: 90 type
+  declarations. Closing it also forces the cycle collector.
+- **Concurrency and networking have designs and recommendations against building them yet**
+  ([PROPOSAL-CONCURRENCY.md](PROPOSAL-CONCURRENCY.md),
+  [PROPOSAL-NETWORKING.md](PROPOSAL-NETWORKING.md)). Atomic reference counts were measured at
+  up to **+74%** on allocation-heavy code, which is what a thread-safe runtime would cost every
+  single-threaded program.

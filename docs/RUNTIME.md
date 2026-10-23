@@ -98,7 +98,7 @@ Measurements should use reproducible programs and documented environments.
 - Collection representation.
 - The recursion depth a native build reaches, which follows `RLIMIT_STACK` rather than anything Dovik chooses.
 - Runtime linking and distribution.
-- Thread safety and concurrency. The runtime promises no thread safety for mutable collections, and Dovik has no concurrency model ([SPEC.md](SPEC.md) section 16).
+- Thread safety and concurrency. The runtime promises no thread safety for mutable collections, and Dovik has no concurrency model ([SPEC.md](SPEC.md) section 16). The price of changing that is now measured rather than guessed: atomic counts cost up to **+74%** on allocation-heavy code and nothing on code that does not churn ([PROPOSAL-CONCURRENCY.md](PROPOSAL-CONCURRENCY.md) 1).
 
 ## 9. Status
 

@@ -75,7 +75,11 @@ Unsupported features should produce clear diagnostics rather than failing unpred
 
 ## 8. Open Decisions
 
-- Which platform comes after Linux x86-64?
+- ~~Which platform comes after Linux x86-64?~~ WebAssembly, and it is built. The order after
+  that is measured and recommended in [PROPOSAL-TARGETS.md](PROPOSAL-TARGETS.md): aarch64
+  Linux, then Windows, then macOS — which cannot be cross-compiled from Linux at all, because
+  the SDK is not redistributable.
+- Which platform comes after those?
 - Which processor architectures should be supported?
 - How should mobile applications integrate with native platform APIs?
 - ~~Should WebAssembly be a primary target or a separate compilation target?~~ A separate one,

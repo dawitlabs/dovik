@@ -77,6 +77,10 @@ node --no-warnings compiler/tests/wasi-host.mjs fib.wasm 10
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | How performance is measured, and what it measured |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Implementation phases and what each one depends on |
 | [docs/PROPOSAL-WASM.md](docs/PROPOSAL-WASM.md) | The WebAssembly target: what broke, and the limitation that remains |
+| [docs/PROPOSAL-CONCURRENCY.md](docs/PROPOSAL-CONCURRENCY.md) | What threads would cost, measured, and why not yet |
+| [docs/PROPOSAL-NETWORKING.md](docs/PROPOSAL-NETWORKING.md) | What a network would take, and why not yet |
+| [docs/PROPOSAL-TARGETS.md](docs/PROPOSAL-TARGETS.md) | The targets after WebAssembly, and the order |
+| [docs/PROPOSAL-SELF-HOSTING.md](docs/PROPOSAL-SELF-HOSTING.md) | The gap to compiling itself, counted |
 | [docs/RELEASES.md](docs/RELEASES.md) | Versioning, what counts as breaking, and what a release requires |
 | [CHANGELOG.md](CHANGELOG.md) | What changed, and whether it breaks anything |
 
