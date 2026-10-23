@@ -1,8 +1,8 @@
 # Dovik Platform Support
 
-**Status:** Draft — no platform is supported yet
+**Status:** Linux x86-64 is supported. Nothing else is.
 
-Linux x86-64 is the initial *target*, not a working one: no compiler exists, so no platform is currently supported. Every other platform in this document is a goal.
+Linux x86-64 meets the bar section 9 sets: working builds and a passing test suite. Every other platform in this document is a goal, and no other target has been attempted.
 
 ## 1. Goal
 
@@ -19,13 +19,15 @@ The first target is:
 - LLVM-based code generation
 - A minimal runtime
 
-The initial compiler will prioritize correctness and reliability on this target before expanding ([DECISIONS.md](DECISIONS.md) D015).
+All four exist. The compiler emits LLVM IR as text and links it with `clang` against a C runtime, and the test suite builds and runs native executables on this target.
+
+Correctness and reliability on this target come before expanding ([DECISIONS.md](DECISIONS.md) D015).
 
 ## 3. Planned Platforms
 
 Long-term targets include:
 
-- **Linux:** Native command-line tools and backend services.
+- **Linux:** Native command-line tools and backend services. *(command-line tools work; a backend service needs networking, which the standard library does not have)*
 - **Windows:** Native applications and command-line tools.
 - **macOS:** Native applications and command-line tools.
 - **Web:** WebAssembly-based applications where practical.
@@ -53,7 +55,11 @@ The standard library should provide portable interfaces for common operations, i
 - Networking
 - Concurrency, when supported
 
-Availability may differ by platform.
+Availability may differ by platform. Of this list, console I/O, files, strings, collections,
+and time exist today ([STDLIB.md](STDLIB.md)). **Networking and concurrency do not exist at
+all** — there is no socket, no HTTP client or server, and no thread. Nothing in Dovik can
+reach the network, so a web server, a web client, and a browser target are all out of reach
+until that changes. Neither has a design yet.
 
 ## 6. Cross-Compilation
 
@@ -77,4 +83,4 @@ Unsupported features should produce clear diagnostics rather than failing unpred
 
 ## 9. Status
 
-This document describes planned platform support. None of it is implemented — not Linux, and certainly not Windows, macOS, WebAssembly, Android, iOS, desktop, or cross-compilation. A target counts as supported only once it has working builds and a passing test suite.
+Linux x86-64 is implemented and tested. Windows, macOS, WebAssembly, Android, iOS, desktop, and cross-compilation are not, and none of them has been started. A target counts as supported only once it has working builds and a passing test suite.
