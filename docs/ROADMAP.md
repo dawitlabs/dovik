@@ -1,6 +1,6 @@
 # Dovik Development Roadmap
 
-**Status:** Draft — Phase 1's blocking decisions are settled; no later phase has started.
+**Status:** Phases 1 through 7 and 9 are implemented and tested. See **Status** at the end for what remains.
 
 Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 21. **All of them are now resolved** ([DECISIONS.md](DECISIONS.md) D013, D019, D020, D022, D023, D025, D026, D027), so no phase is blocked on a language question any more. What remains is implementation.
 
@@ -28,7 +28,7 @@ Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 2
 
 **Completion criterion:** Dovik can parse source files and report useful syntax errors, including bad indentation, tab indentation, empty blocks, and a missing block-header colon.
 
-**Blocked by:** nothing. The lexical and block rules ([SPEC.md](SPEC.md) sections 2.3 through 2.8) are settled, and Phase 1's ratifications are done. This phase can start.
+**Blocked by:** nothing. The lexical and block rules ([SPEC.md](SPEC.md) sections 2.3 through 2.8) are settled, and Phase 1's ratifications are done.
 
 ## Phase 3: Type System
 
@@ -152,4 +152,20 @@ Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 2
 
 This roadmap is provisional. Phases may overlap or change as technical constraints become clearer. Completion is determined by working implementations and tests, not by documentation alone.
 
-Current position: **Phase 1 complete; Phase 2 not started.** No Dovik program has been compiled. The decisions that gated Phases 2 through 4 are all settled; the questions that remain gate Phases 5 and 6.
+Current position: **Phases 1 through 7 and 9 are implemented and tested; Phases 8, 10 and 11 remain.**
+
+Dovik programs compile to native Linux x86-64 executables and run. The frontend, type checker,
+IR, LLVM backend, C runtime, standard library increments, module system, optional types and the
+`dovik` CLI all exist, under 387 tests. Every language question [SPEC.md](SPEC.md) section 21
+raised is resolved, so nothing is blocked on a decision.
+
+What is actually left:
+
+- **Phase 6** is incomplete on one point: reference counting does not reclaim reference cycles,
+  which its completion criterion requires.
+- **Phase 8** has repeatable benchmarks and recorded results ([BENCHMARKS.md](BENCHMARKS.md)); the
+  release and compatibility practices it also asks for are not established.
+- **Phase 9** keeps project configuration and dependency management open, both declined for now
+  ([DECISIONS.md](DECISIONS.md) D029).
+- **Phase 10** has not started. Linux x86-64 is the only target.
+- **Phase 11** waits on language features Dovik does not have, user-defined types chief among them.
