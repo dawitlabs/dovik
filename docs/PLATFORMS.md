@@ -79,6 +79,9 @@ Unsupported features should produce clear diagnostics rather than failing unpred
 - Which processor architectures should be supported?
 - How should mobile applications integrate with native platform APIs?
 - Should WebAssembly be a primary target or a separate compilation target?
+  [PROPOSAL-WASM.md](PROPOSAL-WASM.md) argues for a separate one, via WASI, and names the
+  decision that gates it: stack exhaustion ([SPEC.md](SPEC.md) 15.2) is detected with a signal
+  handler, and WebAssembly has no signals.
 - How should platform-specific dependencies be managed?
 
 ## 9. Status

@@ -69,6 +69,7 @@ cd compiler && cargo build --release && cd ..
 | [docs/PLATFORMS.md](docs/PLATFORMS.md) | Target platforms, current and planned |
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | How performance is measured, and what it measured |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Implementation phases and what each one depends on |
+| [docs/PROPOSAL-WASM.md](docs/PROPOSAL-WASM.md) | A WebAssembly target: what breaks, and the decision that gates it |
 
 ## Project principles
 

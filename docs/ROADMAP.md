@@ -117,13 +117,13 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 - Evaluate additional processor architectures and operating systems.
 - Add Windows and macOS support.
-- Investigate WebAssembly.
+- Investigate WebAssembly. *(designed, not started — [PROPOSAL-WASM.md](PROPOSAL-WASM.md))*
 - Design mobile platform integrations.
 - Validate portability of the runtime and standard library.
 
 **Completion criterion:** Each new target has working builds, tests, and documented limitations. No document may describe a target as supported before that point ([PLATFORMS.md](PLATFORMS.md)).
 
-**Blocked by:** cross-compilation strategy ([ARCHITECTURE.md](ARCHITECTURE.md) section 7) and runtime portability. Mobile and WebAssembly each need design work that has not started.
+**Blocked by:** cross-compilation strategy ([ARCHITECTURE.md](ARCHITECTURE.md) section 7) and runtime portability. WebAssembly now has a design ([PROPOSAL-WASM.md](PROPOSAL-WASM.md)) and is blocked on one decision in it: stack exhaustion cannot be detected by a signal handler on a target with no signals, so either the backend emits a depth check or [SPEC.md](SPEC.md) 15.2 is amended. Mobile still has no design.
 
 ## Phase 11: Self-Hosting
 
