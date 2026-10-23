@@ -1,6 +1,6 @@
 # Dovik Development Roadmap
 
-**Status:** Phases 1 through 7 and 9 are complete, and Phase 10 has begun. See **Status** at the end.
+**Status:** Phases 1 through 9 are complete, and Phase 10 has begun. See **Status** at the end.
 
 Phases were gated by the open language questions in [SPEC.md](SPEC.md) section 21. **All of them are now resolved** ([DECISIONS.md](DECISIONS.md) D013, D019, D020, D022, D023, D025, D026, D027), so no phase is blocked on a language question any more. What remains is implementation.
 
@@ -94,10 +94,10 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 - Establish repeatable benchmarks. *(done — `bench/run.py`, results with their environment)*
 - Profile compiler and runtime performance. *(done)*
 - Optimize based on measured bottlenecks. *(done — and two optimizations were measured and declined)*
-- Test memory safety and runtime correctness. *(partly — the test suite covers correctness; no sanitizer or fuzzing run exists)*
-- Establish release and compatibility practices. *(not started)*
+- Test memory safety and runtime correctness. *(done — `tests/sanitize.rs` runs the runtime under ASan and UBSan, `tests/fuzz.rs` mutates source through the frontend, and both fail when their bug is reintroduced)*
+- Establish release and compatibility practices. *(done — [RELEASES.md](RELEASES.md) and [../CHANGELOG.md](../CHANGELOG.md))*
 
-**Completion criterion:** Performance claims are supported by reproducible results published with their environment and configuration ([BENCHMARKS.md](BENCHMARKS.md)). Until this phase completes, Dovik publishes no performance numbers at all.
+**Completion criterion:** Performance claims are supported by reproducible results published with their environment and configuration ([BENCHMARKS.md](BENCHMARKS.md)). Until this phase completes, Dovik publishes no performance numbers at all. **Met.** Sections 11 and 12 carry their environment, and section 12 carries the host-startup floor that makes its numbers readable rather than flattering.
 
 **Blocked by:** nothing in section 21. Reclamation-pause measurement depends on the memory strategy chosen in Phase 6.
 
@@ -150,11 +150,11 @@ The backend emits LLVM IR as text and links it with `clang` at `-O2 -flto=full`;
 
 This roadmap is provisional. Phases may overlap or change as technical constraints become clearer. Completion is determined by working implementations and tests, not by documentation alone.
 
-Current position: **Phases 1 through 7 and 9 are complete, and Phase 10 has its first target beyond Linux. Phase 8 is partly done, and Phase 11 has not started.**
+Current position: **Phases 1 through 9 are complete, and Phase 10 has its first target beyond Linux. Phase 11 has not started.**
 
 Dovik programs compile to native Linux x86-64 executables and run. The frontend, type checker,
 IR, LLVM backend, C runtime, standard library increments, module system, optional types and the
-`dovik` CLI all exist, under 401 tests. Every language question [SPEC.md](SPEC.md) section 21
+`dovik` CLI all exist, under 405 tests. Every language question [SPEC.md](SPEC.md) section 21
 raised is resolved, so nothing is blocked on a decision.
 
 What is actually left:
@@ -163,9 +163,10 @@ What is actually left:
   [SPEC.md](SPEC.md) section 14 only because no Dovik program can build a reference cycle. A
   test holds that precondition, so adding a named type, a recursive type, a closure or a
   reference cell fails the suite rather than silently leaking.
-- **Phase 8** has repeatable benchmarks and recorded results ([BENCHMARKS.md](BENCHMARKS.md));
-  the release and compatibility practices it also asks for are not established, and the memory
-  safety it asks to test has no sanitizer or fuzzing run behind it.
+- **Phase 8 is complete.** Benchmarks are repeatable and recorded for both targets
+  ([BENCHMARKS.md](BENCHMARKS.md) 11 and 12), the runtime runs under ASan and UBSan, the
+  frontend is fuzzed, and [RELEASES.md](RELEASES.md) is the release and compatibility policy.
+  What remains is a first tag, which is a decision rather than work.
 - **Every error in [SPEC.md](SPEC.md) 15.1 and 15.2 now has a test**, all 88 of them. Out of
   memory was the last, and needed `DOVIK_ALLOC_LIMIT` ([RUNTIME.md](RUNTIME.md) section 11) to
   become reachable on purpose.

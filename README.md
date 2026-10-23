@@ -4,7 +4,7 @@ Dovik is an experimental, statically typed programming language designed for sim
 
 ## Status
 
-**Working, and narrow.** Dovik programs compile to native Linux x86-64 executables and run, and `--target wasm` builds a WebAssembly module that runs under a WASI host. The compiler, the C runtime, and a first standard library all exist, under 401 tests.
+**Working, and narrow.** Dovik programs compile to native Linux x86-64 executables and run, and `--target wasm` builds a WebAssembly module that runs under a WASI host. The compiler, the C runtime, and a first standard library all exist, under 405 tests.
 
 What is deliberately missing: user-defined types, networking, concurrency, a project manifest, dependency management, and reclamation of reference cycles. Windows, macOS and mobile are not targets. [docs/ROADMAP.md](docs/ROADMAP.md) tracks each one. No published performance claim exists outside [docs/BENCHMARKS.md](docs/BENCHMARKS.md), which carries the environment it was measured in.
 
@@ -76,7 +76,9 @@ node --no-warnings compiler/tests/wasi-host.mjs fib.wasm 10
 | [docs/PLATFORMS.md](docs/PLATFORMS.md) | Target platforms, current and planned |
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | How performance is measured, and what it measured |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Implementation phases and what each one depends on |
-| [docs/PROPOSAL-WASM.md](docs/PROPOSAL-WASM.md) | A WebAssembly target: what breaks, and the decision that gates it |
+| [docs/PROPOSAL-WASM.md](docs/PROPOSAL-WASM.md) | The WebAssembly target: what broke, and the limitation that remains |
+| [docs/RELEASES.md](docs/RELEASES.md) | Versioning, what counts as breaking, and what a release requires |
+| [CHANGELOG.md](CHANGELOG.md) | What changed, and whether it breaks anything |
 
 ## Project principles
 
