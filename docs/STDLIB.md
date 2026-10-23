@@ -143,6 +143,10 @@ a seventh, `DVK5007`. That list is normative, so the addition is recorded there 
 The program's own name is deliberately not argument zero, because a program that wants its
 arguments almost never wants its name, and the alternative makes every loop start at one.
 
+An executable built with `dovik build` is given its arguments by whatever started it. Under
+`dovik run` they go after `--`, which is where `dovik` stops reading options of its own
+([CLI.md](CLI.md) 5).
+
 ## 7. Text Operations
 
 Scalar-based throughout, per [SPEC.md](SPEC.md) 10.4: every index and length counts Unicode

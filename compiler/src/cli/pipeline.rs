@@ -255,7 +255,7 @@ pub fn run(path: &str, _source: &str, options: &Options) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let status = Command::new(&target).status();
+    let status = Command::new(&target).args(&options.program_args).status();
     let _ = std::fs::remove_file(&target);
 
     match status {

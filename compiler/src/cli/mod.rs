@@ -13,7 +13,7 @@ dovik — the Dovik compiler
 
 usage:
   dovik build <file.dovk> [-o <out>] [options]
-  dovik run <file.dovk> [options]
+  dovik run <file.dovk> [options] [-- <args for the program>]
   dovik check <file.dovk> [options]
   dovik format <file.dovk> [--check] [--write]
   dovik test <file.dovk>
@@ -29,6 +29,7 @@ options:
   --no-opt        skip optimization
   --write         rewrite the file in place (format only)
   --check         exit 1 if the file is not already formatted (format only)
+  --              stop reading options; the rest goes to the program (run only)
 
   --omit-runtime-checks-for-benchmarking
                   build without the overflow, zero-divisor and conversion
@@ -45,6 +46,7 @@ pub struct Options {
     pub write: bool,
     pub check_only: bool,
     pub omit_checks: bool,
+    pub program_args: Vec<String>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -95,6 +97,7 @@ fn with_file(
         write: false,
         check_only: false,
         omit_checks: false,
+        program_args: Vec::new(),
     };
     let mut path = None;
     let mut pending = args.iter();
@@ -110,11 +113,19 @@ fn with_file(
             "--check" => options.check_only = true,
             "--omit-runtime-checks-for-benchmarking" => options.omit_checks = true,
             "-o" => options.output = pending.next().cloned(),
+            "--" => {
+                options.program_args = pending.cloned().collect();
+                break;
+            }
             other if other.starts_with('-') => {
                 eprintln!("unknown option `{other}`");
                 return ExitCode::FAILURE;
             }
-            other => path = Some(other.to_string()),
+            other if path.is_none() => path = Some(other.to_string()),
+            other => {
+                eprintln!("unexpected argument `{other}`; pass program arguments after `--`");
+                return ExitCode::FAILURE;
+            }
         }
     }
 

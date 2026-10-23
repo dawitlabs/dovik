@@ -44,7 +44,13 @@ cd compiler && cargo build --release && cd ..
 ./fib 10
 ```
 
-`dovik run` compiles to a temporary executable and runs it in one step. `dovik check` stops after type checking, `dovik format` prints a formatted file or rewrites it with `--write`, and `dovik test` runs every `test_*` function in its own process. `--json` turns every diagnostic into one JSON object per line. [docs/CLI.md](docs/CLI.md) is the full interface, and [examples/](examples/) is the place to start reading Dovik itself.
+`dovik run` compiles to a temporary executable and runs it in one step, with the program's own arguments after `--`:
+
+```
+./compiler/target/release/dovik run examples/fib.dovk -- 10
+```
+
+`dovik check` stops after type checking, `dovik format` prints a formatted file or rewrites it with `--write`, and `dovik test` runs every `test_*` function in its own process. `--json` turns every diagnostic into one JSON object per line. [docs/CLI.md](docs/CLI.md) is the full interface, and [examples/](examples/) is the place to start reading Dovik itself.
 
 ## Documentation
 

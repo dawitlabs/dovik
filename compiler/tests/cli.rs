@@ -414,3 +414,50 @@ fn read_input_consumes_standard_input() {
     let finished = child.wait_with_output().expect("wait");
     assert_eq!(String::from_utf8_lossy(&finished.stdout), "ONE\nTWO\n");
 }
+
+#[test]
+fn run_forwards_arguments_after_a_double_dash() {
+    let sandbox = Sandbox::new("run_forwards_arguments");
+    let source = "\
+i = 0
+
+while i < argument_count():
+    print(argument(i))
+    i = i + 1
+";
+    let path = sandbox.write("argv.dovk", source);
+    let file = path.to_str().expect("path");
+
+    let result = sandbox.dovik(&["run", file, "--", "first", "second"]);
+    assert_eq!(result.code, 0, "{:?}", result.stderr);
+    assert_eq!(result.stdout, "first\nsecond\n");
+
+    let none = sandbox.dovik(&["run", file]);
+    assert_eq!(none.code, 0, "{:?}", none.stderr);
+    assert_eq!(none.stdout, "");
+}
+
+#[test]
+fn an_option_meant_for_the_program_is_not_read_as_our_own() {
+    let sandbox = Sandbox::new("run_forwards_options");
+    let path = sandbox.write("argv.dovk", "print(argument(0))\n");
+    let result = sandbox.dovik(&["run", path.to_str().expect("path"), "--", "--json"]);
+
+    assert_eq!(result.code, 0, "{:?}", result.stderr);
+    assert_eq!(result.stdout, "--json\n");
+}
+
+#[test]
+fn a_second_file_is_rejected_rather_than_silently_replacing_the_first() {
+    let sandbox = Sandbox::new("second_file_is_rejected");
+    let first = sandbox.write("first.dovk", "print(1)\n");
+    let second = sandbox.write("second.dovk", "print(2)\n");
+    let result = sandbox.dovik(&[
+        "build",
+        first.to_str().expect("path"),
+        second.to_str().expect("path"),
+    ]);
+
+    assert_eq!(result.code, 1);
+    assert!(result.stderr.contains("unexpected argument"), "{:?}", result.stderr);
+}

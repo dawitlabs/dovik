@@ -20,6 +20,8 @@ Compile a Dovik program or project into an executable.
 
 Compile and execute a Dovik program. This compiles first and then runs; Dovik has no interpreter or REPL ([DECISIONS.md](DECISIONS.md) D016).
 
+Arguments for the program go after `--`: `dovik run fib.dovk -- 10`. Everything before `--` is read by `dovik`, everything after is read by the program through `argument_count` and `argument` ([STDLIB.md](STDLIB.md) 6).
+
 ### `dovik check`
 
 Check syntax, names, and types without producing a final executable.
@@ -114,8 +116,15 @@ there is no `test` keyword and no attribute syntax.
 stem. `--emit-llvm`, `--emit-ir` and `--emit-tokens` write that stage to stdout
 instead. `--no-opt` skips optimization.
 
-`dovik run <file>` builds to a temporary path, executes it, forwards its exit
-code, and removes it. It does not interpret ([DECISIONS.md](DECISIONS.md) D016).
+`dovik run <file> [-- <args>]` builds to a temporary path, executes it, forwards
+its exit code, and removes it. It does not interpret
+([DECISIONS.md](DECISIONS.md) D016). `--` ends `dovik`'s own options, so a
+program may be passed a flag of its own: `dovik run f.dovk -- --json` gives the
+program `--json`.
+
+A second file path is an error rather than a replacement for the first. Only one
+entry file is ever compiled, and the rest of a program is found by following its
+imports ([SPEC.md](SPEC.md) 22).
 
 `dovik check <file>` runs every pass and reports diagnostics without generating
 code. It prints nothing and exits 0 when the program is valid.
