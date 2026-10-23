@@ -129,6 +129,12 @@ imports ([SPEC.md](SPEC.md) 22).
 `dovik check <file>` runs every pass and reports diagnostics without generating
 code. It prints nothing and exits 0 when the program is valid.
 
+`--depth-guard` makes the program count its own call depth instead of relying on
+a signal handler to catch stack exhaustion, and `DOVIK_MAX_DEPTH` sets the limit
+it compares against. Both exist for targets without signals
+([DECISIONS.md](DECISIONS.md) D030); a native build needs neither and emits no
+guard.
+
 Exit codes are 0 on success and 1 on any failure, including a runtime error in a
 program started by `dovik run`.
 

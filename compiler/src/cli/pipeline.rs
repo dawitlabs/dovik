@@ -295,7 +295,11 @@ pub fn compile(graph: &Graph, options: &Options) -> Result<Compiled, Vec<Diagnos
         }
     }
 
-    let llvm = backend::emit_with(&program, sources, !options.omit_checks);
+    let llvm = match options.depth_guard {
+        true => backend::emit_guarded(&program, sources),
+        false => backend::emit_with(&program, sources, !options.omit_checks),
+    };
+
     Ok(Compiled { program, llvm })
 }
 

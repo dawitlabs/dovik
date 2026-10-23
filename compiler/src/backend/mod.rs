@@ -1,5 +1,6 @@
 mod builtin;
 mod purity;
+mod recursion;
 pub(crate) mod ownership;
 mod checks;
 mod collection;
@@ -43,6 +44,8 @@ declare i8 @dovik_optional_eq(i8, i64, i64)
 declare void @dovik_retain(i8, i64)
 declare void @dovik_release(i8, i64)
 declare void @dovik_report_leaks()
+declare void @dovik_enter()
+declare void @dovik_leave()
 declare i64 @dovik_test_index()
 declare void @dovik_start()
 declare void @dovik_set_arguments(i32, ptr)
@@ -90,6 +93,10 @@ pub fn emit(program: &Program, sources: &SourceMap) -> String {
     emit_with(program, sources, true)
 }
 
+pub fn emit_guarded(program: &Program, sources: &SourceMap) -> String {
+    emit_configured(program, sources, true, true)
+}
+
 pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> String {
     let mut emitter = Emitter {
         program,
@@ -99,6 +106,8 @@ pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> St
         label: String::new(),
         checks: true,
         pure: purity::classify(program),
+        recursive: Vec::new(),
+        guarding: false,
         tests: tests.to_vec(),
     };
 
@@ -107,6 +116,15 @@ pub fn emit_tests(program: &Program, sources: &SourceMap, tests: &[usize]) -> St
 }
 
 pub fn emit_with(program: &Program, sources: &SourceMap, checks: bool) -> String {
+    emit_configured(program, sources, checks, false)
+}
+
+fn emit_configured(
+    program: &Program,
+    sources: &SourceMap,
+    checks: bool,
+    depth_guard: bool,
+) -> String {
     let mut emitter = Emitter {
         program,
         sources,
@@ -115,6 +133,11 @@ pub fn emit_with(program: &Program, sources: &SourceMap, checks: bool) -> String
         label: String::new(),
         checks,
         pure: purity::classify(program),
+        recursive: match depth_guard {
+            true => recursion::classify(program),
+            false => Vec::new(),
+        },
+        guarding: false,
         tests: Vec::new(),
     };
 
@@ -130,6 +153,8 @@ pub(crate) struct Emitter<'a> {
     pub(crate) label: String,
     pub(crate) checks: bool,
     pub(crate) pure: Vec<bool>,
+    pub(crate) recursive: Vec<bool>,
+    pub(crate) guarding: bool,
     pub(crate) tests: Vec<usize>,
 }
 
@@ -222,6 +247,13 @@ impl Emitter<'_> {
         ));
 
         self.line("entry:");
+
+        self.guarding = self.recursive.get(index).copied().unwrap_or(false);
+
+        if self.guarding {
+            self.line("  call void @dovik_enter()");
+        }
+
         for (slot, local) in function.locals.iter().enumerate() {
             let ty = llvm_type(&local.ty);
             self.line(&format!("  %s{slot} = alloca {ty}"));
@@ -300,6 +332,10 @@ impl Emitter<'_> {
     }
 
     fn release_frame(&mut self, function: &Function) {
+        if self.guarding {
+            self.line("  call void @dovik_leave()");
+        }
+
         for (slot, local) in function.locals.iter().enumerate() {
             if !is_reference(&local.ty) {
                 continue;

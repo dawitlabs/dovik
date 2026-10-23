@@ -1,8 +1,10 @@
 # Proposal: WebAssembly as a Target
 
-**Status:** **Draft, not ratified and not implemented.** No WebAssembly build exists. This is
-the design work [ROADMAP.md](ROADMAP.md) Phase 10 and [PLATFORMS.md](PLATFORMS.md) section 8
-record as not started. Nothing here is authoritative; [SPEC.md](SPEC.md) is.
+**Status:** **Design accepted; one of five steps built.** No WebAssembly build exists, and
+none can until the sysroot in section 4 step 2 is a decision someone makes. The one part that
+did not need it — stack exhaustion without signals — is settled as
+[DECISIONS.md](DECISIONS.md) D030 and implemented. Nothing here is authoritative;
+[SPEC.md](SPEC.md) is.
 
 Everything measured below was measured on this machine with clang 22.1.8, and each number
 says how.
@@ -58,10 +60,10 @@ compilation target*, not a primary one.
 
 ## 3. What breaks that is not a header
 
-Three things survive neither route unchanged, and the first is a specification problem rather
-than a porting problem.
+Three things survive neither route unchanged. The first looked like a specification problem,
+and turned out to be a missing mechanism; the other two are still open.
 
-### 3.1 Stack exhaustion cannot be detected the way it is now
+### 3.1 Stack exhaustion cannot be detected the way it is now — **resolved, D030**
 
 [SPEC.md](SPEC.md) 15.2 requires that call-stack exhaustion "report what failed" and
 "terminate predictably — never continue with a corrupted value, and never fault." The runtime
@@ -73,13 +75,18 @@ WebAssembly has no signals, no `sigaltstack`, and no faulting address to inspect
 the wasm call stack is an unrecoverable trap: the module aborts, and the host sees a trap with
 no Dovik diagnostic attached. `DVK5009` would simply not be reported.
 
-So a WASI build either violates 15.2 or the compiler emits an explicit depth check. The second
-is a code-generation change with a measurable cost on every call, on every target or on one —
-and "observable program behavior does not depend on which algorithm the runtime uses"
-([SPEC.md](SPEC.md) 14) has a sibling expectation here that a diagnostic does not depend on
-the target either.
+This was recorded here as the decision gating everything else. It was already decided, by the
+paragraph after 15.2's list: the depth "may differ between a native build and any other
+execution of the same program", and "what is specified is the failure: a diagnostic and a
+non-zero exit, not a signal." The specification never promised the mechanism.
 
-**This is the decision that gates the rest.** It is not settled by picking a toolchain.
+So no amendment, and **the mechanism now exists** ([DECISIONS.md](DECISIONS.md) D030):
+`--depth-guard` emits an explicit counter, limited by `DOVIK_MAX_DEPTH`, in exactly the
+functions that can reach themselves — which the backend already knows, because it computes
+call reachability for purity. `fib(30)` costs about 5%; a default build emits no guard at all.
+
+It is tested on Linux today, which is the point: when a sysroot arrives, this part is done
+rather than discovered.
 
 ### 3.2 Reference counting is fine; the fault handler is not
 
@@ -101,8 +108,8 @@ footnote.
 
 Ordered, with the gate first:
 
-1. **Decide 3.1.** Either an explicit depth counter in the backend, or an amendment to 15.2
-   admitting a target where stack exhaustion traps without a diagnostic. No code before this.
+1. ~~**Decide 3.1.**~~ **Done** — [DECISIONS.md](DECISIONS.md) D030, and the counter is built
+   and tested.
 2. **Add the dependency.** `wasi-sdk` for the sysroot and one of `wasmtime`/`wasmer` to
    execute. Both are new build-time dependencies for the project and neither is needed to
    build for Linux.
@@ -115,8 +122,10 @@ Ordered, with the gate first:
    passing test suite, or the target is not supported. That means running the existing native
    corpus under a wasm runtime, not merely linking a module.
 
-Steps 3 through 5 are the work. Step 1 is the decision, and step 2 is a question for whoever
-owns what this repository depends on.
+Step 1 is done. Steps 3 through 5 are the work, and none of them can be *verified* before step
+2, which is why none of them has been written: [PLATFORMS.md](PLATFORMS.md) section 9 counts a
+target as supported only once it builds and passes tests, and scaffolding that cannot be run is
+worth less than the diff it costs.
 
 ## 5. What this deliberately leaves out
 
@@ -129,8 +138,10 @@ owns what this repository depends on.
 
 ## 6. Open decisions
 
-- Stack exhaustion under a target with no signals (3.1). **Gates everything.**
-- Whether the project takes on `wasi-sdk` and a wasm runtime as dependencies.
+- ~~Stack exhaustion under a target with no signals (3.1).~~ Settled as
+  [DECISIONS.md](DECISIONS.md) D030 and implemented.
+- Whether the project takes on `wasi-sdk` and a wasm runtime as dependencies. **This is now
+  the only thing blocking a build.**
 - Whether per-target standard library availability is documented per function or per platform.
-- Whether a depth check, if chosen, is emitted on every target for one diagnostic or only
-  where signals are unavailable.
+- Whether the default depth limit of 100,000 is right for a wasm host, which cannot be
+  answered without one to measure.

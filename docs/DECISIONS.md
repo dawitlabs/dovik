@@ -425,3 +425,21 @@ So caching the frontend could save at most 85 ms per build, and less than that i
 Multi-file projects already work without any of this ([SPEC.md](SPEC.md) 22), which is what makes "not yet" an honest answer rather than a deferral of something missing.
 
 **Status:** Accepted. Recorded in [CLI.md](CLI.md) 5 and 6.
+
+## D030: Stack Exhaustion Is Detected Per Target, by a Signal Handler or by a Counter
+
+**Decision:** How call-stack exhaustion is detected is a per-target choice, not a language question. A target with signals keeps the `SIGSEGV` handler (D022). A target without them — WebAssembly is the first ([PROPOSAL-WASM.md](PROPOSAL-WASM.md) 3.1) — gets an explicit depth counter, emitted by `--depth-guard` and limited by `DOVIK_MAX_DEPTH`. Both report `DVK5009` and exit 1. [SPEC.md](SPEC.md) 15.2 does not change.
+
+**Reason:** 15.2 already settled this, in the paragraph after the list: "The depth at which recursion exhausts the stack ... [is] implementation-defined and may differ between a native build and any other execution of the same program. What is specified is the failure: a diagnostic and a non-zero exit, not a signal."
+
+So the specification never promised the *mechanism*, and it explicitly allowed the *threshold* to differ between a native build and anything else. A WebAssembly build that reports `DVK5009` from a counter at a different depth than a native build reports it from a fault is conforming. The apparent conflict — that WebAssembly has no signals, no `sigaltstack`, and no faulting address to inspect, so `DVK5009` could not be reported at all — was a missing mechanism, not a specification defect.
+
+**The counter is nearly free, because the call graph says where it is needed.** Only a function that can reach itself can drive unbounded depth, and the backend already computes reachability over the IR's calls for purity. A function outside every cycle gets nothing. The increment rides the prologue and the decrement rides `release_frame`, which already runs on every exit path because reference counting needs it there, so no new exit bookkeeping was added.
+
+**Measured:** `fib(30)`, which is nothing but recursion, went from **9.8 ms to 10.3 ms** — about 5%. Every non-recursive function, and every default build, emits no guard call at all and is byte-identical to before.
+
+**Trade-off:** Two mechanisms for one diagnostic, and a default depth limit of 100,000 that is a guess rather than a measurement — it has to sit below the real limit to be useful, and the real limit depends on the host. `DOVIK_MAX_DEPTH` exists because of that, and because a test needs to provoke exhaustion cheaply.
+
+The alternative was to emit the counter on every target and delete the signal handler. That trades a real 5% on recursive native code, plus the loss of `DVK9001` — the "the runtime faulted, this is a compiler defect" path the handler also serves — for having one mechanism instead of two. Not worth it while native is the only shipping target.
+
+**Status:** Accepted. Resolves [PROPOSAL-WASM.md](PROPOSAL-WASM.md) section 3.1, which recorded it as the decision gating a WebAssembly target. No [SPEC.md](SPEC.md) change; recorded in [CLI.md](CLI.md) 5 and [RUNTIME.md](RUNTIME.md) 11.

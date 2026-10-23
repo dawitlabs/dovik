@@ -421,13 +421,26 @@ print(len(seen))
 }
 
 fn run_with_env(source: &str, name: &str, env: &[(&str, &str)]) -> (i32, String) {
+    run_configured(source, name, env, false)
+}
+
+fn run_configured(
+    source: &str,
+    name: &str,
+    env: &[(&str, &str)],
+    depth_guard: bool,
+) -> (i32, String) {
     let program = lowered(source, true);
     let dir = std::env::temp_dir().join("dovik-native-tests");
     std::fs::create_dir_all(&dir).expect("temp dir");
     let ll = dir.join(format!("env-{name}.ll"));
     let binary = dir.join(format!("env-{name}"));
-    std::fs::write(&ll, backend::emit(&program, &SourceMap::single("test.dovk", source)))
-        .expect("write ir");
+    let sources = SourceMap::single("test.dovk", source);
+    let llvm = match depth_guard {
+        true => backend::emit_guarded(&program, &sources),
+        false => backend::emit(&program, &sources),
+    };
+    std::fs::write(&ll, llvm).expect("write ir");
 
     let build = Command::new("clang")
         .args(["-O2", "-flto=full"])
@@ -480,5 +493,79 @@ print(len(xs))
     assert!(
         !stderr.contains(" at "),
         "out of memory has no source location: {stderr:?}"
+    );
+}
+
+const RECURSIVE: &str = "\
+function plain(a: Int) -> Int:
+    return a * 2
+
+function deep(n: Int) -> Int:
+    if n < 1:
+        return 0
+
+    if n == 7:
+        return deep(n - 1)
+
+    return 1 + deep(n - 1)
+
+print(plain(deep(100)))
+";
+
+#[test]
+fn the_depth_guard_reports_exhaustion_without_a_signal() {
+    let (code, stderr) = run_configured(RECURSIVE, "depth-trap", &[("DOVIK_MAX_DEPTH", "10")], true);
+
+    assert_eq!(code, 1, "{stderr:?}");
+    assert!(stderr.contains("DVK5009"), "{stderr:?}");
+    assert!(stderr.contains("recursion too deep"), "{stderr:?}");
+    assert!(!stderr.contains(" at "), "exhaustion has no location: {stderr:?}");
+}
+
+#[test]
+fn the_depth_counter_is_balanced_on_every_exit_path() {
+    let source = "\
+function deep(n: Int) -> Int:
+    if n < 1:
+        return 0
+
+    if n == 7:
+        return deep(n - 1)
+
+    return 1 + deep(n - 1)
+
+total = 0
+i = 0
+
+while i < 2000:
+    total = total + deep(100)
+    i = i + 1
+
+print(total)
+";
+    let (code, stderr) = run_configured(source, "depth-balance", &[("DOVIK_MAX_DEPTH", "150")], true);
+
+    assert_eq!(
+        code, 0,
+        "2000 rounds at depth 100 under a limit of 150 means a missing decrement: {stderr:?}"
+    );
+}
+
+#[test]
+fn only_a_function_that_can_reach_itself_is_guarded() {
+    let program = lowered(RECURSIVE, true);
+    let sources = SourceMap::single("test.dovk", RECURSIVE);
+
+    let plain = backend::emit(&program, &sources);
+    assert!(
+        !plain.contains("  call void @dovik_enter()"),
+        "a default build must not pay for the guard"
+    );
+
+    let guarded = backend::emit_guarded(&program, &sources);
+    assert_eq!(
+        guarded.matches("  call void @dovik_enter()").count(),
+        1,
+        "exactly one of the three functions recurses"
     );
 }

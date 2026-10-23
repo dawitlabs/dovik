@@ -30,6 +30,9 @@ options:
   --write         rewrite the file in place (format only)
   --check         exit 1 if the file is not already formatted (format only)
   --              stop reading options; the rest goes to the program (run only)
+  --depth-guard   check recursion depth in the program instead of relying on a
+                  signal handler. Needed for a target without signals; see
+                  PROPOSAL-WASM.md section 3.1
 
   --omit-runtime-checks-for-benchmarking
                   build without the overflow, zero-divisor and conversion
@@ -46,6 +49,7 @@ pub struct Options {
     pub write: bool,
     pub check_only: bool,
     pub omit_checks: bool,
+    pub depth_guard: bool,
     pub program_args: Vec<String>,
 }
 
@@ -97,6 +101,7 @@ fn with_file(
         write: false,
         check_only: false,
         omit_checks: false,
+        depth_guard: false,
         program_args: Vec::new(),
     };
     let mut path = None;
@@ -112,6 +117,7 @@ fn with_file(
             "--write" => options.write = true,
             "--check" => options.check_only = true,
             "--omit-runtime-checks-for-benchmarking" => options.omit_checks = true,
+            "--depth-guard" => options.depth_guard = true,
             "-o" => options.output = pending.next().cloned(),
             "--" => {
                 options.program_args = pending.cloned().collect();

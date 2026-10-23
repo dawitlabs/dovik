@@ -187,6 +187,37 @@ static void install_fault_handler(void) {
     sigaction(SIGBUS, &action, NULL);
 }
 
+static uint64_t call_depth = 0;
+static uint64_t depth_limit = 0;
+
+static void read_depth_limit(void) {
+    static int read = 0;
+    if (read) return;
+    read = 1;
+
+    depth_limit = 100000;
+    const char *text = getenv("DOVIK_MAX_DEPTH");
+    if (text == NULL) return;
+
+    char *end = NULL;
+    unsigned long long value = strtoull(text, &end, 10);
+    if (end != text && *end == '\0' && value > 0) depth_limit = (uint64_t)value;
+}
+
+void dovik_enter(void) {
+    read_depth_limit();
+    call_depth += 1;
+
+    if (call_depth <= depth_limit) return;
+
+    flush_output();
+    fflush(stdout);
+    report_without_location("DVK5009", "recursion too deep: the call stack is exhausted");
+    _exit(1);
+}
+
+void dovik_leave(void) { call_depth -= 1; }
+
 static const char *trap_code(uint32_t code) {
     switch (code) {
         case 0: return "DVK5001";

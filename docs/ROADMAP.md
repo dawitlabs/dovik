@@ -154,7 +154,7 @@ Current position: **Phases 1 through 7 and 9 are complete. Phase 8 is partly don
 
 Dovik programs compile to native Linux x86-64 executables and run. The frontend, type checker,
 IR, LLVM backend, C runtime, standard library increments, module system, optional types and the
-`dovik` CLI all exist, under 394 tests. Every language question [SPEC.md](SPEC.md) section 21
+`dovik` CLI all exist, under 397 tests. Every language question [SPEC.md](SPEC.md) section 21
 raised is resolved, so nothing is blocked on a decision.
 
 What is actually left:

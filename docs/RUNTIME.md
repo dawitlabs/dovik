@@ -134,6 +134,18 @@ its own binding, or a reference cell — breaks it, and reclamation has to be re
 in the same change. Nothing in the compiler detects this; it is a standing obligation
 on whoever adds such a feature.
 
+### Detecting stack exhaustion without signals
+
+The fault handler above needs signals, an alternate signal stack, and a faulting address to
+compare against the thread's stack bounds. A target with none of those — WebAssembly is the
+first — gets `--depth-guard` instead: the backend increments a counter in the prologue of
+every function that can reach itself and decrements it in `release_frame`, which already runs
+on every exit path. Passing `DOVIK_MAX_DEPTH`, default 100,000, reports `DVK5009` and exits 1.
+
+Only a function on a call cycle is guarded, because only one can drive unbounded depth, and
+the backend already computes call reachability for purity. A default build emits no guard at
+all. [DECISIONS.md](DECISIONS.md) D030 has the measurement and the trade.
+
 ### Forcing an allocation failure
 
 `DOVIK_ALLOC_LIMIT=<bytes>` caps the **total** bytes `checked_alloc` hands out over a

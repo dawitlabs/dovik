@@ -4,7 +4,7 @@ Dovik is an experimental, statically typed programming language designed for sim
 
 ## Status
 
-**Working, and narrow.** Dovik programs compile to native Linux x86-64 executables and run. The compiler, the C runtime, and a first standard library all exist, under 394 tests.
+**Working, and narrow.** Dovik programs compile to native Linux x86-64 executables and run. The compiler, the C runtime, and a first standard library all exist, under 397 tests.
 
 What is deliberately missing: user-defined types, any target other than Linux x86-64, a project manifest, dependency management, and reclamation of reference cycles. [docs/ROADMAP.md](docs/ROADMAP.md) tracks each one. No published performance claim exists outside [docs/BENCHMARKS.md](docs/BENCHMARKS.md), which carries the environment it was measured in.
 
