@@ -10,9 +10,10 @@ cd compiler && cargo build && cd ..
 
 ## lib/text.dovk
 
-`wordcount.dovk` and `upper.dovk` import from it ([../docs/SPEC.md](../docs/SPEC.md) 22). It declares `lines`,
-`flatten`, and `count_words`, and nothing else in it is imported — a module exports every
-module-scope declaration, and the import list at each use site is what decides what arrives.
+`wordcount.dovk` and `upper.dovk` import from it ([../docs/SPEC.md](../docs/SPEC.md) 22). It
+declares `lines`, `flatten`, and `count_words`, and nothing else in it is imported — a module
+exports every module-scope declaration, and the import list at each use site is what decides
+what arrives.
 
 `dovik build examples/wordcount.dovk` finds it by following the import; there is no manifest
 and nothing to configure. The path in the import is relative to the file that writes it.
