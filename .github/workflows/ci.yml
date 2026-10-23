@@ -17,10 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install clang
+      - name: Install the LLVM toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang lld
+          sudo apt-get install --yes clang lld llvm
+          clang --version | head -1
+          llc --version | head -2
 
       - name: Install the WASI sysroot
         run: |
