@@ -24,9 +24,10 @@ jobs:
 
       - name: Install the WASI sysroot
         run: |
+          mkdir -p "$RUNNER_TEMP/wasi-sysroot"
           curl --fail --location --silent --show-error \
             "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sysroot-${WASI_SDK_RELEASE}.tar.gz" \
-            | tar --extract --gzip --directory "$RUNNER_TEMP"
+            | tar --extract --gzip --strip-components=1 --directory "$RUNNER_TEMP/wasi-sysroot"
           echo "DOVIK_WASI_SYSROOT=$RUNNER_TEMP/wasi-sysroot" >> "$GITHUB_ENV"
 
       - name: Check the sysroot arrived
