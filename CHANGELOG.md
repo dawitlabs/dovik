@@ -3,7 +3,10 @@
 Every entry records what changed and whether it breaks a program that worked before, per
 [docs/RELEASES.md](docs/RELEASES.md). Nothing has been tagged yet.
 
-## Unreleased
+## 0.2.0 — 2026-10-23
+
+First tagged release. 0.1.0 was never tagged; it is the version the tree carried while the
+compiler was being built, and this is the first commit that claims to be a release.
 
 ### Added
 
@@ -36,4 +39,15 @@ Every entry records what changed and whether it breaks a program that worked bef
 ### Changed
 
 - Nothing breaking. Every change above either adds a flag, fixes a defect, or touches a
-  documented test hook.
+  documented test hook — so this is a `MINOR` bump for the features, not for a break
+  ([docs/RELEASES.md](docs/RELEASES.md) 1).
+
+### Designed, not built
+
+Four proposals, each recommending against building the thing yet, each with the measurement
+that makes the recommendation checkable:
+[concurrency](docs/PROPOSAL-CONCURRENCY.md) (atomic reference counts cost up to +74%),
+[networking](docs/PROPOSAL-NETWORKING.md) (TLS would be the first dependency),
+[targets](docs/PROPOSAL-TARGETS.md) (macOS cannot be cross-compiled from Linux),
+[self-hosting](docs/PROPOSAL-SELF-HOSTING.md) (90 type declarations the language cannot
+express).
