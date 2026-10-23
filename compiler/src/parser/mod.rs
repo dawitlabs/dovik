@@ -60,9 +60,11 @@ impl<'src> Parser<'src> {
                 continue;
             }
 
+            let before = self.progress();
+
             match self.parse_statement() {
                 Some(statement) => statements.push(statement),
-                None => self.synchronize(),
+                None => self.recover(before),
             }
         }
 
@@ -259,12 +261,14 @@ impl<'src> Parser<'src> {
                 continue;
             }
 
+            let before = self.progress();
+
             match self.parse_statement() {
                 Some(statement) => {
                     end = statement.span.end;
                     statements.push(statement);
                 }
-                None => self.synchronize(),
+                None => self.recover(before),
             }
         }
 

@@ -1023,3 +1023,24 @@ every value. And the measurement only showed up when both binaries were built fi
 run alternately — successive rounds of "build A, measure, build B, measure" drifted by more
 than the effect being measured, and reported `string_index` at 4 ms and 15 ms for the same
 binary.
+
+## Statement recovery must prove it consumed a token
+
+`parse_statements_until_eof` and `parse_block` both loop until `Dedent` or `Eof`, and both
+call `synchronize` when a statement fails. `synchronize` returns immediately when the token
+before the cursor is a `Newline`, `Indent` or `Dedent` — deliberately, so a statement that
+fails on its very first token does not swallow the next line. The two are safe only together
+with a third fact: that something consumed a token.
+
+Nothing guaranteed it. `if x == :` fails in `parse_expr` without consuming the `:`;
+`synchronize` then skips past the newline, `skip_orphaned_block` eats the indented body, and
+the cursor lands on the `else`, which no statement parser accepts. `parse_expr` fails again
+without consuming it, `synchronize` sees the preceding `Dedent` and returns, and the loop
+spins forever on the same token. Five lines were enough to hang `dovik check`.
+
+Both loops now capture `progress()` before the attempt and call `recover`, which advances one
+token when the attempt plus `synchronize` moved the cursor nowhere. `progress` includes the
+`split_eq` flag, because clearing it is forward motion that `pos` alone does not show.
+
+The general rule: any loop that calls `parse_statement` and continues on failure must prove
+the cursor moved. A diagnostic is not progress.

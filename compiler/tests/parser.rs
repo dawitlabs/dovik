@@ -487,3 +487,29 @@ fn a_real_greater_or_equal_still_lexes_as_one_token() {
     assert_eq!(shape_of("a >= b"), "(a >= b)");
     assert_eq!(shape_of("a>=b"), "(a >= b)");
 }
+
+#[test]
+fn a_failed_condition_before_an_else_still_terminates() {
+    assert_eq!(
+        errors("x = 1\nif x == :\n    print(\"a\")\nelse:\n    print(\"c\")\n"),
+        [
+            Expected { what: "an expression", found: "`:`" },
+            Expected { what: "an expression", found: "`else`" },
+            Expected { what: "an expression", found: "`:`" },
+        ]
+    );
+}
+
+#[test]
+fn a_failed_condition_inside_a_block_still_terminates() {
+    assert_eq!(
+        errors(
+            "function f():\n    if 1 == :\n        print(\"a\")\n    else:\n        print(\"c\")\n"
+        ),
+        [
+            Expected { what: "an expression", found: "`:`" },
+            Expected { what: "an expression", found: "`else`" },
+            Expected { what: "an expression", found: "`:`" },
+        ]
+    );
+}

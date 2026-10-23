@@ -160,6 +160,18 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub(super) fn progress(&self) -> (usize, bool) {
+        (self.pos, self.split_eq.is_some())
+    }
+
+    pub(super) fn recover(&mut self, before: (usize, bool)) {
+        self.synchronize();
+
+        if self.progress() == before {
+            self.advance();
+        }
+    }
+
     pub(super) fn synchronize(&mut self) {
         if self.at_statement_boundary() {
             return;
