@@ -32,8 +32,19 @@ jobs:
             | tar --extract --gzip --strip-components=1 --directory "$RUNNER_TEMP/wasi-sysroot"
           echo "DOVIK_WASI_SYSROOT=$RUNNER_TEMP/wasi-sysroot" >> "$GITHUB_ENV"
 
-      - name: Check the sysroot arrived
-        run: test -f "$DOVIK_WASI_SYSROOT/include/wasm32-wasip1/stdio.h"
+      - name: Install the wasm compiler-rt builtins
+        run: |
+          resource=$(clang -print-resource-dir)
+          sudo mkdir -p "$resource/lib"
+          curl --fail --location --silent --show-error \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/libclang_rt-${WASI_SDK_RELEASE}.tar.gz" \
+            | sudo tar --extract --gzip --strip-components=1 --directory "$resource/lib"
+          echo "RESOURCE_DIR=$resource" >> "$GITHUB_ENV"
+
+      - name: Check the sysroot and the builtins arrived
+        run: |
+          test -f "$DOVIK_WASI_SYSROOT/include/wasm32-wasip1/stdio.h"
+          test -f "$RESOURCE_DIR/lib/wasm32-unknown-wasip1/libclang_rt.builtins.a"
 
       - uses: dtolnay/rust-toolchain@stable
 
