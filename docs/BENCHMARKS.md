@@ -1,8 +1,8 @@
 # Dovik Benchmarking
 
-**Status:** First measurements recorded — see section 11
+**Status:** Measurements recorded — native in section 11, WebAssembly in section 12
 
-Every number in Dovik's documentation must come from this process ([DECISIONS.md](DECISIONS.md) D017). Section 11 holds the first run; `bench/run.py` reproduces it.
+Every number in Dovik's documentation must come from this process ([DECISIONS.md](DECISIONS.md) D017). Sections 11 and 12 hold the runs; `bench/run.py` reproduces both.
 
 ## 1. Purpose
 
@@ -122,6 +122,9 @@ access to arguments, so those programs cannot be written yet.
 ---
 
 ## 11. Results — 2026-10-22
+
+Native Linux x86-64. WebAssembly is measured separately in section 12, because the host's
+startup cost dominates the short workloads and makes the two tables unsafe to read as one.
 
 Produced by `bench/run.py`; raw data in `bench/results.json`.
 
@@ -274,3 +277,43 @@ inlinable, and `always_inline` on retain and release removed the calls entirely.
 Unicode scalar over UTF-8 storage, which is O(n) per index; C indexes bytes in O(1) and so
 solves an easier problem. This is the measurement U3 asked for.
 
+
+## 12. WebAssembly — 2026-10-23
+
+`bench/run.py` measures `dovik-wasm` whenever the compiler was built with a WASI sysroot and
+`node` is on the path, and skips it with a printed line when either is missing. Same machine
+and same environment block as section 11.
+
+**Two things make these numbers not comparable to the rest of the table, and both are the
+host's fault rather than the module's.** `node` takes **38.8 ms** to start before any module
+is touched, and **42.9 ms** to reach the end of a module whose whole body is `print(1)` — so
+that 43 ms is a floor under every row. Its peak RSS is around 90 MB in every workload, which
+is node's own heap and says nothing about the module. Compare a wasm row to the `dovik` row
+beside it, never to `c`.
+
+| Workload | `dovik` | `dovik-wasm` | Minus the 43 ms floor | Ratio to native |
+| --- | --- | --- | --- | --- |
+| arith | 18.07 ms | 304.4 ms | 257.4 ms | 14x |
+| calls | 9.64 ms | 224.8 ms | 177.8 ms | 18x |
+| allocation | 11.18 ms | 149.7 ms | 102.7 ms | 9.2x |
+| collections | 22.09 ms | 79.8 ms | 32.8 ms | 1.5x |
+| string_index | 1.31 ms | 61.6 ms | 14.6 ms | 11x |
+| recursion | 2.45 ms | 62.6 ms | 15.6 ms | 6.4x |
+| strings | 2.05 ms | 53.5 ms | 6.5 ms | 3.2x |
+
+**The shape is consistent and explains itself.** `collections` at 1.5x and `strings` at 3.2x
+spend most of their time inside the C runtime, which `clang` compiles for wasm as well as it
+compiles for x86-64. `arith` and `calls`, at 14x and 18x, are almost entirely generated code
+and loop overhead, which is where a wasm engine's own costs land.
+
+`recursion` at 6.4x is the one row with a confound: it is the only workload with a function
+that can reach itself, so it is the only one carrying the depth guard
+([DECISIONS.md](DECISIONS.md) D030). `calls` and `arith` emit **zero** guard calls, so their
+ratios are host overhead alone and not the guard.
+
+**What this does not measure.** One host, one version, one machine. A different engine —
+`wasmtime` compiles ahead of time rather than starting a JavaScript runtime — would move the
+floor and probably the ratios. Nothing here should be read as "WebAssembly costs 14x"; it is
+"this workload, under node 26, costs 14x after subtracting a floor that is most of the
+measurement for the short rows." Picking a second host is in
+[PROPOSAL-WASM.md](PROPOSAL-WASM.md) section 6.

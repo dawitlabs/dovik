@@ -5,8 +5,6 @@ use compiler::source::SourceMap;
 use compiler::target::Target;
 use compiler::{backend, check, cli, interp, ir, lexer, lower, modules, opt, parser, resolve};
 
-const SYSROOT: &str = "/usr/share/wasi-sysroot";
-
 fn lowered(source: &str) -> ir::Program {
     let (tokens, lex_errors) = lexer::lex(source);
     assert_eq!(lex_errors, [], "lex errors");
@@ -22,15 +20,16 @@ fn lowered(source: &str) -> ir::Program {
     program
 }
 
-fn toolchain() -> Option<String> {
+fn toolchain() -> Option<(String, String)> {
     let archive = cli::wasm_runtime_archive()?;
+    let sysroot = cli::wasi_sysroot()?;
 
-    if !PathBuf::from(SYSROOT).exists() {
+    if !PathBuf::from(&sysroot).exists() {
         return None;
     }
 
     let node = Command::new("node").arg("--version").output().ok()?;
-    node.status.success().then_some(archive)
+    node.status.success().then_some((archive, sysroot))
 }
 
 struct Output {
@@ -39,7 +38,8 @@ struct Output {
     code: i32,
 }
 
-fn compile_and_run(archive: &str, source: &str, name: &str) -> Output {
+fn compile_and_run(toolchain: &(String, String), source: &str, name: &str) -> Output {
+    let (archive, sysroot) = toolchain;
     let program = lowered(source);
     let sources = SourceMap::single("test.dovk", source);
     let llvm = backend::emit_for(&program, &sources, true, Target::Wasi);
@@ -52,7 +52,7 @@ fn compile_and_run(archive: &str, source: &str, name: &str) -> Output {
 
     let build = Command::new("clang")
         .args(["--target=wasm32-wasip1", "-O2"])
-        .arg(format!("--sysroot={SYSROOT}"))
+        .arg(format!("--sysroot={sysroot}"))
         .arg("-o")
         .arg(&module)
         .arg(&ll)
@@ -131,7 +131,7 @@ const TRAPS: &[(&str, &str, &str)] = &[
 
 #[test]
 fn wasm_output_matches_the_interpreter() {
-    let Some(archive) = toolchain() else {
+    let Some(toolchain) = toolchain() else {
         eprintln!("no WebAssembly toolchain: install wasi-libc and node, then rebuild");
         return;
     };
@@ -144,7 +144,7 @@ fn wasm_output_matches_the_interpreter() {
             "{name} trapped in the interpreter"
         );
 
-        let wasm = compile_and_run(&archive, source, name);
+        let wasm = compile_and_run(&toolchain, source, name);
 
         assert_eq!(wasm.code, 0, "{name} exited {}: {}", wasm.code, wasm.stderr);
         assert_eq!(
@@ -156,13 +156,13 @@ fn wasm_output_matches_the_interpreter() {
 
 #[test]
 fn every_runtime_check_still_traps_under_wasm() {
-    let Some(archive) = toolchain() else {
+    let Some(toolchain) = toolchain() else {
         eprintln!("no WebAssembly toolchain: install wasi-libc and node, then rebuild");
         return;
     };
 
     for (name, source, expected) in TRAPS {
-        let wasm = compile_and_run(&archive, source, name);
+        let wasm = compile_and_run(&toolchain, source, name);
 
         assert_eq!(wasm.code, 1, "{name} should have trapped: {:?}", wasm.stdout);
         assert!(
@@ -175,12 +175,12 @@ fn every_runtime_check_still_traps_under_wasm() {
 
 #[test]
 fn a_wasm_trap_reports_its_source_position() {
-    let Some(archive) = toolchain() else {
+    let Some(toolchain) = toolchain() else {
         eprintln!("no WebAssembly toolchain: install wasi-libc and node, then rebuild");
         return;
     };
 
-    let wasm = compile_and_run(&archive, "print(\"start\")\nd = 0\nprint(7 / d)\n", "position");
+    let wasm = compile_and_run(&toolchain, "print(\"start\")\nd = 0\nprint(7 / d)\n", "position");
 
     assert_eq!(wasm.stdout, ["start"]);
     assert!(wasm.stderr.contains("3:7"), "{:?}", wasm.stderr);
@@ -188,7 +188,7 @@ fn a_wasm_trap_reports_its_source_position() {
 
 #[test]
 fn stack_exhaustion_is_reported_rather_than_trapping_the_module() {
-    let Some(archive) = toolchain() else {
+    let Some(toolchain) = toolchain() else {
         eprintln!("no WebAssembly toolchain: install wasi-libc and node, then rebuild");
         return;
     };
@@ -202,7 +202,7 @@ function deep(n: Int) -> Int:
 
 print(deep(1000000))
 ";
-    let wasm = compile_and_run(&archive, source, "exhaustion");
+    let wasm = compile_and_run(&toolchain, source, "exhaustion");
 
     assert_eq!(wasm.code, 1, "{:?}", wasm.stdout);
     assert!(wasm.stderr.contains("DVK5009"), "{:?}", wasm.stderr);

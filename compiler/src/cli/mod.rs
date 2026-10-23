@@ -5,7 +5,9 @@ use std::process::ExitCode;
 
 use crate::target::Target;
 
-pub use pipeline::{compile, wasm_runtime_archive, Compiled};
+pub use pipeline::{
+    compile, sanitized_runtime_archive, wasi_sysroot, wasm_runtime_archive, Compiled,
+};
 pub use report::Report;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");

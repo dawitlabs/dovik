@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  WASI_SDK_VERSION: "27"
+  WASI_SDK_RELEASE: "27.0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang lld
+
+      - name: Install the WASI sysroot
+        run: |
+          curl --fail --location --silent --show-error \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sysroot-${WASI_SDK_RELEASE}.tar.gz" \
+            | tar --extract --gzip --directory "$RUNNER_TEMP"
+          echo "DOVIK_WASI_SYSROOT=$RUNNER_TEMP/wasi-sysroot" >> "$GITHUB_ENV"
+
+      - name: Check the sysroot arrived
+        run: test -f "$DOVIK_WASI_SYSROOT/include/wasm32-wasip1/stdio.h"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: compiler
+
+      - name: Test
+        working-directory: compiler
+        run: cargo test --release
+
+      - name: Confirm the WebAssembly tests were not skipped
+        working-directory: compiler
+        run: |
+          cargo test --release --test wasm -- --nocapture 2>&1 | tee wasm.log
+          if grep --quiet "no WebAssembly toolchain" wasm.log; then
+            echo "::error::the WebAssembly tests skipped themselves"
+            exit 1
+          fi
+
+      - name: Confirm the sanitizer tests were not skipped
+        working-directory: compiler
+        run: |
+          cargo test --release --test sanitize -- --nocapture 2>&1 | tee sanitize.log
+          if grep --quiet "no sanitized runtime" sanitize.log; then
+            echo "::error::the sanitizer tests skipped themselves"
+            exit 1
+          fi
+
+      - name: Check formatting of the examples
+        run: |
+          for file in examples/*.dovk examples/lib/*.dovk; do
+            ./compiler/target/release/dovik format "$file" --check
+          done

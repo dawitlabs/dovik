@@ -15,6 +15,7 @@ PROGRAMS = ROOT / "programs"
 BUILD = ROOT / "build"
 COMPILER = ROOT.parent / "compiler"
 DOVIK = COMPILER / "target" / "debug" / "dovik"
+WASI_HOST = COMPILER / "tests" / "wasi-host.mjs"
 
 WORKLOADS = [
     "arith",
@@ -27,6 +28,18 @@ WORKLOADS = [
 ]
 
 REPS = int(os.environ.get("BENCH_REPS", "5"))
+
+
+def wasm_available():
+    if not WASI_HOST.exists() or shutil.which("node") is None:
+        return False
+
+    probe = BUILD / "probe.dovk"
+    BUILD.mkdir(exist_ok=True)
+    probe.write_text("print(1)\n")
+    built = shell([str(DOVIK), "build", "--target", "wasm",
+                   "-o", str(BUILD / "probe.wasm"), str(probe)])
+    return built.returncode == 0
 
 
 def shell(args, **kwargs):
@@ -63,6 +76,9 @@ def environment():
     }
 
 
+WASM = False
+
+
 def build(workload):
     BUILD.mkdir(exist_ok=True)
     results = {}
@@ -91,6 +107,14 @@ def build(workload):
         ),
     }
 
+    if WASM:
+        targets["dovik-wasm"] = (
+            [str(DOVIK), "build", "--target", "wasm",
+             "-o", str(BUILD / f"{workload}.wasm"),
+             str(PROGRAMS / f"{workload}.dovk")],
+            BUILD / f"{workload}.wasm",
+        )
+
     for name, (command, binary) in targets.items():
         start = time.perf_counter()
         result = shell(command)
@@ -100,10 +124,15 @@ def build(workload):
             print(f"  {workload}/{name}: build failed\n{result.stderr}", file=sys.stderr)
             continue
 
+        run = [str(binary)]
+
+        if name == "dovik-wasm":
+            run = ["node", "--no-warnings", str(WASI_HOST), str(binary)]
+
         results[name] = {
             "compile_seconds": elapsed,
             "binary_bytes": binary.stat().st_size if binary.exists() else None,
-            "command": [str(binary)],
+            "command": run,
         }
 
     results["python"] = {
@@ -171,12 +200,22 @@ def measure(command):
 
 
 def main():
+    global WASM
+
     if not DOVIK.exists():
         print("build the compiler first: cargo build", file=sys.stderr)
         return 1
+
+    WASM = wasm_available()
     report = {"environment": environment(), "workloads": {}}
     print(f"environment: {report['environment']['cpu']}, {REPS} reps per measurement")
-    print("peak RSS is absolute VmHWM, sampled; runs under ~20ms may under-report\n")
+    print("peak RSS is absolute VmHWM, sampled; runs under ~20ms may under-report")
+
+    if WASM:
+        print("dovik-wasm runs under node, so its time includes host startup and its")
+        print("peak RSS is node's, not the module's. Compare it to dovik, not to c.\n")
+    else:
+        print("dovik-wasm skipped: no wasi sysroot in this build, or no node\n")
 
     for workload in WORKLOADS:
         print(f"{workload}:")

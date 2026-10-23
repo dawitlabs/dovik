@@ -26,10 +26,42 @@ fn main() {
     assert!(status.success(), "failed to compile {}", source.display());
     println!("cargo:rustc-env=DOVIK_RUNTIME_OBJECT={}", object.display());
 
-    let sysroot = PathBuf::from(WASI_SYSROOT);
+    let sanitized = out.join("dovik_rt.san.o");
 
-    if !sysroot.join("include/wasm32-wasip1/stdio.h").exists() {
+    let status = Command::new("clang")
+        .args([
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-O1",
+            "-g",
+            "-c",
+        ])
+        .arg("-I")
+        .arg(&out)
+        .arg(&source)
+        .arg("-o")
+        .arg(&sanitized)
+        .status()
+        .expect("clang");
+
+    match status.success() {
+        true => println!(
+            "cargo:rustc-env=DOVIK_SANITIZED_RUNTIME_OBJECT={}",
+            sanitized.display()
+        ),
+        false => println!("cargo:rustc-env=DOVIK_SANITIZED_RUNTIME_OBJECT="),
+    }
+
+    println!("cargo:rerun-if-env-changed=DOVIK_WASI_SYSROOT");
+
+    let sysroot = std::env::var("DOVIK_WASI_SYSROOT").unwrap_or_else(|_| WASI_SYSROOT.to_string());
+
+    if !PathBuf::from(&sysroot)
+        .join("include/wasm32-wasip1/stdio.h")
+        .exists()
+    {
         println!("cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT=");
+        println!("cargo:rustc-env=DOVIK_WASI_SYSROOT_USED=");
         return;
     }
 
@@ -37,7 +69,7 @@ fn main() {
 
     let status = Command::new("clang")
         .args(["--target=wasm32-wasip1", "-O2", "-c"])
-        .arg(format!("--sysroot={WASI_SYSROOT}"))
+        .arg(format!("--sysroot={sysroot}"))
         .arg("-I")
         .arg(&out)
         .arg(&source)
@@ -47,11 +79,17 @@ fn main() {
         .expect("clang");
 
     match status.success() {
-        true => println!(
-            "cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT={}",
-            wasm_object.display()
-        ),
-        false => println!("cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT="),
+        true => {
+            println!(
+                "cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT={}",
+                wasm_object.display()
+            );
+            println!("cargo:rustc-env=DOVIK_WASI_SYSROOT_USED={sysroot}");
+        }
+        false => {
+            println!("cargo:rustc-env=DOVIK_WASM_RUNTIME_OBJECT=");
+            println!("cargo:rustc-env=DOVIK_WASI_SYSROOT_USED=");
+        }
     }
 }
 

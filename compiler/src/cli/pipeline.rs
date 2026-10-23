@@ -335,11 +335,18 @@ fn link(llvm: &str, output: &str, target: Target) -> Result<(), String> {
 
     match target {
         Target::Native => command.args(["-O2", "-flto=full"]),
-        Target::Wasi => command.args([
-            "--target=wasm32-wasip1",
-            "-O2",
-            "--sysroot=/usr/share/wasi-sysroot",
-        ]),
+        Target::Wasi => {
+            let Some(sysroot) = wasi_sysroot() else {
+                return Err(
+                    "this compiler was built without a WebAssembly sysroot: install \
+                     wasi-libc and rebuild"
+                        .to_string(),
+                );
+            };
+
+            command.args(["--target=wasm32-wasip1", "-O2"]);
+            command.arg(format!("--sysroot={sysroot}"))
+        }
     };
 
     let status = command
@@ -359,6 +366,24 @@ fn link(llvm: &str, output: &str, target: Target) -> Result<(), String> {
 
 pub fn runtime_archive() -> String {
     std::env::var("DOVIK_RUNTIME").unwrap_or_else(|_| env!("DOVIK_RUNTIME_OBJECT").to_string())
+}
+
+pub fn sanitized_runtime_archive() -> Option<String> {
+    match env!("DOVIK_SANITIZED_RUNTIME_OBJECT") {
+        "" => None,
+        path => Some(path.to_string()),
+    }
+}
+
+pub fn wasi_sysroot() -> Option<String> {
+    if let Ok(path) = std::env::var("DOVIK_WASI_SYSROOT") {
+        return Some(path);
+    }
+
+    match env!("DOVIK_WASI_SYSROOT_USED") {
+        "" => None,
+        path => Some(path.to_string()),
+    }
 }
 
 pub fn wasm_runtime_archive() -> Option<String> {
