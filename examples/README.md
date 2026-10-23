@@ -10,7 +10,7 @@ cd compiler && cargo build && cd ..
 
 ## lib/text.dovk
 
-Both examples import from it ([../docs/SPEC.md](../docs/SPEC.md) 22). It declares `lines`,
+`wordcount.dovk` and `upper.dovk` import from it ([../docs/SPEC.md](../docs/SPEC.md) 22). It declares `lines`,
 `flatten`, and `count_words`, and nothing else in it is imported — a module exports every
 module-scope declaration, and the import list at each use site is what decides what arrives.
 
@@ -36,8 +36,10 @@ It exercises file reading, argument handling, scalar iteration over a string, st
 building, and the guarded-read pattern that the error model requires — `file_exists`
 before `read_file`, since a failed read traps.
 
-It also shows what the library still lacks. Splitting on whitespace has to be written by
-hand, because there is no `split`.
+It also shows what the library still lacks. `split` takes one separator string, not a class
+of characters, so `flatten` normalizes newlines and tabs to spaces before `count_words`
+splits on a space — and a run of spaces still yields empty pieces that `count_words` has to
+skip by hand.
 
 ## upper.dovk
 
@@ -50,6 +52,31 @@ DOVIK RULES
 ```
 
 It composes with other tools, which is what `read_input` was added for.
+
+## fib.dovk
+
+Fibonacci two ways, and the only example that imports nothing. It shows the optional type
+([../docs/SPEC.md](../docs/SPEC.md) 23) carrying a parse failure:
+
+```
+$ ./fib abc
+fib: not a number: abc
+usage: fib <n>        0 <= n <= 92
+$ ./fib 10
+fib(10) = 55
+0 1 1 2 3 5 8 13 21 34 55
+  both agree on  55: true
+  loop           0.118 microseconds
+  recursion      1.152 microseconds
+```
+
+`parse_int` returns `Int?`, and `if requested == none:` narrows the **else** branch to `Int`
+(23.4) — which is why every remaining check nests inside that branch rather than sitting
+beside it as an `else if`. Narrowing applies to one `if` with one arm.
+
+The upper bound is arithmetic, not arbitrary: `fib(93)` exceeds `Int`, and Dovik traps on
+overflow (7.2) instead of wrapping, so the program rejects 93 rather than being killed by it.
+`clock()` prices the loop against the naive recursion on the same input.
 
 ## Running tests
 
